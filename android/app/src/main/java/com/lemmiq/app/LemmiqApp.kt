@@ -122,7 +122,7 @@ private fun Home(vm:LemmiqViewModel){
         bottomBar={
             NavigationBar{
                 listOf("💬" to "Chats","🔔" to "Activity","Q" to "Agent","💳" to "Money","🙂" to "Me").forEachIndexed{i,x->
-                    NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},label={Text(x.second)})
+                    NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},{Text(x.second)})
                 }
             }
         },
