@@ -34,6 +34,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var active by mutableStateOf<ChatDto?>(null)
     var suggestion by mutableStateOf<String?>(null)
     var trustResult by mutableStateOf<TrustResult?>(null)
+    var trustError by mutableStateOf<String?>(null)
     var trustBusy by mutableStateOf(false)
     var socketStatus by mutableStateOf("offline")
     var agentBrief by mutableStateOf<AgentBrief?>(null)
@@ -94,11 +95,20 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }.onFailure{error=it.message}
     }
     fun trustCheck(text:String)=viewModelScope.launch{
-        if(text.isBlank())return@launch
-        trustBusy=true;error=null
-        try{trustResult=api.trustCheck(text)}catch(e:Exception){error=e.message}finally{trustBusy=false}
+        if(text.isBlank()||trustBusy)return@launch
+        trustResult=null;trustError=null;trustBusy=true
+        try {
+            val result=api.trustCheck(text)
+            trustResult=result
+        } catch(e:Exception) {
+            trustError=when(e){
+                is java.net.SocketTimeoutException -> "Fact Check timed out. Render may be waking up, or the AI/web search took too long. Retry in a moment."
+                else -> e.message ?: "Could not complete the Trust check. Please try again."
+            }
+        } finally { trustBusy=false }
     }
-    fun clearTrust(){trustResult=null}
+    fun clearTrust(){trustResult=null;trustError=null}
+    fun discardSuggestion(){suggestion=null}
     fun suggest()=viewModelScope.launch{
         val c=active?:return@launch
         action{suggestion=api.suggest(c.id).reply}

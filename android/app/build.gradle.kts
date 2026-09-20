@@ -13,6 +13,7 @@ val lemmiqApiBaseUrl = lemmiqLocalProperties
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 android {
@@ -22,8 +23,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=6
-        versionName="1.6.2"
+        versionCode=8
+        versionName="1.6.4"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
     }
     buildFeatures { compose=true; buildConfig=true }
@@ -31,6 +32,7 @@ android {
         sourceCompatibility=JavaVersion.VERSION_17
         targetCompatibility=JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget="17" }
 }
 dependencies {
     val composeBom=platform("androidx.compose:compose-bom:2026.08.00")

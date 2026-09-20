@@ -233,6 +233,13 @@ private fun Chat(vm:LemmiqViewModel){
     val c=vm.active?:return
     var draft by remember{mutableStateOf("")}
     var settings by remember{mutableStateOf(false)}
+    // Reverse layout pins the latest message to the composer. Typing never changes scroll state.
+    val messageListState=rememberLazyListState()
+    LaunchedEffect(c.id,vm.messages.lastOrNull()?.id){
+        if(vm.messages.isNotEmpty() && messageListState.firstVisibleItemIndex<=1){
+            messageListState.scrollToItem(0)
+        }
+    }
     Scaffold(
         containerColor=Bg,
         topBar={
@@ -250,15 +257,18 @@ private fun Chat(vm:LemmiqViewModel){
             }
         },
         bottomBar={
-            Column(Modifier.background(Color.White)){
+            // Keep composer above the keyboard without re-scrolling on every character.
+            Column(Modifier.background(Color.White).imePadding()){
                 vm.suggestion?.let{s->
                     Surface(color=Soft,shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
                             Text("Q  Suggested reply",color=Purple,fontWeight=FontWeight.Bold,fontSize=11.sp)
                             Text(s,modifier=Modifier.padding(top=4.dp))
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End){
-                                TextButton({draft=s}){Text("Edit")}
-                                Button({vm.send(s)}){Text("Send")}
+                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                                TextButton(onClick={vm.discardSuggestion()}){Text("Discard",color=Muted)}
+                                Spacer(Modifier.weight(1f))
+                                TextButton(onClick={draft=s;vm.discardSuggestion()}){Text("Edit")}
+                                Button(onClick={vm.send(s)},enabled=!vm.busy){Text("Send")}
                             }
                         }
                     }
@@ -290,13 +300,43 @@ private fun Chat(vm:LemmiqViewModel){
                 }
             }
             if(vm.messages.isEmpty())Empty("👋","Start the conversation","Messages appear here in real time.")
-            else LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
-                items(vm.messages,key={it.id}){m->Bubble(m,vm.store.userId){vm.trustCheck(m.text)}}
+            else LazyColumn(
+                modifier=Modifier.fillMaxSize(),
+                state=messageListState,
+                reverseLayout=true,
+                contentPadding=PaddingValues(14.dp),
+                verticalArrangement=Arrangement.spacedBy(7.dp)
+            ){
+                // Messages are stored oldest-first; reverse items to show newest at the bottom.
+                // The message list does not depend on the draft field, preventing typing-induced jumps.
+                items(vm.messages.asReversed(),key={it.id}){m->
+                    Bubble(m,vm.store.userId){vm.trustCheck(m.text)}
+                }
             }
         }
     }
     if(settings)Settings(c,vm){settings=false}
-    vm.trustResult?.let{r->TrustDialog(r){vm.clearTrust()}}
+    if(vm.trustBusy){
+        AlertDialog(
+            onDismissRequest={},
+            title={Text("🛡 LEMMIQ Trust")},
+            text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
+                LinearProgressIndicator(Modifier.fillMaxWidth(),color=Purple)
+                Text("Checking this message. Searching for evidence may take a little while.")
+            }},
+            confirmButton={}
+        )
+    } else {
+        vm.trustError?.let{message->
+            AlertDialog(
+                onDismissRequest={vm.clearTrust()},
+                title={Text("Trust check unavailable")},
+                text={Text(message)},
+                confirmButton={TextButton(onClick={vm.clearTrust()}){Text("Close")}}
+            )
+        }
+        vm.trustResult?.let{r->TrustDialog(r){vm.clearTrust()}}
+    }
     vm.chatSummary?.let{s->ChatSummaryDialog(s){vm.clearChatSummary()}}
 }
 
@@ -309,7 +349,11 @@ private fun Bubble(m:MessageDto,me:Int,onTrust:()->Unit){
                 if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
                 Text(m.text,color=if(mine)Color.White else Ink)
                 if(mine)Text(if(m.read_at!=null)"✓✓" else "✓",color=Color(0xFFDCD6FF),fontSize=10.sp,modifier=Modifier.align(Alignment.End))
-                else Text("🛡 Fact / Scam Check",color=Purple,fontSize=10.sp,fontWeight=FontWeight.Bold,modifier=Modifier.clickable{onTrust()}.padding(top=6.dp))
+                else TextButton(
+                    onClick=onTrust,
+                    modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
+                    contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)
+                ){Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)}
             }
         }
     }
@@ -317,6 +361,7 @@ private fun Bubble(m:MessageDto,me:Int,onTrust:()->Unit){
 
 @Composable
 private fun TrustDialog(r:TrustResult,dismiss:()->Unit){
+    val uriHandler=androidx.compose.ui.platform.LocalUriHandler.current
     val icon=when(r.status){"SUPPORTED"->"✅";"LIKELY_FALSE"->"❌";"MISLEADING"->"⚠️";"SCAM_RISK"->"🚨";"SUSPICIOUS"->"🟠";else->"🟡"}
     AlertDialog(onDismissRequest=dismiss,title={Text("$icon LEMMIQ Trust")},text={
         LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -325,7 +370,15 @@ private fun TrustDialog(r:TrustResult,dismiss:()->Unit){
             item{LinearProgressIndicator(progress={r.confidence.coerceIn(0,100)/100f},modifier=Modifier.fillMaxWidth())}
             item{Text(r.summary)}
             if(r.reasons.isNotEmpty()){item{Text("Why",fontWeight=FontWeight.Bold)};items(r.reasons){x->Text("• $x",fontSize=12.sp,color=Muted)}}
-            if(r.sources.isNotEmpty()){item{Text("Sources",fontWeight=FontWeight.Bold)};items(r.sources){s->Text("• ${s.title}\n${s.url}",fontSize=11.sp,color=Purple)}}
+            if(r.sources.isNotEmpty()){item{Text("Sources",fontWeight=FontWeight.Bold)};items(r.sources){source->
+                        Text(
+                            "• ${source.title}\n${source.url}",
+                            fontSize=11.sp,color=Purple,
+                            modifier=Modifier.clickable(enabled=source.url.startsWith("https://")){
+                                runCatching{uriHandler.openUri(source.url)}
+                            }.padding(vertical=5.dp)
+                        )
+                    }}
             if(r.advice.isNotBlank())item{Text(r.advice,fontSize=12.sp,fontWeight=FontWeight.SemiBold)}
             item{Text("Confidence reflects available evidence, not certainty.",fontSize=10.sp,color=Muted)}
         }

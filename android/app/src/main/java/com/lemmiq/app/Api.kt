@@ -10,6 +10,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.net.URLEncoder
+import java.util.concurrent.TimeUnit
 
 class SessionStore(context:Context){
     private val p=context.getSharedPreferences("lemmiq",Context.MODE_PRIVATE)
@@ -22,6 +23,11 @@ class SessionStore(context:Context){
 
 class Api(private val store:SessionStore){
     private val client=OkHttpClient()
+    private val trustClient=client.newBuilder()
+        .connectTimeout(25,TimeUnit.SECONDS)
+        .readTimeout(90,TimeUnit.SECONDS)
+        .callTimeout(105,TimeUnit.SECONDS)
+        .build()
     private val gson=Gson()
     private val json="application/json; charset=utf-8".toMediaType()
     private val base=BuildConfig.API_BASE_URL.trimEnd('/')
@@ -32,8 +38,8 @@ class Api(private val store:SessionStore){
         store.token?.let{x.header("Authorization","Bearer $it")}
         return x
     }
-    private suspend fun req(r:Request):String=withContext(Dispatchers.IO){
-        client.newCall(r).execute().use{
+    private suspend fun req(r:Request,forTrust:Boolean=false):String=withContext(Dispatchers.IO){
+        (if(forTrust)trustClient else client).newCall(r).execute().use{
             val body=it.body?.string().orEmpty()
             if(!it.isSuccessful) throw IOException(
                 runCatching{gson.fromJson(body,Map::class.java)["detail"]?.toString()}.getOrNull()
@@ -90,7 +96,7 @@ class Api(private val store:SessionStore){
     }
     suspend fun trustCheck(text:String):TrustResult{
         val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/trust/check").post(rb).build()),TrustResult::class.java)
+        return gson.fromJson(req(b("$base/trust/check").post(rb).build(),forTrust=true),TrustResult::class.java)
     }
 
     suspend fun agentBrief():AgentBrief {
