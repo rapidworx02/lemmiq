@@ -32,6 +32,12 @@ object NotificationControl {
         val values=allowedApps(ctx).toMutableSet();if(on)values.add(pkg) else values.remove(pkg)
         prefs(ctx).edit().putStringSet("apps",values).apply()
     }
+    /** Apply bulk allowlist changes in one preferences write, not one write per app. */
+    fun setApps(ctx:Context,packages:Set<String>,on:Boolean){
+        val current=allowedApps(ctx).toMutableSet()
+        if(on)current.addAll(packages) else current.removeAll(packages)
+        prefs(ctx).edit().putStringSet("apps",current).apply()
+    }
     fun setCategory(ctx:Context,cat:String,on:Boolean){
         val values=allowedCategories(ctx).toMutableSet();if(on)values.add(cat) else values.remove(cat)
         prefs(ctx).edit().putStringSet("categories",values).apply()

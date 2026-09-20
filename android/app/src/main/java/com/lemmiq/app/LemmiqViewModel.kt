@@ -120,6 +120,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun setSync(v:Boolean){NotificationControl.setSync(appCtx,v);reloadNotificationSettings();if(v)syncInsights()}
     fun setRetention(v:Int){NotificationControl.setDays(appCtx,v);reloadNotificationSettings();refreshInsights()}
     fun setApp(pkg:String,v:Boolean){NotificationControl.setApp(appCtx,pkg,v);reloadNotificationSettings()}
+    fun setApps(packages:Set<String>,v:Boolean){NotificationControl.setApps(appCtx,packages,v);reloadNotificationSettings()}
     fun setCategory(cat:String,v:Boolean){NotificationControl.setCategory(appCtx,cat,v);reloadNotificationSettings()}
     fun refreshInsights(){
         if(store.userId<1)return
