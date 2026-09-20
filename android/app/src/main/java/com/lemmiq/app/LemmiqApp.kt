@@ -122,7 +122,7 @@ private fun Home(vm:LemmiqViewModel){
         bottomBar={
             NavigationBar{
                 listOf("💬" to "Chats","🔔" to "Activity","Q" to "Agent","💳" to "Money","🙂" to "Me").forEachIndexed{i,x->
-                    NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},{Text(x.second)})
+                    NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},label={Text(x.second)})
                 }
             }
         },
@@ -553,6 +553,13 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
     var showSources by remember{mutableStateOf(false)}
     var appQuery by remember{mutableStateOf("")}
     var deleteConfirm by remember{mutableStateOf(false)}
+    var confirmBulkSelection by remember{mutableStateOf(false)}
+    val filteredApps=vm.appChoices.filter{
+        it.name.contains(appQuery.trim(),ignoreCase=true) ||
+            it.pkg.contains(appQuery.trim(),ignoreCase=true)
+    }
+    val matchingPackages=filteredApps.map{it.pkg}.toSet()
+    val selectedMatches=matchingPackages.count{it in vm.permittedApps}
     LaunchedEffect(Unit){vm.reloadNotificationSettings();vm.refreshInsights();vm.loadInstalledApps()}
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=28.dp),
         verticalArrangement=Arrangement.spacedBy(12.dp)){
@@ -622,20 +629,39 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
                     if(showSources){
                         OutlinedTextField(appQuery,{appQuery=it},label={Text("Find installed app")},
                             modifier=Modifier.fillMaxWidth(),singleLine=true)
-                        Column(Modifier.heightIn(max=280.dp).verticalScroll(rememberScrollState())){
-                            vm.appChoices.filter{it.name.contains(appQuery,true)||it.pkg.contains(appQuery,true)}
-                                .take(80).forEach{choice->
-                                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                                        Column(Modifier.weight(1f)){
-                                            Text(choice.name,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
-                                            Text(choice.pkg,fontSize=10.sp,color=Muted)
-                                        }
-                                        Checkbox(checked=choice.pkg in vm.permittedApps,onCheckedChange={vm.setApp(choice.pkg,it)})
-                                    }
-                                }
+                        Text("$selectedMatches of ${filteredApps.size} matching apps selected",color=Muted,fontSize=11.sp)
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically){
+                            Button(onClick={confirmBulkSelection=true},
+                                modifier=Modifier.weight(1f), enabled=filteredApps.isNotEmpty() && selectedMatches<filteredApps.size){
+                                Text(if(appQuery.isBlank())"Select all" else "Select matches",fontSize=12.sp)
+                            }
+                            OutlinedButton(onClick={vm.setApps(matchingPackages,false)},
+                                modifier=Modifier.weight(1f), enabled=selectedMatches>0){
+                                Text(if(appQuery.isBlank())"Clear all" else "Clear matches",fontSize=12.sp)
+                            }
                         }
+                        Text("Scroll down to see the complete app list. Search to narrow the selection.",
+                            fontSize=11.sp,color=Muted)
                     }
                 }
+            }
+        }
+        // Render each app in the parent LazyColumn: avoids nested-scroll trapping and removes the old 80-app limit.
+        if(showSources){
+            items(filteredApps,key={"allowed-app-${it.pkg}"}){choice->
+                Row(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=2.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(Color.White)
+                    .padding(horizontal=14.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text(choice.name,fontSize=13.sp,fontWeight=FontWeight.SemiBold)
+                        Text(choice.pkg,fontSize=10.sp,color=Muted)
+                    }
+                    Checkbox(checked=choice.pkg in vm.permittedApps,
+                        onCheckedChange={vm.setApp(choice.pkg,it)})
+                }
+            }
+            if(filteredApps.isEmpty())item{
+                Text("No installed apps match your search.",Modifier.padding(horizontal=24.dp),color=Muted)
             }
         }
         item{
@@ -657,6 +683,17 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
             }
         }
     }
+    if(confirmBulkSelection)AlertDialog(
+        onDismissRequest={confirmBulkSelection=false},
+        title={Text(if(appQuery.isBlank())"Allow all installed apps?" else "Allow all matching apps?")},
+        text={Text("This will allow ${matchingPackages.size} app(s) as notification sources. " +
+            "Only new notifications in categories you enable can be processed. " +
+            "You can deselect apps anytime.")},
+        confirmButton={Button(onClick={vm.setApps(matchingPackages,true);confirmBulkSelection=false}){
+            Text("Allow ${matchingPackages.size} apps")
+        }},
+        dismissButton={TextButton(onClick={confirmBulkSelection=false}){Text("Cancel")}}
+    )
     if(deleteConfirm)AlertDialog(onDismissRequest={deleteConfirm=false},
       title={Text("Delete your detected events?")},
       text={Text("This clears your local records and your synced desktop copy. If the desktop is offline, deletion must be retried.")},
