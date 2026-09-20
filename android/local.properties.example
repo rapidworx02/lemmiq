@@ -1,0 +1,5 @@
+# Android Studio creates actual android/local.properties with sdk.dir.
+# Keep sdk.dir and add this line with YOUR REAL HTTPS Render service URL:
+# lemmiq.apiBaseUrl=https://lemmiq-api-xxxx.onrender.com
+# No trailing slash; do not use localhost or a Tailscale URL for the Render build.
+# The APK defaults to an invalid placeholder until this is configured.

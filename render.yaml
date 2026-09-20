@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: lemmiq-api
+    runtime: docker
+    plan: free  # Free beta. Upgrade service plan for fewer cold starts.
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lemmiq-db
+          property: connectionString
+      - key: LEMMIQ_JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-4-6
+
+databases:
+  - name: lemmiq-db
+    plan: free  # Expires after 30 days; export or upgrade to retain data.
+    databaseName: lemmiq
+    user: lemmiq
