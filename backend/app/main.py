@@ -1,5 +1,5 @@
-from .trust import check_text, media_capabilities
-import os, hashlib, hmac, secrets
+from .trust import check_text, media_capabilities, unavailable_result
+import os, hashlib, hmac, secrets, logging
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
 import jwt
@@ -292,7 +292,11 @@ class TrustIn(BaseModel):
 
 @app.post("/trust/check")
 def trust_check(body: TrustIn, u: User = Depends(current_user)):
-    return check_text(body.text)
+    try:
+        return check_text(body.text)
+    except Exception:
+        logging.getLogger("lemmiq.trust").exception("Trust endpoint failed")
+        return unavailable_result()
 
 @app.get("/trust/media-capabilities")
 def trust_media(u: User = Depends(current_user)):

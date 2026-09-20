@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 import re
 from urllib.parse import urlparse
 import requests
+
+logger = logging.getLogger("lemmiq.trust")
 
 URL_RE = re.compile(r"https?://[^\s<>\"\']+", re.IGNORECASE)
 
@@ -51,7 +54,10 @@ def web_search(query):
         for x in data.get('results',[])[:6]:
             out.append({'title':x.get('title',''),'url':x.get('url',''),'content':(x.get('content') or '')[:1800]})
         return out
-    except Exception: return []
+    except Exception as exc:
+        # Never log the message text, full URL, API key, or search payload.
+        logger.warning("Trust evidence search failed (%s)", type(exc).__name__)
+        return []
 
 def anthropic_assess(text,evidence,scam_score,scam_reasons):
     key=os.getenv('ANTHROPIC_API_KEY','').strip()
@@ -63,25 +69,122 @@ def anthropic_assess(text,evidence,scam_score,scam_reasons):
     m=client.messages.create(model=os.getenv('ANTHROPIC_MODEL','claude-sonnet-4-6'),max_tokens=700,temperature=0,system=SYSTEM,messages=[{'role':'user','content':prompt}])
     raw=''.join(b.text for b in m.content if getattr(b,'type','')=='text').strip()
     raw=raw.removeprefix('```json').removesuffix('```').strip()
-    return json.loads(raw)
+    data = json.loads(raw)
+    return data if isinstance(data, dict) else None
+
+VALID_STATUSES = {"SUPPORTED", "LIKELY_FALSE", "MISLEADING", "UNVERIFIED", "SCAM_RISK", "SUSPICIOUS"}
+
+
+def unavailable_result(message="Fact checking is temporarily unavailable."):
+    return {
+        "status": "UNVERIFIED", "confidence": 0, "summary": message,
+        "reasons": ["The claim has not been independently verified."],
+        "sources": [], "advice": "Please try again later or check a reputable primary source."
+    }
+
+
+def _clean_assessment(assessed, evidence):
+    """Validate untrusted model JSON before returning to Android.
+
+    Model output may have null/list/string fields, or confidence values such as
+    'high'. Previously, parsing these fields outside the try/except could
+    trigger HTTP 500 despite a successful search or model response.
+    """
+    if not isinstance(assessed, dict):
+        return None
+
+    status = assessed.get("status")
+    if not isinstance(status, str) or status not in VALID_STATUSES:
+        return None
+
+    try:
+        confidence = max(0, min(int(float(assessed.get("confidence", 0))), 100))
+    except (TypeError, ValueError, OverflowError):
+        confidence = 0
+
+    summary = assessed.get("summary")
+    summary = str(summary).strip() if isinstance(summary, str) else "Assessment completed with limited information."
+
+    reasons_raw = assessed.get("reasons")
+    reasons = [item[:400] for item in reasons_raw if isinstance(item, str) and item.strip()][:6] if isinstance(reasons_raw, list) else []
+
+    # Only return genuine retrieved source URLs. Do not trust fabricated URLs
+    # emitted by a language model, even if the JSON itself is well formed.
+    approved = {}
+    for source in evidence:
+        if isinstance(source, dict):
+            url = source.get("url")
+            if isinstance(url, str) and url.startswith(("https://", "http://")):
+                approved[url] = {"title": str(source.get("title") or url)[:200], "url": url}
+    sources_raw = assessed.get("sources")
+    sources = []
+    if isinstance(sources_raw, list):
+        for source in sources_raw:
+            if isinstance(source, dict) and isinstance(source.get("url"), str):
+                url = source["url"]
+                if url in approved and url not in {item["url"] for item in sources}:
+                    sources.append(approved[url])
+            if len(sources) >= 6:
+                break
+    if not sources and approved:
+        # Show the available evidence even if the model didn't cite it explicitly.
+        sources = list(approved.values())[:6]
+
+    advice = assessed.get("advice")
+    advice = advice[:500] if isinstance(advice, str) else "Check the cited evidence before acting."
+    # Confidence with no cited evidence must not be presented as verified fact.
+    if status in ("SUPPORTED", "LIKELY_FALSE", "MISLEADING") and not sources:
+        return unavailable_result("No verifiable supporting sources were returned for this claim.")
+
+    return {
+        "status": status, "confidence": confidence, "summary": summary[:1000],
+        "reasons": reasons, "sources": sources, "advice": advice
+    }
+
 
 def check_text(text):
-    text=(text or '').strip()
+    text = (text or "").strip()
     if not text:
-        return {'status':'UNVERIFIED','confidence':0,'summary':'No content to check','reasons':[],'sources':[],'advice':'Select a message containing a claim or link.'}
-    scam_score,scam_reasons=scam_heuristics(text)
-    evidence=web_search(text[:500])
-    try: assessed=anthropic_assess(text,evidence,scam_score,scam_reasons)
-    except Exception: assessed=None
-    if assessed:
-        assessed['confidence']=max(0,min(int(assessed.get('confidence',0)),100))
-        assessed['sources']=[{'title':s.get('title',''),'url':s.get('url','')} for s in assessed.get('sources',[])[:6] if s.get('url','').startswith('http')]
-        return assessed
-    if scam_score>=55:
-        return {'status':'SCAM_RISK','confidence':min(90,55+scam_score//3),'summary':'This message shows several common scam or phishing signals.','reasons':scam_reasons[:5],'sources':[],'advice':'Avoid opening links or sharing passwords, OTPs, banking or card details.'}
-    if extract_urls(text) and scam_score>=25:
-        return {'status':'SUSPICIOUS','confidence':min(75,35+scam_score//2),'summary':'This message contains a link with some risk signals.','reasons':scam_reasons[:5],'sources':[],'advice':'Verify the sender and domain independently before opening the link.'}
-    return {'status':'UNVERIFIED','confidence':25,'summary':'No reliable external verification is configured on this server.','reasons':['Enable TAVILY_API_KEY for current web evidence and ANTHROPIC_API_KEY for evidence synthesis.'],'sources':[],'advice':'Treat the claim as unverified until checked against reliable sources.'}
+        return unavailable_result("Select a message containing a claim or suspicious link.")
+
+    scam_score, scam_reasons = scam_heuristics(text)
+    evidence = web_search(text[:500])
+    assessed = None
+    try:
+        assessed = anthropic_assess(text, evidence, scam_score, scam_reasons)
+    except Exception as exc:
+        # External model failures should not become uncaught HTTP 500 errors.
+        logger.warning("Trust AI assessment failed (%s)", type(exc).__name__)
+
+    clean = _clean_assessment(assessed, evidence)
+    if clean:
+        return clean
+
+    if scam_score >= 55:
+        return {
+            "status": "SCAM_RISK", "confidence": min(90, 55 + scam_score // 3),
+            "summary": "This message shows several common scam or phishing signals.",
+            "reasons": scam_reasons[:5], "sources": [],
+            "advice": "Do not open suspicious links or share passwords, OTPs, or financial details."
+        }
+    if extract_urls(text) and scam_score >= 25:
+        return {
+            "status": "SUSPICIOUS", "confidence": min(75, 35 + scam_score // 2),
+            "summary": "This link shows some suspicious characteristics.",
+            "reasons": scam_reasons[:5], "sources": [],
+            "advice": "Verify the sender and destination independently before opening it."
+        }
+
+    if not os.getenv("TAVILY_API_KEY", "").strip():
+        message = "Current-web fact checking isn't configured."
+    elif not evidence:
+        message = "Current-web evidence could not be retrieved for this message."
+    else:
+        message = "The AI could not complete an evidence-based assessment."
+    result = unavailable_result(message)
+    result["advice"] = "Treat this claim as unverified; try again or review reliable primary sources."
+    return result
+
 
 def media_capabilities():
     return {'status':'UNVERIFIED','confidence':20,'summary':'AI-generation cannot be determined reliably from appearance alone.','reasons':['Production media verification should combine C2PA/Content Credentials provenance, original-source lookup, metadata, forensic manipulation signals and detector signals.','LEMMIQ does not treat an AI detector score as proof.'],'sources':[],'advice':'Use provenance and source verification first; treat detector-only results as advisory.'}
