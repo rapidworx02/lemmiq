@@ -171,10 +171,10 @@ class PhoneEventDb(ctx:Context):SQLiteOpenHelper(ctx,"lemmiq_phone_insights.db",
 class LemmiqNotificationListener:NotificationListenerService(){
     override fun onNotificationPosted(sbn:StatusBarNotification){
         try {
-            if(!NotificationControl.enabled(this) || !NotificationControl.hasSystemAccess(this)) return
+            if(!NotificationControl.hasSystemAccess(this)) return
+            if(!NotificationControl.enabled(this) && !ExternalConsent.enabled(this))return
             val session=SessionStore(this)
             if(session.token.isNullOrEmpty()||session.userId<1)return
-            if(sbn.packageName !in NotificationControl.allowedApps(this))return
             if(sbn.packageName==packageName)return
             if(sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY!=0)return
             val extras=sbn.notification.extras
@@ -183,9 +183,21 @@ class LemmiqNotificationListener:NotificationListenerService(){
               ?:extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
             @Suppress("DEPRECATION") val label=runCatching{packageManager.getApplicationLabel(
                packageManager.getApplicationInfo(sbn.packageName,0)).toString()}.getOrDefault(sbn.packageName)
-            val e=LocalClassifier.classify(title,body,label,sbn.postTime,sbn.key,
-                NotificationControl.allowedCategories(this))?:return
-            PhoneEventDb(this).use{db->db.prune(NotificationControl.keepDays(this));db.insert(session.userId,e)}
+            // Separate consent: external WhatsApp/SMS previews are encrypted locally, never bulk-synced.
+            val source=ExternalConsent.sourceForPackage(sbn.packageName)
+            if(source!=null && ExternalConsent.enabled(this) && ExternalConsent.source(this,source)) {
+                ExternalClassifier.fromNotification(source,title,body,sbn.postTime)?.let{snippet->
+                    ExternalChatDb(this).use{db->
+                        db.prune(session.userId,ExternalConsent.days(this))
+                        db.save(session.userId,sbn.key,snippet)
+                    }
+                }
+            }
+            if(NotificationControl.enabled(this) && sbn.packageName in NotificationControl.allowedApps(this)) {
+                val e=LocalClassifier.classify(title,body,label,sbn.postTime,sbn.key,
+                    NotificationControl.allowedCategories(this))
+                if(e!=null)PhoneEventDb(this).use{db->db.prune(NotificationControl.keepDays(this));db.insert(session.userId,e)}
+            }
         } catch(_:Exception){ /* Never crash the system notification listener. */ }
     }
 }

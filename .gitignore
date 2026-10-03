@@ -23,3 +23,6 @@ Thumbs.db
 .pytest_cache/
 *.sqlite3
 android/local.properties
+
+google-services.json
+media_local/

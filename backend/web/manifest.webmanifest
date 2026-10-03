@@ -1,0 +1,25 @@
+{
+  "name": "LEMMIQ \u2014 Messaging with social IQ",
+  "short_name": "LEMMIQ",
+  "description": "AI-native messaging, Q Chat Agent, Trust and Business Agent.",
+  "start_url": "/web/",
+  "scope": "/web/",
+  "display": "standalone",
+  "background_color": "#080b18",
+  "theme_color": "#6c4cff",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/web/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/web/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

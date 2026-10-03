@@ -11,6 +11,21 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import android.provider.Settings
 import android.content.Intent
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.ContactsContract
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -121,7 +136,7 @@ private fun Home(vm:LemmiqViewModel){
         containerColor=Bg,
         bottomBar={
             NavigationBar{
-                listOf("💬" to "Chats","🔔" to "Activity","Q" to "Agent","💳" to "Money","🙂" to "Me").forEachIndexed{i,x->
+                listOf("💬" to "Chats","🔔" to "Activity","Q" to "Agent","💳" to "Money","💼" to "Biz","🙂" to "Me").forEachIndexed{i,x->
                     NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},{Text(x.second)})
                 }
             }
@@ -136,6 +151,7 @@ private fun Home(vm:LemmiqViewModel){
                 1->ActivityScreen(vm)
                 2->ChatAgent(vm)
                 3->MoneyScreen(vm)
+                4->BusinessScreen(vm)
                 else->Profile(vm)
             }
         }
@@ -233,6 +249,34 @@ private fun Chat(vm:LemmiqViewModel){
     val c=vm.active?:return
     var draft by remember{mutableStateOf("")}
     var settings by remember{mutableStateOf(false)}
+    var businessSettings by remember{mutableStateOf(false)}
+    var showAttach by remember{mutableStateOf(false)}
+    val ctx=LocalContext.current
+    var pendingContact by remember{mutableStateOf<Pair<String,String>?>(null)}
+    val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){
+        uri->if(uri!=null)vm.uploadUri(uri)
+    }
+    val videoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){
+        uri->if(uri!=null)vm.uploadUri(uri)
+    }
+    val filePicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){
+        uri->if(uri!=null)vm.uploadUri(uri)
+    }
+    val contactPicker=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){result->
+        val uri=result.data?.data
+        if(result.resultCode==android.app.Activity.RESULT_OK && uri!=null){
+            runCatching{
+                ctx.contentResolver.query(uri,arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER),null,null,null)?.use{cursor->
+                    if(cursor.moveToFirst()){
+                        val name=cursor.getString(0).orEmpty()
+                        val phone=cursor.getString(1).orEmpty()
+                        if(name.isNotBlank() && phone.isNotBlank())pendingContact=name to phone
+                    }
+                }
+            }
+        }
+    }
     // Reverse layout pins the latest message to the composer. Typing never changes scroll state.
     val messageListState=rememberLazyListState()
     LaunchedEffect(c.id,vm.messages.lastOrNull()?.id){
@@ -252,6 +296,7 @@ private fun Chat(vm:LemmiqViewModel){
                         Text("@${c.other_user.username} · ${catEmoji(c.category)} ${pretty(c.category)} · ${pretty(c.ai_mode)}",color=Muted,fontSize=10.sp)
                     }
                     if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(10.dp))
+                    if(vm.businessProfile.enabled)Text("💼",fontSize=18.sp,modifier=Modifier.clickable{businessSettings=true}.padding(8.dp))
                     Text("⚙",fontSize=19.sp,modifier=Modifier.clickable{settings=true}.padding(10.dp))
                 }
             }
@@ -259,6 +304,26 @@ private fun Chat(vm:LemmiqViewModel){
         bottomBar={
             // Keep composer above the keyboard without re-scrolling on every character.
             Column(Modifier.background(Color.White).imePadding()){
+                vm.businessSuggestion?.let{bs->
+                    Surface(color=Color(0xFFEAF8F2),shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
+                        Column(Modifier.padding(12.dp)){
+                            Row(verticalAlignment=Alignment.CenterVertically){
+                                Text("💼 Business Agent",color=Color(0xFF08775D),fontWeight=FontWeight.Bold,fontSize=12.sp)
+                                Spacer(Modifier.weight(1f))
+                                Text("${bs.confidence}% grounded",fontSize=10.sp,color=Muted)
+                            }
+                            Text(bs.reply,modifier=Modifier.padding(top=5.dp))
+                            if(bs.reason.isNotBlank())Text(bs.reason,fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=5.dp))
+                            if(bs.sources.isNotEmpty())Text("Sources: "+bs.sources.joinToString{it.title},fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=3.dp))
+                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                                TextButton({vm.discardBusinessSuggestion()}){Text("Discard",color=Muted)}
+                                Spacer(Modifier.weight(1f))
+                                TextButton({draft=bs.reply;vm.discardBusinessSuggestion()}){Text("Edit")}
+                                Button({vm.send(bs.reply);vm.discardBusinessSuggestion()}){Text("Send")}
+                            }
+                        }
+                    }
+                }
                 vm.suggestion?.let{s->
                     Surface(color=Soft,shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
@@ -273,8 +338,33 @@ private fun Chat(vm:LemmiqViewModel){
                         }
                     }
                 }
-                if(vm.busy)LinearProgressIndicator(Modifier.fillMaxWidth(),color=Purple)
+                if(vm.busy || vm.attachmentBusy)LinearProgressIndicator(Modifier.fillMaxWidth(),color=Purple)
+                vm.error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=11.sp,
+                    modifier=Modifier.padding(horizontal=14.dp))}
+                if(showAttach){
+                    Card(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=4.dp),
+                        colors=CardDefaults.cardColors(containerColor=Soft)){
+                        Column(Modifier.padding(12.dp)){
+                            Text("Share in this chat",fontWeight=FontWeight.Bold,color=Purple)
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){
+                                TextButton({photoPicker.launch("image/*");showAttach=false}){Text("🖼 Photo")}
+                                TextButton({videoPicker.launch("video/*");showAttach=false}){Text("🎬 Video")}
+                            }
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){
+                                TextButton({filePicker.launch("*/*");showAttach=false}){Text("📄 File")}
+                                TextButton({
+                                    contactPicker.launch(Intent(Intent.ACTION_PICK,
+                                        ContactsContract.CommonDataKinds.Phone.CONTENT_URI))
+                                    showAttach=false
+                                }){Text("👤 Contact")}
+                            }
+                            Text("Files up to 20 MB. Shared content is not end-to-end encrypted.",fontSize=10.sp,color=Muted)
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text("+",fontWeight=FontWeight.Bold,fontSize=28.sp,color=Purple,
+                        modifier=Modifier.clickable{showAttach=!showAttach}.padding(horizontal=5.dp))
                     OutlinedTextField(
                         draft,{draft=it},Modifier.weight(1f),placeholder={Text("Message ${c.other_user.display_name}…")},
                         singleLine=true,shape=RoundedCornerShape(24.dp),
@@ -290,6 +380,15 @@ private fun Chat(vm:LemmiqViewModel){
         }
     ){p->
         Column(Modifier.fillMaxSize().padding(p)){
+            if(vm.businessProfile.enabled && vm.activeBusinessSetting.enabled){
+                Row(Modifier.fillMaxWidth().padding(12.dp,5.dp),verticalAlignment=Alignment.CenterVertically){
+                    FilledTonalButton({vm.suggestBusiness()},enabled=!vm.businessBusy && vm.activeBusinessSetting.mode!="OFF"){Text("💼 Business reply")}
+                    Spacer(Modifier.width(6.dp))
+                    TextButton({businessSettings=true}){Text("Customer memory")}
+                    Spacer(Modifier.weight(1f))
+                    Text("${vm.activeBusinessSetting.mode}",fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
+                }
+            }
             if(c.ai_mode!="OFF"){
                 Row(Modifier.fillMaxWidth().padding(12.dp,7.dp),verticalAlignment=Alignment.CenterVertically){
                     FilledTonalButton({vm.suggest()},enabled=!vm.busy){Text("✨ Suggest reply")}
@@ -310,12 +409,20 @@ private fun Chat(vm:LemmiqViewModel){
                 // Messages are stored oldest-first; reverse items to show newest at the bottom.
                 // The message list does not depend on the draft field, preventing typing-induced jumps.
                 items(vm.messages.asReversed(),key={it.id}){m->
-                    Bubble(m,vm.store.userId){vm.trustCheck(m.text)}
+                    Bubble(m,vm.store.userId,vm){vm.trustCheck(m.text)}
                 }
             }
         }
     }
     if(settings)Settings(c,vm){settings=false}
+    if(businessSettings)BusinessChatDialog(c,vm){businessSettings=false}
+    if(vm.businessLearnCandidates.isNotEmpty())BusinessLearnDialog(vm)
+    pendingContact?.let{(name,phone)->
+        AlertDialog(onDismissRequest={pendingContact=null},title={Text("Share this contact?")},
+            text={Text("$name\n$phone\n\nThis contact's number will be visible to the recipient.")},
+            confirmButton={Button({vm.shareContact(name,phone);pendingContact=null}){Text("Share")}},
+            dismissButton={TextButton({pendingContact=null}){Text("Cancel")}})
+    }
     if(vm.trustBusy){
         AlertDialog(
             onDismissRequest={},
@@ -341,19 +448,72 @@ private fun Chat(vm:LemmiqViewModel){
 }
 
 @Composable
-private fun Bubble(m:MessageDto,me:Int,onTrust:()->Unit){
+private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
     val mine=m.sender_id==me
+    val ctx=LocalContext.current
+    val scope=rememberCoroutineScope()
+    var mediaError by remember(m.id){mutableStateOf<String?>(null)}
+    val mediaId=m.attachment?.media_id
+    var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
+    // Only photo content is fetched for inline display; videos/docs download on tap.
+    LaunchedEffect(mediaId,m.attachment?.kind){
+        if(mediaId!=null && m.attachment?.kind=="PHOTO") {
+            try{
+                val bytes=withContext(Dispatchers.IO){vm.mediaBytes(mediaId)}
+                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+                BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+                var sample=1
+                while(bounds.outWidth/sample>1400 || bounds.outHeight/sample>1400)sample*=2
+                val options=BitmapFactory.Options().apply{inSampleSize=sample}
+                bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)
+            }catch(e:Exception){mediaError=e.message}
+        }
+    }
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
         Surface(color=if(mine)Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
-            Column(Modifier.widthIn(max=290.dp).padding(12.dp)){
+            Column(Modifier.widthIn(max=300.dp).padding(12.dp)){
                 if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
-                Text(m.text,color=if(mine)Color.White else Ink)
+                val a=m.attachment
+                if(a!=null){
+                    if(a.kind=="PHOTO"){
+                        bitmap?.let{bmp->
+                            Image(bmp.asImageBitmap(),contentDescription="Shared photo",
+                                modifier=Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(12.dp)),
+                                contentScale=ContentScale.Fit)
+                        }?:Text(if(mediaError==null)"🖼 Loading photo…" else "🖼 Photo unavailable",color=if(mine)Color.White else Ink)
+                    }
+                    if(a.kind=="CONTACT"){
+                        Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
+                        Text(a.contact_phone.orEmpty(),color=if(mine)Color.White else Ink)
+                    }else if(a.media_id!=null){
+                        Text("${if(a.kind=="VIDEO")"🎬" else if(a.kind=="PHOTO")"🖼" else "📄"} ${a.name.orEmpty()}",
+                            color=if(mine)Color.White else Ink,fontSize=12.sp)
+                        TextButton(onClick={
+                            scope.launch {
+                                mediaError=null
+                                try{
+                                    val bytes=vm.mediaBytes(a.media_id)
+                                    val safeName=(a.name?:"attachment").replace(Regex("[^A-Za-z0-9._-]"),"_")
+                                    val dir=File(ctx.cacheDir,"share").apply{mkdirs()}
+                                    val file=File(dir,"${m.id}_$safeName")
+                                    withContext(Dispatchers.IO){file.writeBytes(bytes)}
+                                    val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
+                                    val intent=Intent(Intent.ACTION_VIEW).apply{
+                                        setDataAndType(uri,a.mime_type?:"application/octet-stream")
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    ctx.startActivity(Intent.createChooser(intent,"Open attachment"))
+                                }catch(e:Exception){mediaError=e.message?:"Cannot open media"}
+                            }
+                        }){Text("Open / share",color=if(mine)Color.White else Purple)}
+                    }
+                }else Text(m.text,color=if(mine)Color.White else Ink)
+                if(mediaError!=null)Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
                 if(mine)Text(if(m.read_at!=null)"✓✓" else "✓",color=Color(0xFFDCD6FF),fontSize=10.sp,modifier=Modifier.align(Alignment.End))
-                else TextButton(
-                    onClick=onTrust,
-                    modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
-                    contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)
-                ){Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)}
+                else if(a==null) TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
+                    contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)){
+                    Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)
+                }
             }
         }
     }
@@ -447,6 +607,19 @@ private fun ChatAgent(vm:LemmiqViewModel){
         contentPadding=PaddingValues(bottom=24.dp)
     ){
         item{Header("Ask Q","Messages + your opt-in phone insights")}
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp)){
+                Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text("Include WhatsApp/SMS previews in Q",fontWeight=FontWeight.Bold,fontSize=13.sp)
+                        Text("Off by default. Up to 30 selected recent snippets are sent only when you press Ask Q.",
+                            color=Muted,fontSize=10.sp)
+                    }
+                    Switch(checked=vm.externalQ && vm.externalEnabled,
+                        onCheckedChange={vm.setExternalQ(it)},enabled=vm.externalEnabled)
+                }
+            }
+        }
         item{
             Card(
                 Modifier.fillMaxWidth().padding(horizontal=20.dp),
@@ -573,18 +746,28 @@ private fun Agents(){
 }
 @Composable
 private fun Profile(vm:LemmiqViewModel){
+    val ctx=LocalContext.current
+    val notificationPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->
+        if(granted)vm.registerPush()
+    }
     var showMoments by remember{mutableStateOf(false)}
     if(showMoments){Column{TextButton({showMoments=false}){Text("‹ Back to Me")};Moments(vm)};return}
     Column{
         Header("Me","@${vm.store.username.orEmpty()}")
         Card(Modifier.fillMaxWidth().padding(20.dp)){Column(Modifier.padding(18.dp)){Text(vm.store.displayName.orEmpty(),fontSize=20.sp,fontWeight=FontWeight.Bold);Text("@${vm.store.username.orEmpty()}",color=Muted)}}
         Row(Modifier.padding(horizontal=20.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
-            BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V1.6",fontWeight=FontWeight.Bold)
+            BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V1.7",fontWeight=FontWeight.Bold)
         }
         TextButton({showMoments=true},modifier=Modifier.padding(horizontal=20.dp)){Text("✨ Open 24-hour Moments")}
         Text("🧠 AI memory: recent 50-message context",Modifier.padding(horizontal=20.dp,vertical=6.dp))
         Text("🔒 Private beta: messenger and synced events are server-readable, not E2EE.",
             Modifier.padding(horizontal=20.dp,vertical=6.dp),fontSize=12.sp,color=Muted)
+        OutlinedButton(onClick={
+            if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(ctx,Manifest.permission.POST_NOTIFICATIONS)
+                !=PackageManager.PERMISSION_GRANTED)notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else vm.registerPush()
+        }){Text("🔔 Enable / refresh message push alerts")}
+        Text("FCM needs Firebase setup; background delivery can be delayed on sleeping Render services.",fontSize=10.sp,color=Muted)
         Text("Server: ${vm.serverUrl}",Modifier.padding(horizontal=20.dp,vertical=6.dp),fontSize=11.sp,color=Muted)
         Button({vm.logout()},modifier=Modifier.padding(20.dp)){Text("Log out")}
     }
@@ -599,7 +782,141 @@ private fun Empty(icon:String,title:String,sub:String){
 }
 private fun catEmoji(c:String)=when(c){"PARTNER"->"❤️";"DATING"->"💘";"BESTIE"->"👯";"FRIEND"->"😂";"FAMILY"->"🏠";"WORK"->"💼";"CUSTOMER"->"🤝";"SALES"->"💰";"STUDY"->"🎓";else->"✨"}
 private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
-\
+
+
+@Composable
+private fun BusinessScreen(vm:LemmiqViewModel){
+    var enabled by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.enabled)}
+    var name by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.business_name)}
+    var type by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.business_type)}
+    var description by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.description)}
+    var website by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.website)}
+    var phone by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.phone)}
+    var email by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.email)}
+    var hours by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.hours)}
+    var area by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.service_area)}
+    var tone by remember(vm.businessProfile){mutableStateOf(vm.businessProfile.tone)}
+    var threshold by remember(vm.businessProfile){mutableIntStateOf(vm.businessProfile.auto_threshold)}
+    var category by remember{mutableStateOf("FAQ")}
+    var kbTitle by remember{mutableStateOf("")}
+    var kbContent by remember{mutableStateOf("")}
+    var showKnowledge by remember{mutableStateOf(true)}
+    val docPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)vm.uploadBusinessKnowledge(uri)}
+    LaunchedEffect(Unit){vm.refreshBusiness()}
+    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=30.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+        item{Header("LEMMIQ Business Beta","Teach Q your business, then use grounded customer replies")}
+        item{GradientPanel("💼 Business Agent","Optional beta inside your personal LEMMIQ"){
+            Text(if(enabled)"Business intelligence enabled" else "Business intelligence is off",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black)
+            Text("Approved knowledge + customer context + recent chat → grounded reply",color=Color.White.copy(alpha=.85f),fontSize=11.sp)
+        }}
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
+                    Row(verticalAlignment=Alignment.CenterVertically){
+                        Column(Modifier.weight(1f)){Text("Enable Business Beta",fontWeight=FontWeight.Bold);Text("You choose which customer chats use it.",fontSize=10.sp,color=Muted)}
+                        Switch(enabled,{enabled=it})
+                    }
+                    OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Business name")},singleLine=true)
+                    OutlinedTextField(type,{type=it},Modifier.fillMaxWidth(),label={Text("Business type")},singleLine=true)
+                    OutlinedTextField(description,{description=it},Modifier.fillMaxWidth(),label={Text("What your business does")},minLines=2,maxLines=4)
+                    OutlinedTextField(hours,{hours=it},Modifier.fillMaxWidth(),label={Text("Opening hours")},minLines=2,maxLines=4)
+                    OutlinedTextField(area,{area=it},Modifier.fillMaxWidth(),label={Text("Service area")},minLines=1,maxLines=3)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        OutlinedTextField(phone,{phone=it},Modifier.weight(1f),label={Text("Phone")},singleLine=true)
+                        OutlinedTextField(email,{email=it},Modifier.weight(1f),label={Text("Email")},singleLine=true)
+                    }
+                    OutlinedTextField(website,{website=it},Modifier.fillMaxWidth(),label={Text("Website")},singleLine=true)
+                    Text("Reply tone",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                    LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("Professional","Friendly","Warm","Direct","Premium","Casual")){x->FilterChip(tone==x,{tone=x},{Text(x)})}}
+                    Text("AUTO grounding threshold: $threshold%",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                    Slider(value=threshold.toFloat(),onValueChange={threshold=it.toInt()},valueRange=70f..100f,steps=5)
+                    Text("AUTO only sends when the Business Agent returns a high-confidence reply that does not require review. Otherwise it waits for you.",fontSize=10.sp,color=Muted)
+                    Button({vm.saveBusinessProfile(BusinessProfileDto(enabled,name,type,description,website,phone,email,hours,area,tone,"AUD",threshold))},
+                        enabled=!vm.businessBusy && name.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text(if(vm.businessBusy)"Saving…" else "Save Business Profile")}
+                }
+            }
+        }
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text("Knowledge Base",fontSize=19.sp,fontWeight=FontWeight.Black)
+                    Text("Only approved knowledge is used for customer answers. Uploading a document extracts text; the original file is not used as a public attachment.",fontSize=11.sp,color=Muted)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        OutlinedButton({docPicker.launch("*/*")},enabled=!vm.businessBusy){Text("📄 Upload PDF / DOCX / TXT")}
+                        TextButton({showKnowledge=!showKnowledge}){Text(if(showKnowledge)"Hide knowledge" else "Show knowledge (${vm.businessKnowledge.size})")}
+                    }
+                    Text("Add knowledge manually",fontWeight=FontWeight.Bold,fontSize=13.sp)
+                    LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("FAQ","SERVICE","PRICING","POLICY","HOURS","AREA","OTHER")){x->FilterChip(category==x,{category=x},{Text(x)})}}
+                    OutlinedTextField(kbTitle,{kbTitle=it},Modifier.fillMaxWidth(),label={Text("Title")},singleLine=true)
+                    OutlinedTextField(kbContent,{kbContent=it},Modifier.fillMaxWidth(),label={Text("Approved information")},minLines=3,maxLines=7)
+                    Button({vm.addBusinessKnowledge(category,kbTitle,kbContent);kbTitle="";kbContent=""},enabled=kbTitle.isNotBlank()&&kbContent.isNotBlank()&&!vm.businessBusy){Text("Add approved knowledge")}
+                }
+            }
+        }
+        if(showKnowledge){
+            if(vm.businessKnowledge.isEmpty())item{Text("No business knowledge yet.",Modifier.padding(horizontal=20.dp),color=Muted)}
+            items(vm.businessKnowledge,key={it.id}){k->
+                Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(18.dp)){
+                    Column(Modifier.padding(14.dp)){
+                        Row{Text(k.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Black);Spacer(Modifier.weight(1f));Text(k.source,color=Muted,fontSize=9.sp)}
+                        Text(k.title,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=3.dp))
+                        Text(k.content,maxLines=5,overflow=TextOverflow.Ellipsis,fontSize=12.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                        TextButton({vm.deleteBusinessKnowledge(k.id)},enabled=!vm.businessBusy){Text("Delete",color=MaterialTheme.colorScheme.error)}
+                    }
+                }
+            }
+        }
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),colors=CardDefaults.cardColors(containerColor=Soft),shape=RoundedCornerShape(20.dp)){
+                Column(Modifier.padding(16.dp)){
+                    Text("How to use it",fontWeight=FontWeight.Black,color=Purple)
+                    Text("1. Add your business profile and approved knowledge.\n2. Open a customer chat.\n3. Tap 💼 and enable Business Agent for that chat.\n4. Use Business reply in ASSIST, or test guarded AUTO.\n5. Use Learn from chat to review reusable facts before saving them.",fontSize=12.sp,modifier=Modifier.padding(top=7.dp))
+                }
+            }
+        }
+        vm.error?.let{item{Text(it,color=MaterialTheme.colorScheme.error,fontSize=11.sp,modifier=Modifier.padding(horizontal=20.dp))}}
+    }
+}
+
+@Composable
+private fun BusinessChatDialog(c:ChatDto,vm:LemmiqViewModel,dismiss:()->Unit){
+    var enabled by remember(vm.activeBusinessSetting){mutableStateOf(vm.activeBusinessSetting.enabled)}
+    var mode by remember(vm.activeBusinessSetting){mutableStateOf(vm.activeBusinessSetting.mode)}
+    var label by remember(vm.activeBusinessSetting){mutableStateOf(vm.activeBusinessSetting.customer_label)}
+    var notes by remember(vm.activeBusinessMemory){mutableStateOf(vm.activeBusinessMemory.notes)}
+    var tags by remember(vm.activeBusinessMemory){mutableStateOf(vm.activeBusinessMemory.tags)}
+    AlertDialog(onDismissRequest=dismiss,title={Text("💼 Business Agent · ${c.other_user.display_name}")},text={
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(10.dp)){
+            item{Row(verticalAlignment=Alignment.CenterVertically){Text("Use Business Agent",Modifier.weight(1f),fontWeight=FontWeight.Bold);Switch(enabled,{enabled=it})}}
+            item{Text("Mode",fontWeight=FontWeight.Bold);LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("OFF","ASSIST","AUTO")){x->FilterChip(mode==x,{mode=x},{Text(x)})}}}
+            item{OutlinedTextField(label,{label=it},Modifier.fillMaxWidth(),label={Text("Customer label (optional)")},singleLine=true)}
+            item{OutlinedTextField(notes,{notes=it},Modifier.fillMaxWidth(),label={Text("Customer memory / confirmed notes")},minLines=3,maxLines=6)}
+            item{OutlinedTextField(tags,{tags=it},Modifier.fillMaxWidth(),label={Text("Tags e.g. lead, ceramic coating")},singleLine=true)}
+            item{Text("Memory is owner-controlled. Do not store passwords, OTPs, card numbers or unnecessary sensitive information.",fontSize=10.sp,color=Muted)}
+            item{OutlinedButton({vm.learnBusinessFromActiveChat();dismiss()}){Text("🧠 Learn from chat (review first)")}}
+            if(mode=="AUTO")item{Text("AUTO will only send when approved business knowledge strongly supports the reply and the confidence threshold is met.",fontSize=10.sp,color=Color(0xFF795A16))}
+        }
+    },confirmButton={Button({vm.saveBusinessChat(enabled,mode,label);vm.saveBusinessMemory(notes,tags);dismiss()}){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
+}
+
+@Composable
+private fun BusinessLearnDialog(vm:LemmiqViewModel){
+    AlertDialog(onDismissRequest={vm.businessLearnCandidates=emptyList()},title={Text("Review business learning")},text={
+        LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            item{Text("Nothing is learned automatically. Approve only reusable facts that are correct for future customers.",fontSize=11.sp,color=Muted)}
+            items(vm.businessLearnCandidates){x->
+                Card(colors=CardDefaults.cardColors(containerColor=Soft)){
+                    Column(Modifier.padding(12.dp)){
+                        Text(x.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Black)
+                        Text(x.title,fontWeight=FontWeight.Bold)
+                        Text(x.content,fontSize=12.sp,modifier=Modifier.padding(top=4.dp))
+                        Row{TextButton({vm.businessLearnCandidates=vm.businessLearnCandidates.filterNot{it==x}}){Text("Discard",color=Muted)};Spacer(Modifier.weight(1f));Button({vm.approveBusinessLearning(x)}){Text("Approve")}}
+                    }
+                }
+            }
+        }
+    },confirmButton={TextButton({vm.businessLearnCandidates=emptyList()}){Text("Close")}})
+}
 
 @Composable private fun ActivityScreen(vm:LemmiqViewModel){
     val ctx=LocalContext.current
@@ -613,7 +930,7 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
     }
     val matchingPackages=filteredApps.map{it.pkg}.toSet()
     val selectedMatches=matchingPackages.count{it in vm.permittedApps}
-    LaunchedEffect(Unit){vm.reloadNotificationSettings();vm.refreshInsights();vm.loadInstalledApps()}
+    LaunchedEffect(Unit){vm.reloadNotificationSettings();vm.refreshInsights();vm.loadInstalledApps();vm.reloadExternalSettings();vm.refreshExternal()}
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=28.dp),
         verticalArrangement=Arrangement.spacedBy(12.dp)){
         item{Header("Q Activity","Selected phone notifications · locally processed")}
@@ -622,6 +939,7 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
             Text("Nothing is captured until you grant Android access, choose apps and enable categories.",
                color=Color.White.copy(alpha=.9f),fontSize=12.sp)
         }}
+        item{ExternalChatPanel(vm)}
         item{
             Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -752,6 +1070,74 @@ private fun pretty(s:String)=s.lowercase().replaceFirstChar{it.uppercase()}
       text={Text("This clears your local records and your synced desktop copy. If the desktop is offline, deletion must be retried.")},
       confirmButton={Button({vm.deleteInsights();deleteConfirm=false}){Text("Delete data")}},
       dismissButton={TextButton({deleteConfirm=false}){Text("Cancel")}})
+}
+
+@Composable private fun ExternalChatPanel(vm:LemmiqViewModel){
+    val ctx=LocalContext.current
+    val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
+    var expanded by remember{mutableStateOf(false)}
+    var confirmDelete by remember{mutableStateOf(false)}
+    Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp),
+        colors=CardDefaults.cardColors(containerColor=Color.White)){
+        Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+            Text("💬 Universal Chat Intelligence",fontSize=18.sp,fontWeight=FontWeight.Bold)
+            Text("Optional WhatsApp / SMS incoming notification previews. Not complete conversations; no automatic sending.",fontSize=11.sp,color=Muted)
+            Row(verticalAlignment=Alignment.CenterVertically){
+                Text("Capture new external previews",Modifier.weight(1f),fontWeight=FontWeight.Bold,fontSize=12.sp)
+                Switch(checked=vm.externalEnabled,onCheckedChange={vm.setExternalEnabled(it)})
+            }
+            if(vm.externalEnabled){
+                Row(verticalAlignment=Alignment.CenterVertically){
+                    Text("WhatsApp",Modifier.weight(1f));Checkbox(vm.externalWhatsApp,{vm.setExternalSource("WhatsApp",it)})
+                }
+                Row(verticalAlignment=Alignment.CenterVertically){
+                    Text("SMS / Google Messages",Modifier.weight(1f));Checkbox(vm.externalSms,{vm.setExternalSource("SMS",it)})
+                }
+                Text("Keep encrypted local context for",fontSize=11.sp,color=Muted)
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    listOf(1,7,30).forEach{n->FilterChip(vm.externalDays==n,{vm.setExternalDays(n)},
+                        {Text(if(n==1)"24h" else "$n days")})}
+                }
+                Row(verticalAlignment=Alignment.CenterVertically){
+                    Text("Allow Q to use selected snippets",Modifier.weight(1f),fontSize=12.sp)
+                    Switch(vm.externalQ,{vm.setExternalQ(it)})
+                }
+                Text("Q sharing is on demand, when you explicitly ask Q or request a draft. Nothing is automatically sent to contacts.",fontSize=10.sp,color=Muted)
+            }
+            Row(verticalAlignment=Alignment.CenterVertically){
+                OutlinedButton({vm.refreshExternal();expanded=!expanded}){
+                    Text(if(expanded)"Hide recent previews" else "View recent previews (${vm.externalMessages.size})")
+                }
+                TextButton({confirmDelete=true}){Text("Delete",color=Muted)}
+            }
+            if(expanded){
+                if(vm.externalMessages.isEmpty())Text("No permitted new WhatsApp/SMS notifications yet.",fontSize=11.sp,color=Muted)
+                vm.externalMessages.take(20).forEach{entry->
+                    HorizontalDivider()
+                    Text("${entry.source} · ${entry.contact}",fontWeight=FontWeight.SemiBold,fontSize=12.sp)
+                    Text(entry.text,maxLines=3,overflow=TextOverflow.Ellipsis,fontSize=12.sp)
+                    TextButton({vm.suggestExternal(entry)},enabled=!vm.agentBusy){Text("✨ Suggest reply")}
+                }
+                vm.externalDraft?.let{draft->
+                    Surface(color=Soft,shape=RoundedCornerShape(12.dp)){
+                        Column(Modifier.padding(12.dp)){
+                            Text("Q draft — review before use",fontWeight=FontWeight.Bold,color=Purple)
+                            Text(draft)
+                            Row{
+                                TextButton({vm.discardExternalDraft()}){Text("Discard")}
+                                TextButton({clipboard.setText(androidx.compose.ui.text.AnnotatedString(draft))}){Text("Copy reply")}
+                            }
+                        }
+                    }
+                }
+                vm.error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=11.sp)}
+            }
+        }
+    }
+    if(confirmDelete)AlertDialog(onDismissRequest={confirmDelete=false},title={Text("Delete external chat context?")},
+        text={Text("This deletes all locally saved WhatsApp/SMS previews for this LEMMIQ account. It does not delete messages in those apps.")},
+        confirmButton={Button({vm.clearExternal();confirmDelete=false}){Text("Delete")}},
+        dismissButton={TextButton({confirmDelete=false}){Text("Cancel")}})
 }
 
 @Composable private fun EventCard(e:PhoneEvent){

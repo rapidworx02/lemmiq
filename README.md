@@ -1,3 +1,15 @@
+# LEMMIQ V2 Web Beta
+
+**Messaging with social IQ — now available from Android, iPhone/iPad browsers and desktop browsers.**
+
+V2 keeps the native Android client and adds a responsive PWA served by the same FastAPI/Render backend.
+
+Open the deployed Render root URL to launch the browser app.
+
+See `LEMMIQ_V2_WEB_BETA_SETUP.md` for deployment and testing steps.
+
+---
+
 # V1.6.1 deployment: GitHub + Render
 
 **Use [`GITHUB_RENDER_V1_6_1_SETUP.md`](GITHUB_RENDER_V1_6_1_SETUP.md).** Previous desktop/Tailscale guides remain only for optional local testing.
@@ -266,3 +278,13 @@ It also fixes the Android Chat Agent API methods, makes the API URL configurable
 
 # V1.6 Desktop/Notification Intelligence update
 Read `V1_6_DESKTOP_SETUP.md` for exact private testing instructions, privacy limitations and new features.
+
+## V1.7: GitHub/Render media, optional Firebase push and WhatsApp/SMS previews
+
+Start with **LEMMIQ_V1_7_INSTALL.md**. Media sharing on Render requires a persistent private S3-compatible bucket such as Cloudflare R2. Background push requires your own Firebase project and service account. External WhatsApp/SMS notification preview intelligence is opt-in and local by default.
+
+# LEMMIQ V1.8 — Business Beta
+
+V1.8 adds an optional Business Agent inside the personal LEMMIQ app. Businesses can create a profile, add approved knowledge or upload documents, enable the Business Agent per customer chat, maintain owner-controlled customer notes, generate grounded replies, test guarded AUTO mode and review proposed knowledge learned from chats before anything is saved.
+
+See `LEMMIQ_V1_8_BUSINESS_BETA.md` for deployment and testing steps.

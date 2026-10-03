@@ -16,6 +16,12 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+// Add your Firebase google-services.json to android/app/ to enable push registration.
+// Without that file, normal messaging still compiles and works without FCM.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 android {
     namespace="com.lemmiq.app"
     compileSdk=37
@@ -23,8 +29,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=8
-        versionName="1.6.4"
+        versionCode=20
+        versionName="2.0.0"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
     }
     buildFeatures { compose=true; buildConfig=true }
@@ -48,6 +54,8 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("com.squareup.okhttp3:okhttp:5.1.0")
     implementation("com.google.code.gson:gson:2.13.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
+    implementation("com.google.firebase:firebase-messaging")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

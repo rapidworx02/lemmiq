@@ -8,7 +8,7 @@ data class ChatDto(
 )
 data class MessageDto(
     val id:Int,val chat_id:Int,val sender_id:Int,val text:String,val created_at:String,
-    val read_at:String?=null,val ai_generated:Boolean=false
+    val read_at:String?=null,val ai_generated:Boolean=false,val attachment:AttachmentDto?=null
 )
 data class MomentDto(val id:Int,val user:UserDto,val text:String,val created_at:String,val expires_at:String)
 data class SuggestResponse(val reply:String)
@@ -56,4 +56,49 @@ data class InsightBrief(
     val spending_cents:Long=0,val incoming_cents:Long=0,val transactions:Int=0,
     val detected_count:Int=0,val events:List<PhoneEvent> = emptyList(),
     val note:String=""
+)
+
+
+data class AttachmentDto(
+    val kind:String="",val name:String?=null,val mime_type:String?=null,val size_bytes:Long?=null,
+    val media_id:Int?=null,val contact_name:String?=null,val contact_phone:String?=null
+)
+
+// LEMMIQ V1.8 Business Beta
+data class BusinessProfileDto(
+    val enabled:Boolean=false,
+    val business_name:String="",
+    val business_type:String="",
+    val description:String="",
+    val website:String="",
+    val phone:String="",
+    val email:String="",
+    val hours:String="",
+    val service_area:String="",
+    val tone:String="Professional",
+    val currency:String="AUD",
+    val auto_threshold:Int=90,
+    val updated_at:String?=null
+)
+data class BusinessKnowledgeDto(
+    val id:Int=0,val category:String="OTHER",val title:String="",val content:String="",
+    val source:String="Manual",val approved:Boolean=true,val active:Boolean=true,
+    val created_at:String?=null,val updated_at:String?=null
+)
+data class BusinessChatSettingDto(
+    val enabled:Boolean=false,val mode:String="ASSIST",val customer_label:String="",val updated_at:String?=null
+)
+data class BusinessMemoryDto(val notes:String="",val tags:String="",val updated_at:String?=null)
+data class BusinessChatBundle(
+    val setting:BusinessChatSettingDto=BusinessChatSettingDto(),
+    val memory:BusinessMemoryDto=BusinessMemoryDto()
+)
+data class BusinessSourceDto(val id:Int=0,val title:String="",val category:String="")
+data class BusinessSuggestionDto(
+    val reply:String="",val confidence:Int=0,val requires_review:Boolean=true,
+    val reason:String="",val sources:List<BusinessSourceDto> = emptyList()
+)
+data class BusinessLearnCandidate(val category:String="OTHER",val title:String="",val content:String="")
+data class BusinessLearnResponse(
+    val candidates:List<BusinessLearnCandidate> = emptyList(),val note:String=""
 )

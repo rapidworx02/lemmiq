@@ -1,21 +1,28 @@
 from .trust import check_text, media_capabilities, unavailable_result
-import os, hashlib, hmac, secrets, logging
+import os, hashlib, hmac, secrets, logging, re
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
 import jwt
-from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field
+from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from .database import Base, engine, SessionLocal
-from .models import User, Chat, ChatSetting, Message, Moment, InsightEvent
+from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
+    BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory)
+from . import media_store, push_service
 from .chat_agent import daily_brief, needs_reply, communication_profile, search_memory, summarize_chat, ask_agent
 from .insights import CATEGORIES, DIRECTIONS, event_json, list_events, brief as insight_brief
+from .business_agent import (profile_for, profile_json, knowledge_json, chat_setting_for,
+    chat_setting_json, customer_memory_for, memory_json, business_reply, extract_document, learn_candidates)
 
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="1.6.1")
+app = FastAPI(title="LEMMIQ Server", version="2.0.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -67,10 +74,20 @@ def get_settings(db: Session, cid: int, uid: int):
         db.add(s); db.commit(); db.refresh(s)
     return s
 
-def msg_json(m: Message):
-    return {"id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id, "text": m.text,
+def msg_json(m: Message, db: Session | None = None):
+    data = {"id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id, "text": m.text,
             "created_at": m.created_at.isoformat(), "read_at": m.read_at.isoformat() if m.read_at else None,
             "ai_generated": m.ai_generated}
+    attach = db.get(MessageAttachment, m.id) if db is not None else None
+    data["attachment"] = ({"kind": attach.kind, "name": attach.original_name,
+        "mime_type": attach.mime_type, "size_bytes": attach.size_bytes,
+        "media_id": attach.message_id if attach.object_key else None,
+        "contact_name": attach.contact_name, "contact_phone": attach.contact_phone}
+        if attach else None)
+    return data
+
+def push_tokens(db:Session, uid:int):
+    return [x.token for x in db.scalars(select(PushDevice).where(PushDevice.user_id == uid)).all()]
 
 def chat_json(db: Session, c: Chat, uid: int):
     oid = c.user2_id if c.user1_id == uid else c.user1_id
@@ -137,10 +154,11 @@ class MomentIn(BaseModel):
 class AgentAskIn(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     days: int = Field(default=30, ge=1, le=365)
+    external_context: list[dict] = Field(default_factory=list,max_length=30)
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "1.6.1"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.0.0"}
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -193,19 +211,37 @@ def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(
 def messages(cid: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
     ensure_member(db, cid, u.id)
     rows = db.scalars(select(Message).where(Message.chat_id == cid).order_by(Message.id.asc()).limit(500)).all()
-    return [msg_json(m) for m in rows]
+    return [msg_json(m, db) for m in rows]
 
 @app.post("/chats/{cid}/messages")
-async def send(cid: int, body: Msg, u: User = Depends(current_user), db: Session = Depends(get_db)):
+async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depends(current_user), db: Session = Depends(get_db)):
     c = ensure_member(db, cid, u.id)
     m = Message(chat_id=cid, sender_id=u.id, text=body.text.strip())
     c.updated_at = datetime.now(timezone.utc)
     db.add(m); db.commit(); db.refresh(m)
-    data = msg_json(m)
+    data = msg_json(m, db)
     oid = c.user2_id if c.user1_id == u.id else c.user1_id
     await push(oid, {"type":"message","data":data}); await push(u.id, {"type":"message","data":data})
+    background.add_task(push_service.notify, push_tokens(db, oid), u.display_name, cid)
+    # Business Agent AUTO takes priority over the personal Auto agent when enabled for this chat.
+    bs = db.get(BusinessChatSetting, {"user_id": oid, "chat_id": cid})
+    bp = db.get(BusinessProfile, oid)
+    business_handled = False
+    if bs and bp and bp.enabled and bs.enabled and bs.mode == "AUTO" and not sensitive(body.text):
+        try:
+            br = business_reply(db, oid, cid, body.text)
+            if br.get("reply") and int(br.get("confidence", 0)) >= int(bp.auto_threshold or 90) and not br.get("requires_review", True):
+                auto = Message(chat_id=cid, sender_id=oid, text=br["reply"], ai_generated=True)
+                c.updated_at = datetime.now(timezone.utc)
+                db.add(auto); db.commit(); db.refresh(auto)
+                ad = msg_json(auto, db)
+                await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
+                background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid)
+                business_handled = True
+        except Exception as e:
+            print("Business AUTO error:", e)
     s = get_settings(db, cid, oid)
-    if s.ai_mode == "AUTO" and not sensitive(body.text):
+    if not business_handled and not (bs and bp and bp.enabled and bs.enabled) and s.ai_mode == "AUTO" and not sensitive(body.text):
         hist = db.scalars(select(Message).where(Message.chat_id == cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
         lines = []
         for x in hist:
@@ -216,8 +252,9 @@ async def send(cid: int, body: Msg, u: User = Depends(current_user), db: Session
             auto = Message(chat_id=cid, sender_id=oid, text=reply, ai_generated=True)
             c.updated_at = datetime.now(timezone.utc)
             db.add(auto); db.commit(); db.refresh(auto)
-            ad = msg_json(auto)
+            ad = msg_json(auto, db)
             await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
+            background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid)
         except Exception as e:
             print("AI AUTO error:", e)
     return data
@@ -328,7 +365,12 @@ def agent_chat_summary(cid: int, u: User = Depends(current_user), db: Session = 
 
 @app.post("/agent/ask")
 def agent_ask(body: AgentAskIn, u: User = Depends(current_user), db: Session = Depends(get_db)):
-    return ask_agent(db, u.id, body.question, body.days)
+    clean=[]
+    for x in body.external_context:
+        if isinstance(x,dict) and x.get("source") in {"WhatsApp","SMS"}:
+            clean.append({"source":x["source"],"contact":str(x.get("contact",""))[:80],
+                          "text":str(x.get("text",""))[:500]})
+    return ask_agent(db, u.id, body.question, body.days, clean)
 
 
 class InsightIn(BaseModel):
@@ -365,3 +407,259 @@ def delete_insights(u:User=Depends(current_user),db:Session=Depends(get_db)):
     for e in db.scalars(select(InsightEvent).where(InsightEvent.user_id==u.id)).all(): db.delete(e)
     db.commit()
     return {"deleted":True}
+
+
+# V1.7: Authenticated attachments, contacts, optional push registration and on-demand external reply assistance.
+ALLOWED_MIME = {
+    "image/jpeg":"PHOTO", "image/png":"PHOTO", "image/webp":"PHOTO",
+    "video/mp4":"VIDEO", "video/webm":"VIDEO", "video/quicktime":"VIDEO",
+    "application/pdf":"FILE", "text/plain":"FILE", "text/csv":"FILE",
+    "application/zip":"FILE", "application/vnd.openxmlformats-officedocument.wordprocessingml.document":"FILE",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"FILE",
+}
+MAX_FILE_BYTES = 20 * 1024 * 1024
+
+@app.post("/chats/{cid}/attachments")
+async def upload_attachment(cid: int, background: BackgroundTasks, file: UploadFile = File(...),
+                            u: User = Depends(current_user), db: Session = Depends(get_db)):
+    c = ensure_member(db,cid,u.id)
+    mime=(file.content_type or "").split(";")[0].lower().strip()
+    kind=ALLOWED_MIME.get(mime)
+    if kind is None:
+        raise HTTPException(415,"Unsupported file type. Use JPEG/PNG/WebP, MP4/WebM/MOV, PDF, TXT, CSV, ZIP, DOCX or XLSX.")
+    payload=await file.read(MAX_FILE_BYTES + 1)
+    if not payload or len(payload)>MAX_FILE_BYTES:
+        raise HTTPException(413,"File must be between 1 byte and 20 MB")
+    # Verify magic bytes for common content types to avoid trusting client MIME alone.
+    if (mime=="image/jpeg" and not payload.startswith(b"\xff\xd8\xff")) or \
+       (mime=="image/png" and not payload.startswith(b"\x89PNG\r\n\x1a\n")) or \
+       (mime=="application/pdf" and not payload.startswith(b"%PDF-")) or \
+       (mime=="application/zip" and not payload.startswith(b"PK\x03\x04")) or \
+       (mime=="image/webp" and not (payload.startswith(b"RIFF") and payload[8:12]==b"WEBP")):
+        raise HTTPException(415,"File bytes do not match the declared type")
+    if mime == "video/mp4" and b"ftyp" not in payload[:16]:
+        raise HTTPException(415,"Not an MP4 file")
+    object_key=media_store.store(payload)
+    original=(file.filename or "Attachment").replace("\\","/").split("/")[-1]
+    original=re.sub(r"[^A-Za-z0-9 .()\-]", "_", original)[:190] or "Attachment"
+    m=Message(chat_id=cid,sender_id=u.id,text="[" + kind.title() + "] " + original)
+    c.updated_at=datetime.now(timezone.utc)
+    db.add(m);db.flush()
+    db.add(MessageAttachment(message_id=m.id,kind=kind,object_key=object_key,original_name=original,
+                             mime_type=mime,size_bytes=len(payload)))
+    db.commit();db.refresh(m)
+    data=msg_json(m,db)
+    oid=c.user2_id if c.user1_id==u.id else c.user1_id
+    await push(oid,{"type":"message","data":data});await push(u.id,{"type":"message","data":data})
+    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid)
+    return data
+
+class ContactShare(BaseModel):
+    display_name: str = Field(min_length=1,max_length=120)
+    phone: str = Field(min_length=3,max_length=35)
+
+@app.post("/chats/{cid}/contacts")
+async def share_contact(cid:int,body:ContactShare,background:BackgroundTasks,
+                        u:User=Depends(current_user),db:Session=Depends(get_db)):
+    c=ensure_member(db,cid,u.id)
+    name=body.display_name.strip();phone=body.phone.strip()
+    if not re.fullmatch(r"[+0-9() .\-]{3,35}",phone) or len(re.sub(r"\D","",phone))<3:
+        raise HTTPException(422,"Invalid contact phone")
+    m=Message(chat_id=cid,sender_id=u.id,text="[Contact] " + name)
+    c.updated_at=datetime.now(timezone.utc)
+    db.add(m);db.flush()
+    db.add(MessageAttachment(message_id=m.id,kind="CONTACT",contact_name=name,contact_phone=phone))
+    db.commit();db.refresh(m)
+    data=msg_json(m,db)
+    oid=c.user2_id if c.user1_id==u.id else c.user1_id
+    await push(oid,{"type":"message","data":data});await push(u.id,{"type":"message","data":data})
+    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid)
+    return data
+
+@app.get("/media/{message_id}")
+def private_media(message_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    item=db.get(MessageAttachment,message_id)
+    if not item or not item.object_key:
+        raise HTTPException(404,"Attachment not found")
+    message=db.get(Message,message_id)
+    ensure_member(db,message.chat_id,u.id)
+    safe_name=(item.original_name or "file").replace('"','').replace('\r','').replace('\n','')
+    return StreamingResponse(media_store.stream(item.object_key),media_type=item.mime_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}"',
+                 "Cache-Control":"private, no-store", "X-Content-Type-Options":"nosniff"})
+
+class PushRegister(BaseModel):
+    token: str = Field(min_length=20,max_length=300)
+
+@app.post("/push/register")
+def register_push(body:PushRegister,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    existing=db.scalar(select(PushDevice).where(PushDevice.token==body.token))
+    if existing:
+        existing.user_id=u.id;existing.updated_at=datetime.now(timezone.utc)
+    else:
+        db.add(PushDevice(user_id=u.id,token=body.token))
+    db.commit()
+    return {"ok":True}
+
+@app.delete("/push/unregister")
+def unregister_push(body:PushRegister,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    row=db.scalar(select(PushDevice).where(PushDevice.token==body.token,PushDevice.user_id==u.id))
+    if row:db.delete(row);db.commit()
+    return {"ok":True}
+
+class ExternalMessage(BaseModel):
+    source: str = Field(pattern="^(WhatsApp|SMS)$")
+    contact: str = Field(min_length=1,max_length=100)
+    text: str = Field(min_length=1,max_length=700)
+
+class ExternalAsk(BaseModel):
+    contact: str = Field(min_length=1,max_length=100)
+    source: str = Field(pattern="^(WhatsApp|SMS)$")
+    tone: str = Field(default="Natural",max_length=40)
+    messages: list[ExternalMessage] = Field(min_length=1,max_length=15)
+
+@app.post("/external/suggest")
+def external_suggest(body:ExternalAsk,u:User=Depends(current_user)):
+    rows=[x for x in body.messages if x.source==body.source and x.contact==body.contact][-15:]
+    if not rows:
+        raise HTTPException(422,"No matching messages")
+    hist="\n".join(f"{x.contact}: {x.text}" for x in rows)
+    return {"reply":ai_reply("FRIEND",body.tone,hist,rows[-1].text),
+            "note":"Draft only. Review and copy into the original app; LEMMIQ never sends it."}
+
+
+# ---------------- LEMMIQ V1.8 BUSINESS BETA ----------------
+BUSINESS_CATEGORIES = {"FAQ","SERVICE","PRICING","POLICY","HOURS","AREA","OTHER","APPROVED_REPLY"}
+BUSINESS_MODES = {"OFF","ASSIST","AUTO"}
+
+class BusinessProfileIn(BaseModel):
+    enabled: bool = False
+    business_name: str = Field(default="", max_length=120)
+    business_type: str = Field(default="", max_length=100)
+    description: str = Field(default="", max_length=4000)
+    website: str = Field(default="", max_length=300)
+    phone: str = Field(default="", max_length=60)
+    email: str = Field(default="", max_length=160)
+    hours: str = Field(default="", max_length=2000)
+    service_area: str = Field(default="", max_length=2000)
+    tone: str = Field(default="Professional", max_length=40)
+    currency: str = Field(default="AUD", max_length=12)
+    auto_threshold: int = Field(default=90, ge=70, le=100)
+
+class BusinessKnowledgeIn(BaseModel):
+    category: str = Field(default="OTHER", max_length=24)
+    title: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=60000)
+    source: str = Field(default="Manual", max_length=180)
+    approved: bool = True
+    active: bool = True
+
+class BusinessChatIn(BaseModel):
+    enabled: bool = False
+    mode: str = Field(default="ASSIST", max_length=12)
+    customer_label: str = Field(default="", max_length=80)
+
+class BusinessMemoryIn(BaseModel):
+    notes: str = Field(default="", max_length=5000)
+    tags: str = Field(default="", max_length=300)
+
+class LearnCandidateIn(BaseModel):
+    category: str = Field(default="OTHER", max_length=24)
+    title: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=1800)
+
+@app.get("/business/profile")
+def get_business_profile(u:User=Depends(current_user),db:Session=Depends(get_db)):
+    return profile_json(profile_for(db,u.id))
+
+@app.put("/business/profile")
+def put_business_profile(body:BusinessProfileIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    p=profile_for(db,u.id)
+    for field in ("enabled","business_name","business_type","description","website","phone","email","hours","service_area","tone","currency","auto_threshold"):
+        setattr(p,field,getattr(body,field))
+    p.updated_at=datetime.now(timezone.utc);db.commit();db.refresh(p)
+    return profile_json(p)
+
+@app.get("/business/knowledge")
+def get_business_knowledge(u:User=Depends(current_user),db:Session=Depends(get_db)):
+    rows=db.scalars(select(BusinessKnowledge).where(BusinessKnowledge.user_id==u.id).order_by(BusinessKnowledge.updated_at.desc()).limit(250)).all()
+    return [knowledge_json(x) for x in rows]
+
+@app.post("/business/knowledge")
+def add_business_knowledge(body:BusinessKnowledgeIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    cat=body.category.upper()
+    if cat not in BUSINESS_CATEGORIES: raise HTTPException(422,"Unsupported business knowledge category")
+    k=BusinessKnowledge(user_id=u.id,category=cat,title=body.title.strip(),content=body.content.strip(),
+        source=body.source.strip() or "Manual",approved=body.approved,active=body.active,updated_at=datetime.now(timezone.utc))
+    db.add(k);db.commit();db.refresh(k);return knowledge_json(k)
+
+@app.delete("/business/knowledge/{kid}")
+def delete_business_knowledge(kid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    k=db.get(BusinessKnowledge,kid)
+    if not k or k.user_id!=u.id: raise HTTPException(404,"Knowledge item not found")
+    db.delete(k);db.commit();return {"deleted":True}
+
+@app.post("/business/knowledge/upload")
+async def upload_business_knowledge(file:UploadFile=File(...),u:User=Depends(current_user),db:Session=Depends(get_db)):
+    payload=await file.read(5*1024*1024+1)
+    if not payload or len(payload)>5*1024*1024: raise HTTPException(413,"Knowledge document must be 1 byte to 5 MB")
+    try: text=extract_document(file.filename or "document",file.content_type or "",payload)
+    except ValueError as e: raise HTTPException(415,str(e))
+    name=(file.filename or "Business document").replace("\\","/").split("/")[-1][:120]
+    k=BusinessKnowledge(user_id=u.id,category="OTHER",title=name,content=text,source="Uploaded document",
+        approved=True,active=True,updated_at=datetime.now(timezone.utc))
+    db.add(k);db.commit();db.refresh(k);return knowledge_json(k)
+
+@app.get("/business/chats/{cid}")
+def get_business_chat(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    s=chat_setting_for(db,u.id,cid);m=customer_memory_for(db,u.id,cid)
+    return {"setting":chat_setting_json(s),"memory":memory_json(m)}
+
+@app.put("/business/chats/{cid}")
+def put_business_chat(cid:int,body:BusinessChatIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    mode=body.mode.upper()
+    if mode not in BUSINESS_MODES: raise HTTPException(422,"Invalid business mode")
+    s=chat_setting_for(db,u.id,cid);s.enabled=body.enabled;s.mode=mode;s.customer_label=body.customer_label.strip();s.updated_at=datetime.now(timezone.utc)
+    db.commit();db.refresh(s);return chat_setting_json(s)
+
+@app.put("/business/chats/{cid}/memory")
+def put_business_memory(cid:int,body:BusinessMemoryIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    m=customer_memory_for(db,u.id,cid);m.notes=body.notes.strip();m.tags=body.tags.strip();m.updated_at=datetime.now(timezone.utc)
+    db.commit();db.refresh(m);return memory_json(m)
+
+@app.post("/business/chats/{cid}/suggest")
+def business_suggest(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    s=chat_setting_for(db,u.id,cid)
+    if not s.enabled or s.mode=="OFF": raise HTTPException(409,"Enable Business Agent for this customer chat first")
+    rows=db.scalars(select(Message).where(Message.chat_id==cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
+    incoming=next((x.text for x in reversed(rows) if x.sender_id!=u.id),None)
+    if not incoming: raise HTTPException(400,"No incoming customer message")
+    return business_reply(db,u.id,cid,incoming)
+
+@app.post("/business/chats/{cid}/learn")
+def business_learn(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    return {"candidates":learn_candidates(db,u.id,cid),"note":"Candidates are not saved until you approve them."}
+
+@app.post("/business/learn/approve")
+def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    cat=body.category.upper()
+    if cat not in BUSINESS_CATEGORIES: cat="OTHER"
+    k=BusinessKnowledge(user_id=u.id,category=cat,title=body.title.strip(),content=body.content.strip(),source="Approved chat learning",
+        approved=True,active=True,updated_at=datetime.now(timezone.utc))
+    db.add(k);db.commit();db.refresh(k);return knowledge_json(k)
+
+
+# ---------------- LEMMIQ V2 WEB / PWA ----------------
+WEB_DIR = Path(__file__).resolve().parents[1] / "web"
+
+@app.get("/", include_in_schema=False)
+def web_root():
+    return RedirectResponse(url="/web/")
+
+if WEB_DIR.exists():
+    app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="lemmiq-web")

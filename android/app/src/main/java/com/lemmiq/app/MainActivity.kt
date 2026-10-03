@@ -8,6 +8,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
 
 class MainActivity:ComponentActivity(){
+    companion object { @Volatile var isVisible=false }
+    override fun onStart(){super.onStart();isVisible=true}
+    override fun onStop(){isVisible=false;super.onStop()}
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
         setContent{
