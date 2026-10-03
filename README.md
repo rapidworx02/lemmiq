@@ -1,3 +1,11 @@
+# LEMMIQ V2.2.1
+
+Mobile safe-area/layout hotfix for Android chat headers and the 7-item web/PWA bottom navigation.
+
+See `LEMMIQ_V2_2_1_UI_FIX.md`.
+
+---
+
 # LEMMIQ V2.2
 
 Background push diagnostics, notification badge support, and hard exclusion of LEMMIQ's own notifications.

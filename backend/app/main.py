@@ -22,7 +22,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.2.0")
+app = FastAPI(title="LEMMIQ Server", version="2.2.1")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -170,7 +170,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.2.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.2.1"}
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -761,7 +761,7 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.2.0",
+        "version": "2.2.1",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "web_install_enabled": True,

@@ -304,8 +304,11 @@ private fun Chat(vm:LemmiqViewModel){
     Scaffold(
         containerColor=Bg,
         topBar={
-            Surface(shadowElevation=1.dp){
-                Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){
+            Surface(
+                modifier=Modifier.fillMaxWidth().statusBarsPadding(),
+                shadowElevation=1.dp
+            ){
+                Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically){
                     Text("‹",fontSize=36.sp,modifier=Modifier.clickable{vm.close()}.padding(8.dp))
                     Avatar(c.other_user);Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)){
@@ -320,7 +323,7 @@ private fun Chat(vm:LemmiqViewModel){
         },
         bottomBar={
             // Keep composer above the keyboard without re-scrolling on every character.
-            Column(Modifier.background(Color.White).imePadding()){
+            Column(Modifier.background(Color.White).navigationBarsPadding().imePadding()){
                 vm.businessSuggestion?.let{bs->
                     Surface(color=Color(0xFFEAF8F2),shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
