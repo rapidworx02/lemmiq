@@ -15,6 +15,7 @@ val lemmiqApiBaseUrl = lemmiqLocalProperties
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 // Add your Firebase google-services.json to android/app/ to enable push registration.
@@ -30,8 +31,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=24
-        versionName="2.2.1"
+        versionCode=30
+        versionName="2.3.0"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }
@@ -40,6 +41,7 @@ android {
         sourceCompatibility=JavaVersion.VERSION_17
         targetCompatibility=JavaVersion.VERSION_17
     }
+    kotlinOptions { jvmTarget="17" }
 }
 dependencies {
     val composeBom=platform("androidx.compose:compose-bom:2026.08.00")
@@ -58,5 +60,6 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.18.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("io.livekit:livekit-android:2.+")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

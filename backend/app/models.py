@@ -137,3 +137,78 @@ class BusinessCustomerMemory(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[str] = mapped_column(String(300), default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# ---------------- LEMMIQ V2.3: Groups, Voice Notes and Calls ----------------
+
+class LemmiqGroup(Base):
+    __tablename__ = "lemmiq_groups"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    photo_key: Mapped[str | None] = mapped_column(String(190), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+    group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(12), default="MEMBER")  # ADMIN / MEMBER
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class GroupSetting(Base):
+    __tablename__ = "group_settings"
+    group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    ai_mode: Mapped[str] = mapped_column(String(20), default="ASSIST")  # OFF / ASSIST / SUMMARY
+    tone: Mapped[str] = mapped_column(String(40), default="Natural")
+
+class GroupRead(Base):
+    __tablename__ = "group_reads"
+    group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class GroupMessage(Base):
+    __tablename__ = "group_messages"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), index=True)
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    ai_generated: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class GroupMessageAttachment(Base):
+    __tablename__ = "group_message_attachments"
+    message_id: Mapped[int] = mapped_column(ForeignKey("group_messages.id"), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    object_key: Mapped[str | None] = mapped_column(String(190), nullable=True)
+    original_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+class VoiceNote(Base):
+    __tablename__ = "voice_notes"
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    transcript: Mapped[str] = mapped_column(Text, default="")
+
+class GroupVoiceNote(Base):
+    __tablename__ = "group_voice_notes"
+    message_id: Mapped[int] = mapped_column(ForeignKey("group_messages.id"), primary_key=True)
+    duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    transcript: Mapped[str] = mapped_column(Text, default="")
+
+class CallRecord(Base):
+    __tablename__ = "call_records"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"), index=True)
+    caller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    callee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    room_name: Mapped[str] = mapped_column(String(100), unique=True)
+    status: Mapped[str] = mapped_column(String(20), default="RINGING")  # RINGING/CONNECTED/DECLINED/ENDED/MISSED
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

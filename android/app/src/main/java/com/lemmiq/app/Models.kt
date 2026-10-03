@@ -61,7 +61,8 @@ data class InsightBrief(
 
 data class AttachmentDto(
     val kind:String="",val name:String?=null,val mime_type:String?=null,val size_bytes:Long?=null,
-    val media_id:Int?=null,val contact_name:String?=null,val contact_phone:String?=null
+    val media_id:Int?=null,val contact_name:String?=null,val contact_phone:String?=null,
+    val duration_ms:Int?=null,val transcript:String?=null
 )
 
 // LEMMIQ V1.8 Business Beta
@@ -105,3 +106,31 @@ data class BusinessLearnResponse(
 
 
 data class PushStatusDto(val firebase_configured:Boolean=false,val registered_devices:Int=0)
+
+
+// LEMMIQ V2.3 Groups + Voice + Calls
+data class GroupMemberDto(
+    val id:Int=0,val username:String="",val display_name:String="",val avatar:String?=null,val role:String="MEMBER"
+)
+data class GroupDto(
+    val id:Int=0,val name:String="",val created_by:Int=0,val has_photo:Boolean=false,
+    val member_count:Int=0,val role:String="MEMBER",val ai_mode:String="ASSIST",val tone:String="Natural",val unread:Int=0,
+    val last_message:String?=null,val updated_at:String?=null,val members:List<GroupMemberDto> = emptyList()
+)
+data class GroupMessageDto(
+    val id:Int=0,val group_id:Int=0,val sender_id:Int=0,val sender:UserDto?=null,val text:String="",
+    val created_at:String="",val ai_generated:Boolean=false,val attachment:AttachmentDto?=null
+)
+data class GroupSummaryDto(
+    val summary:String="",val decisions:List<String> = emptyList(),val actions:List<String> = emptyList()
+)
+data class GroupAskDto(val answer:String="",val references:List<String> = emptyList())
+data class VoiceAiDto(val transcript:String="",val summary:String="",val suggested_reply:String="")
+data class CallDto(
+    val id:String="",val chat_id:Int=0,val caller_id:Int=0,val callee_id:Int=0,val other_user:UserDto?=null,
+    val status:String="",val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
+)
+data class CallJoinDto(
+    val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false
+)
+data class CallStatusDto(val configured:Boolean=false,val provider:String="LiveKit",val voice:Boolean=true,val video:Boolean=false)

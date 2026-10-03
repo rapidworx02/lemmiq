@@ -1,3 +1,11 @@
+# LEMMIQ V2.3
+
+Groups, voice messages, group Q intelligence, always-visible mobile-web ASSIST, and LiveKit one-to-one voice-call beta.
+
+See `LEMMIQ_V2_3_SETUP.md`.
+
+---
+
 # LEMMIQ V2.2.1
 
 Mobile safe-area/layout hotfix for Android chat headers and the 7-item web/PWA bottom navigation.

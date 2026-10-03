@@ -45,3 +45,20 @@ def notify(tokens:list[str],sender_name:str,chat_id:int,body:str="New message",u
             ))
         except Exception:
             LOG.warning("FCM send failed for a device; check token/credentials")
+
+
+def notify_data(tokens:list[str],data:dict):
+    """Send an authenticated high-priority data message to LEMMIQ devices."""
+    if not tokens or _app() is None:
+        return
+    from firebase_admin import messaging
+    payload={str(k):str(v)[:500] for k,v in data.items() if v is not None}
+    for token in tokens:
+        try:
+            messaging.send(messaging.Message(
+                token=token,
+                data=payload,
+                android=messaging.AndroidConfig(priority="high", ttl=3600),
+            ))
+        except Exception:
+            LOG.warning("FCM data send failed for a device")

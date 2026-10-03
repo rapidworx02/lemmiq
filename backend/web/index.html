@@ -85,8 +85,10 @@
           <div class="conversation-list glass">
             <div class="list-tools">
               <input id="chatFilter" placeholder="Search conversations">
-              <button id="newChatBtn" class="primary">＋</button>
+              <button id="newGroupBtn" class="ghost" title="New group">👥</button>
+              <button id="newChatBtn" class="primary" title="New chat">＋</button>
             </div>
+            <div id="groupList" class="group-strip"></div>
             <div id="chatList" class="list-scroll"></div>
           </div>
 
@@ -103,18 +105,44 @@
                   <small id="chatMeta">LEMMIQ chat</small>
                 </div>
                 <div class="chat-head-actions">
+                  <button id="callBtn" class="ghost" title="Voice call">📞</button>
                   <button id="chatAiBtn" class="ghost">⚙ Chat AI</button>
                   <button id="summaryBtn" class="ghost">🧠 Summary</button>
                   <button id="businessChatBtn" class="ghost">💼 Agent</button>
                 </div>
               </div>
               <div id="messageList" class="messages"></div>
+              <div id="assistBar" class="assist-bar hidden"><button id="assistBarBtn" class="ghost">✨ Suggest reply</button><span>ASSIST drafts only — you choose what to send.</span></div>
               <div id="suggestionCard" class="suggestion hidden"></div>
               <div class="composer">
                 <label class="attach-btn" title="Send file">＋<input id="fileInput" type="file" hidden></label>
+                <button id="voiceBtn" class="ghost voice-btn" title="Record voice message">🎙</button>
                 <textarea id="messageInput" rows="1" placeholder="Message"></textarea>
                 <button id="suggestBtn" class="ghost qbtn">Q</button>
                 <button id="sendBtn" class="primary send">➤</button>
+              </div>
+            </div>
+
+            <div id="activeGroup" class="hidden chat-inner">
+              <div class="chat-head">
+                <div>
+                  <strong id="groupName">Group</strong>
+                  <small id="groupMeta">LEMMIQ group</small>
+                </div>
+                <div class="chat-head-actions">
+                  <button id="groupCatchupBtn" class="ghost">🧠 Catch me up</button>
+                  <button id="groupQBtn" class="ghost">Q</button>
+                  <button id="groupSettingsBtn" class="ghost">⋮</button>
+                </div>
+              </div>
+              <div id="groupMessageList" class="messages"></div>
+              <div id="groupAssistBar" class="assist-bar hidden"><button id="groupSuggestBtn" class="ghost">✨ Suggest reply</button><span>Group ASSIST drafts only.</span></div>
+              <div id="groupSuggestionCard" class="suggestion hidden"></div>
+              <div class="composer">
+                <label class="attach-btn" title="Send file">＋<input id="groupFileInput" type="file" hidden></label>
+                <button id="groupVoiceBtn" class="ghost voice-btn" title="Record voice message">🎙</button>
+                <textarea id="groupMessageInput" rows="1" placeholder="Message group"></textarea>
+                <button id="groupSendBtn" class="primary send">➤</button>
               </div>
             </div>
           </div>
@@ -266,6 +294,23 @@
     </section>
   </main>
 
+
+  <div id="callOverlay" class="call-overlay hidden">
+    <div class="call-card glass">
+      <img src="/web/brand-icon.png" alt="LEMMIQ">
+      <span class="eyebrow">LEMMIQ VOICE</span>
+      <h2 id="callPerson">Connecting…</h2>
+      <p id="callState">Preparing secure internet call</p>
+      <div id="remoteAudio"></div>
+      <div class="call-actions">
+        <button id="muteCallBtn" class="ghost round">🎙</button>
+        <button id="speakerCallBtn" class="ghost round">🔊</button>
+        <button id="endCallBtn" class="danger round">☎</button>
+      </div>
+      <p class="micro">V2.3 voice-call beta uses LiveKit/WebRTC. Internet data charges may apply.</p>
+    </div>
+  </div>
+
   <dialog id="modal">
     <div class="modal-card glass">
       <button id="closeModal" class="modal-close">×</button>
@@ -273,6 +318,7 @@
     </div>
   </dialog>
 
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
   <script src="/web/app.js" defer></script>
 </body>
 </html>

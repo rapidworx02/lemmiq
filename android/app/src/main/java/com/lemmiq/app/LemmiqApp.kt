@@ -103,6 +103,7 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
     }
     when{
         !vm.authenticated->Auth(vm)
+        vm.activeGroup!=null->V23GroupChat(vm)
         vm.active!=null->Chat(vm)
         else->Home(vm)
     }
@@ -148,7 +149,9 @@ private fun Auth(vm:LemmiqViewModel){
 private fun Home(vm:LemmiqViewModel){
     var tab by remember{mutableIntStateOf(0)}
     var newChat by remember{mutableStateOf(false)}
-    LaunchedEffect(Unit){vm.refreshChats();vm.refreshMoments()}
+    var newGroup by remember{mutableStateOf(false)}
+    var calls by remember{mutableStateOf(false)}
+    LaunchedEffect(Unit){vm.refreshChats();vm.refreshGroups();vm.refreshMoments();vm.refreshCalls()}
     Scaffold(
         containerColor=Bg,
         bottomBar={
@@ -159,12 +162,15 @@ private fun Home(vm:LemmiqViewModel){
             }
         },
         floatingActionButton={
-            if(tab==0)FloatingActionButton({newChat=true},containerColor=Purple,contentColor=Color.White){Text("+",fontSize=28.sp)}
+            if(tab==0)Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
+                SmallFloatingActionButton({newGroup=true},containerColor=Soft,contentColor=Purple){Text("👥")}
+                FloatingActionButton({newChat=true},containerColor=Purple,contentColor=Color.White){Text("+",fontSize=28.sp)}
+            }
         }
     ){p->
         Box(Modifier.padding(p)){
             when(tab){
-                0->Inbox(vm)
+                0->Inbox(vm){calls=true}
                 1->ActivityScreen(vm)
                 2->ChatAgent(vm)
                 3->MoneyScreen(vm)
@@ -174,6 +180,8 @@ private fun Home(vm:LemmiqViewModel){
         }
     }
     if(newChat)NewChat(vm){newChat=false}
+    if(newGroup)V23NewGroupDialog(vm,{newGroup=false}){g->newGroup=false;vm.openGroup(g)}
+    if(calls)V23CallsDialog(vm){calls=false}
 }
 
 @Composable
@@ -185,7 +193,7 @@ private fun Header(title:String,sub:String?=null){
 }
 
 @Composable
-private fun Inbox(vm:LemmiqViewModel){
+private fun Inbox(vm:LemmiqViewModel,onCalls:()->Unit={}){
     LaunchedEffect(Unit){vm.refreshAgent()}
     Column(Modifier.fillMaxSize()){
         Header("lemmiq",if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}")
@@ -196,6 +204,15 @@ private fun Inbox(vm:LemmiqViewModel){
                 Text("Each chat can be Off, Assist or Auto.",color=Color(0xFFB9AAFF),fontSize=11.sp,modifier=Modifier.padding(top=6.dp))
                 vm.agentBrief?.let{b->Text("${b.needs_reply_count} conversations may need a reply.",color=Color.White,fontSize=11.sp)}
         }
+        Row(Modifier.fillMaxWidth().padding(20.dp,16.dp,20.dp,4.dp),verticalAlignment=Alignment.CenterVertically){
+            Text("Groups",fontSize=20.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+            TextButton({vm.refreshCalls();onCalls()}){Text("📞 Calls")}
+        }
+        if(vm.groups.isNotEmpty()){
+            LazyRow(contentPadding=PaddingValues(horizontal=16.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                items(vm.groups,key={it.id}){g->V23GroupChip(g){vm.openGroup(g)}}
+            }
+        }else Text("Create a group with the 👥 button.",color=Muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=20.dp))
         Text("Chats",fontSize=20.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,18.dp,20.dp,6.dp))
         if(vm.chats.isEmpty())Empty("💬","No conversations yet","Tap + and search another username.")
         else LazyColumn{items(vm.chats,key={it.id}){c->ChatRow(c){vm.open(c)}}}
@@ -269,6 +286,11 @@ private fun Chat(vm:LemmiqViewModel){
     var businessSettings by remember{mutableStateOf(false)}
     var showAttach by remember{mutableStateOf(false)}
     val ctx=LocalContext.current
+    val voiceRecorder=remember{LemmiqVoiceRecorder(ctx)}
+    var voiceRecording by remember{mutableStateOf(false)}
+    val micPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->
+        if(granted){runCatching{voiceRecorder.start()}.onSuccess{voiceRecording=true}.onFailure{vm.error=it.message}}
+    }
     var pendingContact by remember{mutableStateOf<Pair<String,String>?>(null)}
     val photoPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){
         uri->if(uri!=null)vm.uploadUri(uri)
@@ -315,6 +337,14 @@ private fun Chat(vm:LemmiqViewModel){
                         Text(c.other_user.display_name,fontWeight=FontWeight.Bold)
                         Text("@${c.other_user.username} · ${catEmoji(c.category)} ${pretty(c.category)} · ${pretty(c.ai_mode)}",color=Muted,fontSize=10.sp)
                     }
+                    Text("📞",fontSize=18.sp,modifier=Modifier.clickable{
+                        vm.startVoiceCall(c.id){join->
+                            ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
+                                putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
+                                putExtra("person",c.other_user.display_name);putExtra("incoming",false)
+                            })
+                        }
+                    }.padding(8.dp))
                     if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(10.dp))
                     if(vm.businessProfile.enabled)Text("💼",fontSize=18.sp,modifier=Modifier.clickable{businessSettings=true}.padding(8.dp))
                     Text("⚙",fontSize=19.sp,modifier=Modifier.clickable{settings=true}.padding(10.dp))
@@ -391,7 +421,21 @@ private fun Chat(vm:LemmiqViewModel){
                         keyboardOptions=KeyboardOptions(imeAction=ImeAction.Send),
                         keyboardActions=KeyboardActions(onSend={if(draft.isNotBlank()){vm.send(draft);draft=""}})
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        Modifier.size(44.dp).clickable{
+                            if(voiceRecording){
+                                voiceRecorder.stop()?.let{(file,duration)->vm.sendVoiceFile(file,duration)}
+                                voiceRecording=false
+                            }else{
+                                if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){
+                                    runCatching{voiceRecorder.start()}.onSuccess{voiceRecording=true}.onFailure{vm.error=it.message}
+                                }else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        },
+                        color=if(voiceRecording)Color(0xFFFFE8EC) else Soft,shape=CircleShape
+                    ){Box(contentAlignment=Alignment.Center){Text(if(voiceRecording)"■" else "🎙",color=if(voiceRecording)Color(0xFFC82D4A) else Purple)}}
+                    Spacer(Modifier.width(6.dp))
                     Surface(Modifier.size(48.dp).clickable{if(draft.isNotBlank()){vm.send(draft);draft=""}},color=Purple,shape=CircleShape){
                         Box(contentAlignment=Alignment.Center){Text("➤",color=Color.White)}
                     }
@@ -495,7 +539,9 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
                 if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
                 val a=m.attachment
                 if(a!=null){
-                    if(a.kind=="PHOTO"){
+                    if(a.kind=="VOICE"){
+                        V23VoiceBubble(a,m.id,false,vm,mine){reply->}
+                    } else if(a.kind=="PHOTO"){
                         bitmap?.let{bmp->
                             Image(bmp.asImageBitmap(),contentDescription="Shared photo",
                                 modifier=Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(12.dp)),
@@ -505,7 +551,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
                     if(a.kind=="CONTACT"){
                         Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
                         Text(a.contact_phone.orEmpty(),color=if(mine)Color.White else Ink)
-                    }else if(a.media_id!=null){
+                    }else if(a.kind!="VOICE" && a.media_id!=null){
                         Text("${if(a.kind=="VIDEO")"🎬" else if(a.kind=="PHOTO")"🖼" else "📄"} ${a.name.orEmpty()}",
                             color=if(mine)Color.White else Ink,fontSize=12.sp)
                         TextButton(onClick={

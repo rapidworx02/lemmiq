@@ -12,7 +12,7 @@ from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from .database import Base, engine, SessionLocal
 from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
-    BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory)
+    BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote)
 from . import media_store, push_service
 from .chat_agent import daily_brief, needs_reply, communication_profile, search_memory, summarize_chat, ask_agent
 from .insights import CATEGORIES, DIRECTIONS, event_json, list_events, brief as insight_brief
@@ -22,7 +22,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.2.1")
+app = FastAPI(title="LEMMIQ Server", version="2.3.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -79,10 +79,13 @@ def msg_json(m: Message, db: Session | None = None):
             "created_at": m.created_at.isoformat(), "read_at": m.read_at.isoformat() if m.read_at else None,
             "ai_generated": m.ai_generated}
     attach = db.get(MessageAttachment, m.id) if db is not None else None
+    voice = db.get(VoiceNote, m.id) if db is not None and attach and attach.kind=="VOICE" else None
     data["attachment"] = ({"kind": attach.kind, "name": attach.original_name,
         "mime_type": attach.mime_type, "size_bytes": attach.size_bytes,
         "media_id": attach.message_id if attach.object_key else None,
-        "contact_name": attach.contact_name, "contact_phone": attach.contact_phone}
+        "contact_name": attach.contact_name, "contact_phone": attach.contact_phone,
+        "duration_ms": voice.duration_ms if voice else None,
+        "transcript": voice.transcript if voice else None}
         if attach else None)
     return data
 
@@ -170,7 +173,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.2.1"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.3.0"}
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -761,11 +764,15 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.2.1",
+        "version": "2.3.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "web_install_enabled": True,
     }
+
+# ---------------- LEMMIQ V2.3 feature routes ----------------
+from .v23 import register_v23_routes
+register_v23_routes(app,current_user,get_db,push,push_tokens,user_json)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

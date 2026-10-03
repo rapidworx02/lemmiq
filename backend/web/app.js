@@ -2,10 +2,22 @@ const state = {
   token: localStorage.getItem("lemmiq_token") || "",
   user: JSON.parse(localStorage.getItem("lemmiq_user") || "null"),
   chats: [],
+  groups: [],
   activeChat: null,
+  activeGroup: null,
   messages: [],
+  groupMessages: [],
   socket: null,
   installPrompt: null,
+  mediaRecorder:null,
+  voiceChunks:[],
+  voiceStartedAt:0,
+  voiceTarget:"direct",
+  voiceTranscript:"",
+  speechRecognition:null,
+  callRoom:null,
+  callId:null,
+  callMuted:false,
   appConfig: {android_download_url:"", android_play_url:"", web_install_enabled:true}
 };
 
@@ -95,6 +107,13 @@ function connectSocket(){
         await loadChats();
         if(state.activeChat && p.data?.chat_id===state.activeChat.id) await openChat(state.activeChat.id,false);
       }
+      if(p.type==="group_message"){
+        await loadGroups();
+        if(state.activeGroup && p.group_id===state.activeGroup.id) await openGroup(state.activeGroup.id);
+      }
+      if(p.type==="incoming_call"){
+        showIncomingWebCall(p);
+      }
     }catch{}
   };
   window.__wsPing && clearInterval(window.__wsPing);
@@ -104,6 +123,20 @@ function connectSocket(){
 async function loadChats(){
   state.chats=await api("/chats");
   renderChats();
+  await loadGroups();
+}
+async function loadGroups(){
+  state.groups=await api("/v23/groups");
+  renderGroups();
+}
+function renderGroups(){
+  const el=$("groupList"); if(!el)return;
+  el.innerHTML=state.groups.length?`<div class="micro" style="padding:4px 5px">GROUPS</div>`+state.groups.map(g=>`
+    <button class="group-row ${state.activeGroup?.id===g.id?"active":""}" onclick="openGroup(${g.id})">
+      <span class="group-avatar">${escapeHtml(initials(g.name))}</span>
+      <span class="body"><strong>${escapeHtml(g.name)}</strong><small>${g.member_count} members · ${escapeHtml(g.last_message||"New group")}</small></span>
+      ${g.unread?`<span class="badge">${g.unread}</span>`:""}
+    </button>`).join(""):"";
 }
 function renderChats(){
   const filter=$("chatFilter").value.toLowerCase().trim();
@@ -119,15 +152,135 @@ async function openChat(cid, mark=true){
   let chat=state.chats.find(x=>x.id===cid);
   if(!chat){await loadChats();chat=state.chats.find(x=>x.id===cid)}
   if(!chat)return;
+  state.activeGroup=null;
   state.activeChat=chat;
   state.messages=await api(`/chats/${cid}/messages`);
   if(mark) api(`/chats/${cid}/read`,{method:"POST"}).catch(()=>{});
-  $("emptyChat").classList.add("hidden");$("activeChat").classList.remove("hidden");
+  $("emptyChat").classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
   $("chatName").textContent=chat.other_user.display_name;
   $("chatMeta").textContent=`@${chat.other_user.username} · ${chat.category} · AI ${chat.ai_mode}`;
+  updateAssistBar(chat);
   document.querySelector(".chat-layout").classList.add("open-chat");
   renderMessages(); renderChats();
 }
+
+async function openGroup(gid){
+  state.activeChat=null;
+  const g=await api(`/v23/groups/${gid}`);
+  state.activeGroup=g;
+  state.groupMessages=await api(`/v23/groups/${gid}/messages`);await api(`/v23/groups/${gid}/read`,{method:"POST"});
+  $("emptyChat").classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
+  $("groupName").textContent=g.name;
+  $("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
+  $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");
+  document.querySelector(".chat-layout").classList.add("open-chat");
+  renderGroupMessages();renderGroups();renderChats();
+}
+function renderGroupMessages(){
+  const me=state.user?.id;
+  $("groupMessageList").innerHTML=state.groupMessages.map(m=>{
+    const mine=m.sender_id===me;
+    const a=m.attachment;
+    let attachment="";
+    if(a?.kind==="VOICE"){
+      attachment=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ Voice ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
+    }else if(a?.media_id){
+      attachment=`<button class="mini" onclick="downloadGroupMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
+    }
+    return `<div class="msg ${mine?"mine":"theirs"}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div><div>${escapeHtml(m.text)}</div>${attachment}<div class="meta">${new Date(m.created_at).toLocaleString()}</div></div>`;
+  }).join("");
+  const list=$("groupMessageList");setTimeout(()=>list.scrollTop=list.scrollHeight,30);
+}
+async function sendGroupMessage(){
+  const box=$("groupMessageInput"),text=box.value.trim();if(!state.activeGroup||!text)return;
+  box.value="";
+  try{await api(`/v23/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text})});await openGroup(state.activeGroup.id)}
+  catch(e){toast(e.message,true)}
+}
+async function showNewGroup(){
+  openModal(`<h3>👥 New LEMMIQ group</h3><label>Group name<input id="newGroupName" placeholder="Weekend Crew"></label><label>Search usernames<input id="groupUserSearch" placeholder="Search username or display name"></label><div id="groupUserResults" class="modal-results"></div><div><strong>Selected</strong><div id="groupSelected" class="chips"></div></div><button id="createGroupBtn" class="primary full">Create group</button>`);
+  const selected=new Map();
+  const rerender=()=>{$("groupSelected").innerHTML=[...selected.values()].map(u=>`<span>@${escapeHtml(u.username)} <button class="mini" onclick="removeGroupPick(${u.id})">×</button></span>`).join("")};
+  window.removeGroupPick=id=>{selected.delete(id);rerender()};
+  $("groupUserSearch").oninput=async e=>{
+    const q=e.target.value.trim();if(q.length<2){$("groupUserResults").innerHTML="";return}
+    const rows=await api(`/users/search?q=${encodeURIComponent(q)}`);
+    $("groupUserResults").innerHTML=rows.map(u=>`<div class="user-result"><div><strong>${escapeHtml(u.display_name)}</strong><small> @${escapeHtml(u.username)}</small></div><button class="ghost" data-pick="${u.id}">Add</button></div>`).join("");
+    document.querySelectorAll("[data-pick]").forEach(btn=>btn.onclick=()=>{
+      const u=rows.find(x=>x.id===Number(btn.dataset.pick));if(u){selected.set(u.id,u);rerender()}
+    });
+  };
+  $("createGroupBtn").onclick=async()=>{
+    const name=$("newGroupName").value.trim();if(!name||!selected.size)return toast("Add a group name and at least one member",true);
+    try{const g=await api("/v23/groups",{method:"POST",body:JSON.stringify({name,member_ids:[...selected.keys()]})});closeModal();await loadGroups();await openGroup(g.id)}
+    catch(e){toast(e.message,true)}
+  };
+}
+async function groupSuggestReply(){
+  if(!state.activeGroup)return;
+  try{
+    const r=await api(`/v23/groups/${state.activeGroup.id}/suggest`,{method:"POST"});
+    const card=$("groupSuggestionCard");card.classList.remove("hidden");
+    card.innerHTML=`<strong>Q · Group suggestion</strong><p>${escapeHtml(r.reply||"")}</p><div class="suggestion-actions"><button class="ghost" id="discardGroupSuggestion">Discard</button><button class="ghost" id="editGroupSuggestion">Edit</button><button class="primary" id="sendGroupSuggestion">Send</button></div>`;
+    $("discardGroupSuggestion").onclick=()=>card.classList.add("hidden");
+    $("editGroupSuggestion").onclick=()=>{$("groupMessageInput").value=r.reply||"";card.classList.add("hidden")};
+    $("sendGroupSuggestion").onclick=async()=>{await api(`/v23/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text:r.reply||""})});card.classList.add("hidden");await openGroup(state.activeGroup.id)};
+  }catch(e){toast(e.message,true)}
+}
+async function groupCatchup(){
+  if(!state.activeGroup)return;
+  openModal("<h3>🧠 Catch me up</h3><p>Q is reading the recent group conversation…</p>");
+  try{
+    const r=await api(`/v23/groups/${state.activeGroup.id}/summary`,{method:"POST"});
+    $("modalContent").innerHTML=`<h3>🧠 Catch me up</h3><p>${escapeHtml(r.summary||"")}</p>${(r.decisions||[]).length?`<h4>Decisions</h4>${r.decisions.map(x=>`<p>• ${escapeHtml(x)}</p>`).join("")}`:""}${(r.actions||[]).length?`<h4>Follow-ups</h4>${r.actions.map(x=>`<p>• ${escapeHtml(x)}</p>`).join("")}`:""}`;
+  }catch(e){$("modalContent").innerHTML=`<h3>Catch-up failed</h3><p>${escapeHtml(e.message)}</p>`}
+}
+async function groupAsk(){
+  if(!state.activeGroup)return;
+  openModal(`<h3>Q · ${escapeHtml(state.activeGroup.name)}</h3><textarea id="groupQuestion" placeholder="What did everyone decide about Saturday?"></textarea><button id="askGroupNow" class="primary full">Ask Q</button><div id="groupAnswer"></div>`);
+  $("askGroupNow").onclick=async()=>{
+    const question=$("groupQuestion").value.trim();if(!question)return;
+    $("groupAnswer").innerHTML="<p>Q is checking the group history…</p>";
+    try{const r=await api(`/v23/groups/${state.activeGroup.id}/ask`,{method:"POST",body:JSON.stringify({question})});$("groupAnswer").innerHTML=`<div class="answer-box"><p>${escapeHtml(r.answer||"")}</p>${(r.references||[]).map(x=>`<p class="micro">• ${escapeHtml(x)}</p>`).join("")}</div>`}
+    catch(e){$("groupAnswer").textContent=e.message}
+  };
+}
+async function groupSettings(){
+  const g=state.activeGroup;if(!g)return;
+  const admin=g.role==="ADMIN";
+  openModal(`<h3>👥 ${escapeHtml(g.name)}</h3>
+    <label>Group AI<select id="groupAiMode"><option ${g.ai_mode==="OFF"?"selected":""}>OFF</option><option ${g.ai_mode==="ASSIST"?"selected":""}>ASSIST</option><option ${g.ai_mode==="SUMMARY"?"selected":""}>SUMMARY</option></select></label>
+    <label>Tone<select id="groupTone"><option>Natural</option><option>Warm</option><option>Casual</option><option>Professional</option></select></label>
+    ${admin?`<label class="upload">🖼 Upload group photo<input id="groupPhotoInput" type="file" accept="image/*" hidden></label><label>Add member<input id="groupAddSearch" placeholder="Search username"></label><div id="groupAddResults"></div>`:""}
+    <button id="saveGroupSettings" class="primary">Save</button>
+    <div class="group-member-list">${g.members.map(m=>`<div class="group-member"><span>${escapeHtml(m.display_name)} <small>@${escapeHtml(m.username)}</small></span><span><strong>${m.role}</strong>${admin&&m.id!==state.user.id?` <button class="mini" data-admin="${m.id}">${m.role==="ADMIN"?"Make member":"Make admin"}</button><button class="mini" data-remove="${m.id}">Remove</button>`:""}</span></div>`).join("")}</div>
+    <p class="micro">Group AUTO replies are intentionally disabled in V2.3.</p>`);
+  $("groupTone").value=g.tone||"Natural";
+  $("saveGroupSettings").onclick=async()=>{try{const updated=await api(`/v23/groups/${g.id}/settings`,{method:"PUT",body:JSON.stringify({ai_mode:$("groupAiMode").value,tone:$("groupTone").value})});state.activeGroup=updated;closeModal();await loadGroups();$("groupMeta").textContent=`${updated.member_count} members · Q ${updated.ai_mode}`;toast("Group AI saved")}catch(e){toast(e.message,true)}};
+  if(admin){
+    $("groupPhotoInput").onchange=async e=>{const file=e.target.files[0];if(!file)return;const fd=new FormData();fd.append("file",file);try{await api(`/v23/groups/${g.id}/photo`,{method:"POST",body:fd});toast("Group photo updated");await openGroup(g.id)}catch(err){toast(err.message,true)}};
+    $("groupAddSearch").oninput=async e=>{const q=e.target.value.trim();if(q.length<2){$("groupAddResults").innerHTML="";return}const rows=await api(`/users/search?q=${encodeURIComponent(q)}`);$("groupAddResults").innerHTML=rows.filter(u=>!g.members.some(m=>m.id===u.id)).map(u=>`<div class="user-result"><span>${escapeHtml(u.display_name)} @${escapeHtml(u.username)}</span><button class="mini" data-addmember="${u.id}">Add</button></div>`).join("");document.querySelectorAll("[data-addmember]").forEach(b=>b.onclick=async()=>{await api(`/v23/groups/${g.id}/members`,{method:"POST",body:JSON.stringify({user_id:Number(b.dataset.addmember)})});closeModal();await openGroup(g.id);groupSettings()})};
+    document.querySelectorAll("[data-admin]").forEach(b=>b.onclick=async()=>{const uid=Number(b.dataset.admin);const m=g.members.find(x=>x.id===uid);await api(`/v23/groups/${g.id}/members/${uid}`,{method:"PUT",body:JSON.stringify({role:m.role==="ADMIN"?"MEMBER":"ADMIN"})});closeModal();await openGroup(g.id);groupSettings()});
+    document.querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove this member?"))return;await api(`/v23/groups/${g.id}/members/${Number(b.dataset.remove)}`,{method:"DELETE"});closeModal();await openGroup(g.id);groupSettings()});
+  }
+}
+
+async function uploadGroupAttachment(file){
+  if(!state.activeGroup||!file)return;
+  const fd=new FormData();fd.append("file",file);
+  try{toast("Uploading…");await api(`/v23/groups/${state.activeGroup.id}/attachments`,{method:"POST",body:fd});await openGroup(state.activeGroup.id)}
+  catch(e){toast(e.message,true)}
+}
+async function downloadGroupMedia(id,name){
+  try{const r=await fetch(`/v23/group-media/${id}`,{headers:authHeaders()});if(!r.ok)throw new Error(`Download failed (${r.status})`);const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name||"lemmiq-group-file";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}catch(e){toast(e.message,true)}
+}
+window.openGroup=openGroup;window.downloadGroupMedia=downloadGroupMedia;
+
+function updateAssistBar(chat){
+  const bar=$("assistBar");if(!bar)return;
+  bar.classList.toggle("hidden",chat?.ai_mode!=="ASSIST");
+}
+
 function renderMessages(){
   const me=state.user?.id;
   $("messageList").innerHTML=state.messages.map(m=>{
@@ -137,6 +290,8 @@ function renderMessages(){
     if(attachment){
       if(attachment.kind==="CONTACT"){
         attach=`<div class="answer-box">👤 <strong>${escapeHtml(attachment.contact_name)}</strong><br><small>${escapeHtml(attachment.contact_phone)}</small></div>`;
+      }else if(attachment.kind==="VOICE"){
+        attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},false,this)">▶ Voice ${Math.round((attachment.duration_ms||0)/1000)}s</button><button class="mini" onclick="voiceAI(${m.id})">Q</button></div>${attachment.transcript?`<div class="micro">Transcript: ${escapeHtml(attachment.transcript)}</div>`:""}`;
       }else{
         attach=`<button class="mini" onclick="downloadMedia(${m.id},'${escapeHtml((attachment.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(attachment.name||attachment.kind)}</button>`;
       }
@@ -210,6 +365,69 @@ async function downloadMedia(id,name){
   }catch(e){toast(e.message,true)}
 }
 window.downloadMedia=downloadMedia;
+
+
+function supportsSpeechRecognition(){
+  return !!(window.SpeechRecognition||window.webkitSpeechRecognition);
+}
+async function toggleVoice(target="direct"){
+  if(state.mediaRecorder && state.mediaRecorder.state==="recording"){
+    state.mediaRecorder.stop();return;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    const preferred=MediaRecorder.isTypeSupported("audio/webm;codecs=opus")?"audio/webm;codecs=opus":"audio/webm";
+    state.voiceChunks=[];state.voiceStartedAt=Date.now();state.voiceTarget=target;state.voiceTranscript="";
+    const rec=new MediaRecorder(stream,{mimeType:preferred});state.mediaRecorder=rec;
+    const btn=target==="group"?$("groupVoiceBtn"):$("voiceBtn");btn.classList.add("recording");btn.textContent="■";
+    if(supportsSpeechRecognition()){
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+      const sr=new SR();state.speechRecognition=sr;sr.continuous=true;sr.interimResults=true;
+      sr.onresult=e=>{let t="";for(let i=0;i<e.results.length;i++)t+=e.results[i][0].transcript+" ";state.voiceTranscript=t.trim()};
+      try{sr.start()}catch{}
+    }
+    rec.ondataavailable=e=>{if(e.data?.size)state.voiceChunks.push(e.data)};
+    rec.onstop=async()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      try{state.speechRecognition?.stop()}catch{}
+      btn.classList.remove("recording");btn.textContent="🎙";
+      const duration=Date.now()-state.voiceStartedAt;
+      const blob=new Blob(state.voiceChunks,{type:rec.mimeType||"audio/webm"});
+      const fd=new FormData();fd.append("file",blob,"voice-note.webm");fd.append("duration_ms",String(duration));fd.append("transcript",state.voiceTranscript||"");
+      try{
+        toast("Sending voice message…");
+        if(target==="group"&&state.activeGroup){
+          await api(`/v23/groups/${state.activeGroup.id}/voice`,{method:"POST",body:fd});await openGroup(state.activeGroup.id);
+        }else if(state.activeChat){
+          await api(`/v23/chats/${state.activeChat.id}/voice`,{method:"POST",body:fd});await openChat(state.activeChat.id,false);
+        }
+      }catch(e){toast(e.message,true)}
+      state.mediaRecorder=null;state.voiceChunks=[];
+    };
+    rec.start(250);
+  }catch(e){toast("Microphone unavailable: "+e.message,true)}
+}
+async function loadVoice(id,isGroup,button){
+  try{
+    button.disabled=true;button.textContent="Loading…";
+    const url=isGroup?`/v23/group-media/${id}`:`/media/${id}`;
+    const r=await fetch(url,{headers:authHeaders()});if(!r.ok)throw new Error(`Audio HTTP ${r.status}`);
+    const blob=await r.blob();const src=URL.createObjectURL(blob);
+    const audio=document.createElement("audio");audio.controls=true;audio.src=src;audio.playbackRate=1;
+    const speed=document.createElement("button");speed.className="mini";speed.textContent="1×";
+    speed.onclick=()=>{audio.playbackRate=audio.playbackRate===1?1.5:audio.playbackRate===1.5?2:1;speed.textContent=audio.playbackRate+"×"};
+    button.replaceWith(audio);audio.parentElement?.appendChild(speed);audio.play().catch(()=>{});
+    audio.onended=()=>{};
+  }catch(e){button.disabled=false;button.textContent="▶ Voice";toast(e.message,true)}
+}
+async function voiceAI(id){
+  try{
+    const r=await api(`/v23/voice/${id}/ai`,{method:"POST"});
+    openModal(`<h3>Q · Voice note</h3><p><strong>Transcript</strong></p><p>${escapeHtml(r.transcript||"")}</p><p><strong>Summary</strong></p><p>${escapeHtml(r.summary||"")}</p>${r.suggested_reply?`<p><strong>Suggested reply</strong></p><div class="answer-box">${escapeHtml(r.suggested_reply)}</div><button id="useVoiceReply" class="primary">Use reply</button>`:""}`);
+    if($("useVoiceReply"))$("useVoiceReply").onclick=()=>{$("messageInput").value=r.suggested_reply;closeModal()};
+  }catch(e){toast(e.message,true)}
+}
+window.loadVoice=loadVoice;window.voiceAI=voiceAI;
 
 async function uploadAttachment(file){
   if(!state.activeChat||!file)return;
@@ -509,6 +727,45 @@ function installAndroidApp(){
     <p class="micro">Render environment variable: <strong>ANDROID_PLAY_URL</strong> or <strong>ANDROID_APK_URL</strong></p>`);
 }
 
+
+function showIncomingWebCall(p){
+  openModal(`<h3>📞 Incoming LEMMIQ call</h3><p><strong>${escapeHtml(p.caller_name||"LEMMIQ user")}</strong> is calling.</p><div class="suggestion-actions"><button id="declineWebCall" class="danger">Decline</button><button id="answerWebCall" class="primary">Answer</button></div>`);
+  $("declineWebCall").onclick=async()=>{try{await api(`/v23/calls/${p.call_id}/decline`,{method:"POST"})}catch{}closeModal()};
+  $("answerWebCall").onclick=async()=>{try{const join=await api(`/v23/calls/${p.call_id}/join`,{method:"POST"});closeModal();await connectVoiceCall(join,p.caller_name)}catch(e){toast(e.message,true)}};
+}
+async function startVoiceCall(){
+  if(!state.activeChat)return;
+  try{
+    const join=await api("/v23/calls/start",{method:"POST",body:JSON.stringify({chat_id:state.activeChat.id})});
+    await connectVoiceCall(join,state.activeChat.other_user.display_name);
+  }catch(e){toast(e.message,true)}
+}
+async function connectVoiceCall(join,person){
+  if(!window.LivekitClient)return toast("LiveKit client did not load",true);
+  try{
+    $("callOverlay").classList.remove("hidden");$("callPerson").textContent=person||"LEMMIQ call";$("callState").textContent="Connecting…";
+    const {Room,RoomEvent,Track}=LivekitClient;
+    const room=new Room();state.callRoom=room;state.callId=join.call.id;state.callMuted=false;
+    room.on(RoomEvent.Connected,()=>{$("callState").textContent="Connected"});
+    room.on(RoomEvent.Disconnected,()=>{$("callState").textContent="Call ended"});
+    room.on(RoomEvent.TrackSubscribed,(track)=>{
+      if(track.kind===Track.Kind.Audio){const el=track.attach();el.autoplay=true;$("remoteAudio").appendChild(el)}
+    });
+    await room.connect(join.ws_url,join.token);
+    await room.localParticipant.setMicrophoneEnabled(true);
+  }catch(e){toast("Call failed: "+e.message,true);endVoiceCall()}
+}
+async function endVoiceCall(){
+  try{state.callRoom?.disconnect()}catch{}
+  if(state.callId)api(`/v23/calls/${state.callId}/end`,{method:"POST"}).catch(()=>{});
+  state.callRoom=null;state.callId=null;$("remoteAudio").innerHTML="";$("callOverlay").classList.add("hidden");
+}
+async function toggleCallMute(){
+  if(!state.callRoom)return;state.callMuted=!state.callMuted;
+  await state.callRoom.localParticipant.setMicrophoneEnabled(!state.callMuted);
+  $("muteCallBtn").textContent=state.callMuted?"🔇":"🎙";
+}
+
 async function installHelp(){
   if(state.installPrompt){
     state.installPrompt.prompt();
@@ -528,11 +785,17 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   qsa("#nav button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
   $("refreshBtn").onclick=refreshCurrent;$("logoutBtn").onclick=logout;
-  $("newChatBtn").onclick=showNewChat;$("chatFilter").oninput=renderChats;
-  $("sendBtn").onclick=sendMessage;$("suggestBtn").onclick=suggestReply;
+  $("newChatBtn").onclick=showNewChat;$("newGroupBtn").onclick=showNewGroup;$("chatFilter").oninput=renderChats;
+  $("sendBtn").onclick=sendMessage;$("suggestBtn").onclick=suggestReply;$("assistBarBtn").onclick=suggestReply;
+  $("voiceBtn").onclick=()=>toggleVoice("direct");$("callBtn").onclick=startVoiceCall;
   $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}});
   $("fileInput").onchange=e=>{uploadAttachment(e.target.files[0]);e.target.value=""};
+  $("groupFileInput").onchange=e=>{uploadGroupAttachment(e.target.files[0]);e.target.value=""};
+  $("groupVoiceBtn").onclick=()=>toggleVoice("group");$("groupSendBtn").onclick=sendGroupMessage;
+  $("groupMessageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendGroupMessage()}});
+  $("groupSuggestBtn").onclick=groupSuggestReply;$("groupCatchupBtn").onclick=groupCatchup;$("groupQBtn").onclick=groupAsk;$("groupSettingsBtn").onclick=groupSettings;
   $("chatAiBtn").onclick=personalChatSettings;$("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
+  $("muteCallBtn").onclick=toggleCallMute;$("endCallBtn").onclick=endVoiceCall;$("speakerCallBtn").onclick=()=>toast("Speaker routing is controlled by your browser/device.");
 
   $("askAgentBtn").onclick=askAgent;$("trustBtn").onclick=()=>{const t=$("trustText").value.trim();if(t)runTrust(t)};
   $("resetMoneyBtn").onclick=()=>resetInsights("MONEY");$("resetActivityBtn").onclick=()=>resetInsights("ACTIVITY");$("resetAllInsightsBtn").onclick=()=>resetInsights("ALL");
@@ -550,3 +813,5 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 window.openChat=openChat;
+
+window.showNewGroup=showNewGroup;

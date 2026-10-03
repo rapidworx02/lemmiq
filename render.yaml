@@ -32,9 +32,20 @@ services:
         sync: false
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-4-6
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
 
 databases:
   - name: lemmiq-db
     plan: free  # Expires after 30 days; export or upgrade to retain data.
     databaseName: lemmiq
     user: lemmiq
+
+# V2.3 LiveKit Cloud secrets: add these manually to lemmiq-api in Render:
+# LIVEKIT_URL
+# LIVEKIT_API_KEY
+# LIVEKIT_API_SECRET

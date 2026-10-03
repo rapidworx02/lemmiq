@@ -77,17 +77,26 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var businessBusy by mutableStateOf(false)
     var pushStatusText by mutableStateOf("Not checked")
     var pushRegistered by mutableStateOf(false)
+    var groups by mutableStateOf<List<GroupDto>>(emptyList())
+    var activeGroup by mutableStateOf<GroupDto?>(null)
+    var groupMessages by mutableStateOf<List<GroupMessageDto>>(emptyList())
+    var groupSummary by mutableStateOf<GroupSummaryDto?>(null)
+    var groupAnswer by mutableStateOf<GroupAskDto?>(null)
+    var groupSuggestion by mutableStateOf<String?>(null)
+    var groupBusy by mutableStateOf(false)
+    var callHistory by mutableStateOf<List<CallDto>>(emptyList())
+    var callStatus by mutableStateOf(CallStatusDto())
 
     val listenerGranted:Boolean get()=NotificationControl.hasSystemAccess(appCtx)
     val detectedSpendingCents:Long get()=localEvents.filter{it.category=="MONEY"&&it.direction=="OUT"}.sumOf{it.amount_cents?:0L}
     val detectedIncomingCents:Long get()=localEvents.filter{it.category=="MONEY"&&it.direction=="IN"}.sumOf{it.amount_cents?:0L}
 
 
-    init{if(authenticated){connect();refreshChats();registerPush();refreshExternal();refreshBusiness()}}
+    init{if(authenticated){connect();refreshChats();refreshGroups();registerPush();refreshExternal();refreshBusiness();refreshCalls()}}
 
     private fun auth(a:AuthResponse){
         store.token=a.token;store.userId=a.user.id;store.username=a.user.username;store.displayName=a.user.display_name
-        authenticated=true;connect();refreshChats();refreshInsights();refreshExternal();refreshBusiness();registerPush()
+        authenticated=true;connect();refreshChats();refreshGroups();refreshInsights();refreshExternal();refreshBusiness();refreshCalls();registerPush()
     }
     fun register(u:String,n:String,p:String)=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p))}}
     fun login(u:String,p:String)=viewModelScope.launch{action{auth(api.login(u.trim().lowercase(),p))}}
@@ -104,7 +113,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         NotificationControl.setSync(appCtx,false)
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
-        ws?.close(1000,"logout");store.clear();authenticated=false;active=null;chats=emptyList()
+        ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList()
         localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -116,12 +125,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         val c=api.direct(uid);active=c;messages=api.messages(c.id);api.read(c.id);refreshChats()
     }}
     fun open(c:ChatDto)=viewModelScope.launch{
-        active=c;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList()
+        activeGroup=null;groupMessages=emptyList();active=c;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList()
         runCatching{messages=api.messages(c.id);api.read(c.id);PushControl.cancelChat(appCtx,c.id)}
         runCatching{api.businessChat(c.id)}.onSuccess{bundle->activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
         refreshChats()
     }
-    fun close(){active=null;messages=emptyList();suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats()}
+    fun close(){active=null;activeGroup=null;messages=emptyList();groupMessages=emptyList();suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
     fun send(text:String)=viewModelScope.launch{
         val c=active?:return@launch;if(text.isBlank())return@launch
         runCatching{api.send(c.id,text.trim())}.onSuccess{m->
@@ -199,7 +208,6 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 else->"Push ready · ${s.registered_devices} registered device${if(s.registered_devices==1)"" else "s"}"
             }
         }.onFailure{pushStatusText="Push status unavailable: ${it.message}"}
-    }
     }
 
     fun uploadUri(uri:Uri){
@@ -508,6 +516,166 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }catch(e:Exception){error=e.message}finally{businessBusy=false}
     }
 
+
+    // ---------------- V2.3 Groups ----------------
+    fun refreshGroups()=viewModelScope.launch{
+        runCatching{api.groups()}.onSuccess{groups=it}.onFailure{error=it.message}
+    }
+
+    fun createGroup(name:String,memberIds:List<Int>,onCreated:(GroupDto)->Unit={})=viewModelScope.launch{
+        if(name.isBlank()||memberIds.isEmpty())return@launch
+        groupBusy=true;error=null
+        try{
+            val g=api.createGroup(name.trim(),memberIds)
+            groups=(listOf(g)+groups.filterNot{it.id==g.id})
+            onCreated(g)
+        }catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun openGroup(g:GroupDto)=viewModelScope.launch{
+        active=null;messages=emptyList();activeGroup=g;groupSummary=null;groupAnswer=null;groupSuggestion=null
+        groupBusy=true;error=null
+        try{
+            activeGroup=api.group(g.id)
+            groupMessages=api.groupMessages(g.id);api.readGroup(g.id)
+        }catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun sendGroup(text:String)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        if(text.isBlank())return@launch
+        runCatching{api.sendGroup(g.id,text.trim())}.onSuccess{m->
+            if(groupMessages.none{it.id==m.id})groupMessages=groupMessages+m
+            refreshGroups()
+        }.onFailure{error=it.message}
+    }
+
+    fun addGroupMember(uid:Int)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{activeGroup=api.addGroupMember(g.id,uid);refreshGroups()}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+    fun setGroupRole(uid:Int,role:String)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{activeGroup=api.setGroupRole(g.id,uid,role);refreshGroups()}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+    fun removeGroupMember(uid:Int)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{api.removeGroupMember(g.id,uid);activeGroup=api.group(g.id);refreshGroups()}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+    fun uploadGroupPhoto(uri:Uri)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{
+            val data=withContext(Dispatchers.IO){
+                val cr=appCtx.contentResolver
+                var name="group-photo.jpg"
+                cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst())name=c.getString(0)?:name}
+                val bytes=cr.openInputStream(uri)?.use{it.readBytes()}?:throw IllegalArgumentException("Cannot read group photo")
+                if(bytes.size>5*1024*1024)throw IllegalArgumentException("Group photo exceeds 5 MB")
+                Triple(name,cr.getType(uri)?:"image/jpeg",bytes)
+            }
+            activeGroup=api.uploadGroupPhoto(g.id,data.first,data.second,data.third);refreshGroups()
+        }catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun saveGroupSettings(mode:String,tone:String)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{activeGroup=api.saveGroupSettings(g.id,mode,tone);refreshGroups()}
+        catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun suggestGroup()=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{groupSuggestion=api.groupSuggest(g.id).reply}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+    fun discardGroupSuggestion(){groupSuggestion=null}
+
+    fun summarizeGroup()=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{groupSummary=api.groupSummary(g.id)}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun askGroup(question:String)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        if(question.isBlank())return@launch
+        groupBusy=true;error=null
+        try{groupAnswer=api.groupAsk(g.id,question.trim())}catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    fun clearGroupQ(){groupSummary=null;groupAnswer=null}
+
+    fun uploadGroupUri(uri:Uri)=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        groupBusy=true;error=null
+        try{
+            val data=withContext(Dispatchers.IO){
+                val cr=appCtx.contentResolver
+                var name="group_attachment"
+                cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst())name=c.getString(0)?:name}
+                val bytes=cr.openInputStream(uri)?.use{input->
+                    val out=java.io.ByteArrayOutputStream();val buf=ByteArray(65536)
+                    while(true){val n=input.read(buf);if(n<0)break;out.write(buf,0,n);if(out.size()>20*1024*1024)throw IllegalArgumentException("Attachment exceeds 20 MB")}
+                    out.toByteArray()
+                }?:throw IllegalArgumentException("Cannot read selected file")
+                val mime=cr.getType(uri)?:"application/octet-stream"
+                Triple(name,mime,bytes)
+            }
+            val m=api.uploadGroup(g.id,data.first,data.second,data.third)
+            if(groupMessages.none{it.id==m.id})groupMessages=groupMessages+m
+            refreshGroups()
+        }catch(e:Exception){error=e.message}finally{groupBusy=false}
+    }
+
+    suspend fun groupMediaBytes(id:Int)=api.groupMediaBytes(id)
+
+    // ---------------- V2.3 Voice Notes ----------------
+    fun sendVoiceFile(file:File,durationMs:Int){
+        val c=active?:return
+        viewModelScope.launch{
+            attachmentBusy=true;error=null
+            try{
+                val bytes=withContext(Dispatchers.IO){file.readBytes()}
+                val m=api.sendVoice(c.id,bytes,durationMs)
+                if(messages.none{it.id==m.id})messages=messages+m
+                refreshChats()
+            }catch(e:Exception){error=e.message}finally{file.delete();attachmentBusy=false}
+        }
+    }
+
+    fun sendGroupVoiceFile(file:File,durationMs:Int){
+        val g=activeGroup?:return
+        viewModelScope.launch{
+            groupBusy=true;error=null
+            try{
+                val bytes=withContext(Dispatchers.IO){file.readBytes()}
+                val m=api.sendGroupVoice(g.id,bytes,durationMs)
+                if(groupMessages.none{it.id==m.id})groupMessages=groupMessages+m
+                refreshGroups()
+            }catch(e:Exception){error=e.message}finally{file.delete();groupBusy=false}
+        }
+    }
+
+    fun voiceAi(messageId:Int,onReady:(VoiceAiDto)->Unit)=viewModelScope.launch{
+        agentBusy=true;error=null
+        try{onReady(api.voiceAi(messageId))}catch(e:Exception){error=e.message}finally{agentBusy=false}
+    }
+
+    // ---------------- V2.3 Calls ----------------
+    fun refreshCalls()=viewModelScope.launch{
+        runCatching{callStatus=api.callStatus();callHistory=api.callHistory()}.onFailure{ /* optional until LiveKit configured */ }
+    }
+
+    fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
+        busy=true;error=null
+        try{onReady(api.startCall(cid));refreshCalls()}catch(e:Exception){error=e.message}finally{busy=false}
+    }
+
     private suspend fun action(block:suspend()->Unit){busy=true;error=null;try{block()}catch(e:Exception){error=e.message}finally{busy=false}}
     private fun connect(){
         ws?.cancel();socketStatus="connecting"
@@ -525,6 +693,14 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                             }
                         }
                         refreshChats()
+                    }
+                }
+                if(map["type"]?.toString()=="group_message"){
+                    val gid=(map["group_id"] as? Number)?.toInt()?:return
+                    val m=gson.fromJson(gson.toJson(map["data"]),GroupMessageDto::class.java)
+                    viewModelScope.launch{
+                        if(activeGroup?.id==gid && groupMessages.none{it.id==m.id})groupMessages=groupMessages+m
+                        refreshGroups()
                     }
                 }
             }
