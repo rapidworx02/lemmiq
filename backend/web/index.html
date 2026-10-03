@@ -55,13 +55,10 @@
       </div>
       <nav id="nav">
         <button data-view="chats" class="active"><span>💬</span>Chats</button>
-        <button data-view="updates"><span>⭕</span>Updates</button>
         <button data-view="agent"><span>Q</span>Agent</button>
         <button data-view="trust"><span>🛡</span>Trust</button>
         <button data-view="business"><span>💼</span>Business</button>
-        <button data-view="activity"><span>◈</span>Activity</button>
-        <button data-view="money"><span>💳</span>Money</button>
-        <button data-view="me"><span>🙂</span>Me</button>
+        <button data-view="more"><span>◇</span>More</button>
       </nav>
       <div class="sidebar-foot">
         <span id="socketDot" class="dot"></span><span id="socketText">offline</span>
@@ -264,6 +261,23 @@
             <p id="androidInstallHint" class="micro">The native Android app adds WhatsApp/SMS notification intelligence, detected payment alerts and stronger background features.</p>
           </article>
         </div>
+      </section>
+
+      <section id="view-more" class="view">
+        <article class="card glass more-card">
+          <div class="section-head">
+            <div><span class="eyebrow">LEMMIQ</span><h3>More</h3></div>
+          </div>
+          <p class="micro">Profile, updates, Android install and less-used tools are kept here so the main mobile navigation stays clean.</p>
+          <div class="more-menu-grid">
+            <button class="more-link" data-more-view="me"><span class="more-icon">🙂</span><span><strong>Me & Profile</strong><small>Photo, account, Android and web install</small></span><b>›</b></button>
+            <button class="more-link" data-more-view="updates"><span class="more-icon">⭕</span><span><strong>Updates</strong><small>LEMMIQ Status and recent updates</small></span><b>›</b></button>
+            <button class="more-link" data-more-view="activity"><span class="more-icon">◈</span><span><strong>Activity</strong><small>Android notification intelligence</small></span><b>›</b></button>
+            <button class="more-link" data-more-view="money"><span class="more-icon">💳</span><span><strong>Money</strong><small>Detected payment insights</small></span><b>›</b></button>
+            <button id="moreAndroidBtn" class="more-link"><span class="more-icon">📱</span><span><strong>Get LEMMIQ for Android</strong><small id="moreAndroidStatus">Checking Android availability…</small></span><b>›</b></button>
+            <button id="moreInstallBtn" class="more-link"><span class="more-icon">🌐</span><span><strong>Install Web App</strong><small>Add the LEMMIQ PWA to this device</small></span><b>›</b></button>
+          </div>
+        </article>
       </section>
     </section>
   </main>
