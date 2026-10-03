@@ -22,7 +22,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.1.0")
+app = FastAPI(title="LEMMIQ Server", version="2.2.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -88,6 +88,18 @@ def msg_json(m: Message, db: Session | None = None):
 
 def push_tokens(db:Session, uid:int):
     return [x.token for x in db.scalars(select(PushDevice).where(PushDevice.user_id == uid)).all()]
+
+def unread_count_for_user(db:Session, uid:int):
+    cids=[c.id for c in db.scalars(select(Chat).where(or_(Chat.user1_id==uid,Chat.user2_id==uid))).all()]
+    if not cids:
+        return 0
+    return int(db.scalar(
+        select(func.count()).select_from(Message).where(
+            Message.chat_id.in_(cids),
+            Message.sender_id != uid,
+            Message.read_at.is_(None)
+        )
+    ) or 0)
 
 def chat_json(db: Session, c: Chat, uid: int):
     oid = c.user2_id if c.user1_id == uid else c.user1_id
@@ -158,7 +170,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.1.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.2.0"}
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -222,7 +234,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
     data = msg_json(m, db)
     oid = c.user2_id if c.user1_id == u.id else c.user1_id
     await push(oid, {"type":"message","data":data}); await push(u.id, {"type":"message","data":data})
-    background.add_task(push_service.notify, push_tokens(db, oid), u.display_name, cid)
+    background.add_task(push_service.notify, push_tokens(db, oid), u.display_name, cid, m.text, unread_count_for_user(db, oid))
     # Business Agent AUTO takes priority over the personal Auto agent when enabled for this chat.
     bs = db.get(BusinessChatSetting, {"user_id": oid, "chat_id": cid})
     bp = db.get(BusinessProfile, oid)
@@ -236,7 +248,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 db.add(auto); db.commit(); db.refresh(auto)
                 ad = msg_json(auto, db)
                 await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
-                background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid)
+                background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
                 business_handled = True
         except Exception as e:
             print("Business AUTO error:", e)
@@ -254,7 +266,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
             db.add(auto); db.commit(); db.refresh(auto)
             ad = msg_json(auto, db)
             await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
-            background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid)
+            background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
         except Exception as e:
             print("AI AUTO error:", e)
     return data
@@ -531,7 +543,7 @@ async def upload_attachment(cid: int, background: BackgroundTasks, file: UploadF
     data=msg_json(m,db)
     oid=c.user2_id if c.user1_id==u.id else c.user1_id
     await push(oid,{"type":"message","data":data});await push(u.id,{"type":"message","data":data})
-    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid)
+    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid,m.text,unread_count_for_user(db,oid))
     return data
 
 class ContactShare(BaseModel):
@@ -553,7 +565,7 @@ async def share_contact(cid:int,body:ContactShare,background:BackgroundTasks,
     data=msg_json(m,db)
     oid=c.user2_id if c.user1_id==u.id else c.user1_id
     await push(oid,{"type":"message","data":data});await push(u.id,{"type":"message","data":data})
-    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid)
+    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid,m.text,unread_count_for_user(db,oid))
     return data
 
 @app.get("/media/{message_id}")
@@ -570,6 +582,15 @@ def private_media(message_id:int,u:User=Depends(current_user),db:Session=Depends
 
 class PushRegister(BaseModel):
     token: str = Field(min_length=20,max_length=300)
+
+@app.get("/push/status")
+def push_status(u:User=Depends(current_user),db:Session=Depends(get_db)):
+    return {
+        "firebase_configured": bool(push_service.configured()),
+        "registered_devices": int(db.scalar(
+            select(func.count()).select_from(PushDevice).where(PushDevice.user_id==u.id)
+        ) or 0)
+    }
 
 @app.post("/push/register")
 def register_push(body:PushRegister,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -740,7 +761,7 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.1.0",
+        "version": "2.2.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "web_install_enabled": True,

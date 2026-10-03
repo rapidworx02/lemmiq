@@ -75,6 +75,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var businessSuggestion by mutableStateOf<BusinessSuggestionDto?>(null)
     var businessLearnCandidates by mutableStateOf<List<BusinessLearnCandidate>>(emptyList())
     var businessBusy by mutableStateOf(false)
+    var pushStatusText by mutableStateOf("Not checked")
+    var pushRegistered by mutableStateOf(false)
 
     val listenerGranted:Boolean get()=NotificationControl.hasSystemAccess(appCtx)
     val detectedSpendingCents:Long get()=localEvents.filter{it.category=="MONEY"&&it.direction=="OUT"}.sumOf{it.amount_cents?:0L}
@@ -101,6 +103,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         NotificationControl.setCapture(appCtx,false)
         NotificationControl.setSync(appCtx,false)
         reloadNotificationSettings()
+        PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;chats=emptyList()
         localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
@@ -114,7 +117,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }}
     fun open(c:ChatDto)=viewModelScope.launch{
         active=c;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList()
-        runCatching{messages=api.messages(c.id);api.read(c.id)}
+        runCatching{messages=api.messages(c.id);api.read(c.id);PushControl.cancelChat(appCtx,c.id)}
         runCatching{api.businessChat(c.id)}.onSuccess{bundle->activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
         refreshChats()
     }
@@ -151,10 +154,52 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
 
     fun registerPush(){
-        // Firebase is optional until the developer supplies google-services.json.
-        runCatching{FirebaseMessaging.getInstance().token}.getOrNull()?.addOnSuccessListener { token->
-            viewModelScope.launch { runCatching{if(authenticated)api.registerPush(token)} }
+        if(!BuildConfig.FCM_CONFIGURED){
+            pushRegistered=false
+            pushStatusText="Firebase app config missing: add google-services.json"
+            return
         }
+        pushStatusText="Registering this phone…"
+        val task=runCatching{FirebaseMessaging.getInstance().token}.getOrElse{
+            pushRegistered=false;pushStatusText="Firebase token unavailable";return
+        }
+        task.addOnSuccessListener { token->
+            viewModelScope.launch {
+                runCatching{
+                    if(authenticated)api.registerPush(token)
+                    val s=api.pushStatus()
+                    pushRegistered=s.firebase_configured && s.registered_devices>0
+                    pushStatusText=when{
+                        !s.firebase_configured->"Render Firebase credentials are not configured"
+                        s.registered_devices<1->"This phone is not registered on the server"
+                        else->"Push ready · ${s.registered_devices} registered device${if(s.registered_devices==1)"" else "s"}"
+                    }
+                }.onFailure{
+                    pushRegistered=false
+                    pushStatusText="Push registration failed: ${it.message}"
+                }
+            }
+        }.addOnFailureListener{
+            pushRegistered=false
+            pushStatusText="Firebase token failed: ${it.message}"
+        }
+    }
+
+    fun refreshPushStatus()=viewModelScope.launch{
+        if(!BuildConfig.FCM_CONFIGURED){
+            pushRegistered=false
+            pushStatusText="Firebase app config missing: add google-services.json"
+            return@launch
+        }
+        runCatching{api.pushStatus()}.onSuccess{s->
+            pushRegistered=s.firebase_configured && s.registered_devices>0
+            pushStatusText=when{
+                !s.firebase_configured->"Render Firebase credentials are not configured"
+                s.registered_devices<1->"No phone token registered yet"
+                else->"Push ready · ${s.registered_devices} registered device${if(s.registered_devices==1)"" else "s"}"
+            }
+        }.onFailure{pushStatusText="Push status unavailable: ${it.message}"}
+    }
     }
 
     fun uploadUri(uri:Uri){

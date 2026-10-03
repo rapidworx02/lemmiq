@@ -1,3 +1,11 @@
+# LEMMIQ V2.2
+
+Background push diagnostics, notification badge support, and hard exclusion of LEMMIQ's own notifications.
+
+See `LEMMIQ_V2_2_PUSH_SETUP.md`.
+
+---
+
 # LEMMIQ V2.1
 
 Cross-platform Chat Intelligence plus user-controlled Money/Activity data management.

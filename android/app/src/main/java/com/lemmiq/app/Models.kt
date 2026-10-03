@@ -102,3 +102,6 @@ data class BusinessLearnCandidate(val category:String="OTHER",val title:String="
 data class BusinessLearnResponse(
     val candidates:List<BusinessLearnCandidate> = emptyList(),val note:String=""
 )
+
+
+data class PushStatusDto(val firebase_configured:Boolean=false,val registered_devices:Int=0)

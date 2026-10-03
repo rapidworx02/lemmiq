@@ -6,6 +6,8 @@ val lemmiqLocalProperties = Properties().apply {
         file.inputStream().use { load(it) }
     }
 }
+val lemmiqFirebaseConfigured = file("google-services.json").exists()
+
 val lemmiqApiBaseUrl = lemmiqLocalProperties
     .getProperty("lemmiq.apiBaseUrl", "https://YOUR-RENDER-SERVICE.onrender.com")
     .trim()
@@ -13,7 +15,6 @@ val lemmiqApiBaseUrl = lemmiqLocalProperties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 // Add your Firebase google-services.json to android/app/ to enable push registration.
@@ -29,16 +30,16 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=22
-        versionName="2.1.0"
+        versionCode=23
+        versionName="2.2.0"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
+        buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }
     buildFeatures { compose=true; buildConfig=true }
     compileOptions {
         sourceCompatibility=JavaVersion.VERSION_17
         targetCompatibility=JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget="17" }
 }
 dependencies {
     val composeBom=platform("androidx.compose:compose-bom:2026.08.00")

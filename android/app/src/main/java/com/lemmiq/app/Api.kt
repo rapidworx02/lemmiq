@@ -196,6 +196,9 @@ class Api(private val store:SessionStore){
         val reqBody=gson.toJson(mapOf("token" to token)).toRequestBody(json)
         req(b("$base/push/register").post(reqBody).build())
     }
+    suspend fun pushStatus():PushStatusDto {
+        return gson.fromJson(req(b("$base/push/status").get().build()),PushStatusDto::class.java)
+    }
 
     suspend fun unregisterPush(token:String,bearer:String?=null){
         val reqBody=gson.toJson(mapOf("token" to token)).toRequestBody(json)

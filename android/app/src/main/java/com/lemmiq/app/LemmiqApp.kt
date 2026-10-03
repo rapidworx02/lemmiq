@@ -84,6 +84,23 @@ private val BrandGradient=Brush.linearGradient(listOf(Blue,Purple,Pink))
 
 @Composable
 fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
+    val ctx=LocalContext.current
+    val pushPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->
+        PushControl.markPermissionAsked(ctx)
+        if(granted)vm.registerPush() else vm.pushStatusText="Android notification permission is off"
+    }
+    LaunchedEffect(vm.authenticated){
+        if(vm.authenticated){
+            PushControl.ensureChannel(ctx)
+            when{
+                !BuildConfig.FCM_CONFIGURED -> vm.pushStatusText="Firebase app config missing: add google-services.json"
+                Build.VERSION.SDK_INT>=33 &&
+                    ContextCompat.checkSelfPermission(ctx,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED &&
+                    !PushControl.permissionAsked(ctx) -> pushPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                else -> { vm.registerPush(); vm.refreshPushStatus() }
+            }
+        }
+    }
     when{
         !vm.authenticated->Auth(vm)
         vm.active!=null->Chat(vm)
@@ -764,10 +781,18 @@ private fun Profile(vm:LemmiqViewModel){
             Modifier.padding(horizontal=20.dp,vertical=6.dp),fontSize=12.sp,color=Muted)
         OutlinedButton(onClick={
             if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(ctx,Manifest.permission.POST_NOTIFICATIONS)
-                !=PackageManager.PERMISSION_GRANTED)notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else vm.registerPush()
+                !=PackageManager.PERMISSION_GRANTED){
+                PushControl.markPermissionAsked(ctx)
+                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else vm.registerPush()
         }){Text("🔔 Enable / refresh message push alerts")}
-        Text("FCM needs Firebase setup; background delivery can be delayed on sleeping Render services.",fontSize=10.sp,color=Muted)
+        Row(Modifier.padding(horizontal=20.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+            Text(if(vm.pushRegistered)"●" else "○",color=if(vm.pushRegistered)Mint else Muted,fontSize=13.sp)
+            Spacer(Modifier.width(6.dp))
+            Text(vm.pushStatusText,fontSize=10.sp,color=Muted)
+        }
+        Text("LEMMIQ never reads its own notifications. Cross-app intelligence only processes permitted third-party apps.",
+            fontSize=10.sp,color=Muted,modifier=Modifier.padding(horizontal=20.dp))
         Text("Server: ${vm.serverUrl}",Modifier.padding(horizontal=20.dp,vertical=6.dp),fontSize=11.sp,color=Muted)
         Button({vm.logout()},modifier=Modifier.padding(20.dp)){Text("Log out")}
     }

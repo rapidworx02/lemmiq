@@ -23,19 +23,21 @@ object NotificationControl {
     fun enabled(ctx:Context)=prefs(ctx).getBoolean("capture",false)
     fun sync(ctx:Context)=prefs(ctx).getBoolean("sync",false)
     fun keepDays(ctx:Context)=prefs(ctx).getInt("retention_days",7)
-    fun allowedApps(ctx:Context)=prefs(ctx).getStringSet("apps",emptySet())?.toSet()?:emptySet()
+    fun allowedApps(ctx:Context)=(prefs(ctx).getStringSet("apps",emptySet())?.toSet()?:emptySet()).filter{it!=ctx.packageName}.toSet()
     fun allowedCategories(ctx:Context)=prefs(ctx).getStringSet("categories",emptySet())?.toSet()?:emptySet()
     fun setCapture(ctx:Context,v:Boolean)=prefs(ctx).edit().putBoolean("capture",v).apply()
     fun setSync(ctx:Context,v:Boolean)=prefs(ctx).edit().putBoolean("sync",v).apply()
     fun setDays(ctx:Context,v:Int)=prefs(ctx).edit().putInt("retention_days",v.coerceIn(1,30)).apply()
     fun setApp(ctx:Context,pkg:String,on:Boolean){
+        if(pkg==ctx.packageName)return
         val values=allowedApps(ctx).toMutableSet();if(on)values.add(pkg) else values.remove(pkg)
         prefs(ctx).edit().putStringSet("apps",values).apply()
     }
     /** Apply bulk allowlist changes in one preferences write, not one write per app. */
     fun setApps(ctx:Context,packages:Set<String>,on:Boolean){
+        val safe=packages.filter{it!=ctx.packageName}.toSet()
         val current=allowedApps(ctx).toMutableSet()
-        if(on)current.addAll(packages) else current.removeAll(packages)
+        if(on)current.addAll(safe) else current.removeAll(safe)
         prefs(ctx).edit().putStringSet("apps",current).apply()
     }
     fun setCategory(ctx:Context,cat:String,on:Boolean){
@@ -186,6 +188,7 @@ class LemmiqNotificationListener:NotificationListenerService(){
             if(!NotificationControl.enabled(this) && !ExternalConsent.enabled(this))return
             val session=SessionStore(this)
             if(session.token.isNullOrEmpty()||session.userId<1)return
+            // Hard loop/privacy guard: LEMMIQ never analyses its own notifications.
             if(sbn.packageName==packageName)return
             if(sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY!=0)return
             val extras=sbn.notification.extras

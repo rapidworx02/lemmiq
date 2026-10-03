@@ -13,6 +13,7 @@ class MainActivity:ComponentActivity(){
     override fun onStop(){isVisible=false;super.onStop()}
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
+        PushControl.ensureChannel(this)
         setContent{
             MaterialTheme(colorScheme=lightColorScheme(
                 primary=Color(0xFF6C4DFF),secondary=Color(0xFFFF4F9A),

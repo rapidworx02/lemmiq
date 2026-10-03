@@ -28,7 +28,11 @@ def _app():
         return None
 
 
-def notify(tokens:list[str],sender_name:str,chat_id:int):
+def configured():
+    return _app() is not None
+
+
+def notify(tokens:list[str],sender_name:str,chat_id:int,body:str="New message",unread_count:int=1):
     if not tokens or _app() is None:
         return
     from firebase_admin import messaging
@@ -36,7 +40,7 @@ def notify(tokens:list[str],sender_name:str,chat_id:int):
         try:
             messaging.send(messaging.Message(
                 token=token,
-                data={"type":"chat", "chat_id":str(chat_id), "title":"LEMMIQ", "body":f"New message from {sender_name[:40]}"},
+                data={"type":"chat", "chat_id":str(chat_id), "sender_name":sender_name[:60], "body":(body or "New message")[:180], "unread_count":str(max(1,int(unread_count)))},
                 android=messaging.AndroidConfig(priority="high", ttl=3600),
             ))
         except Exception:
