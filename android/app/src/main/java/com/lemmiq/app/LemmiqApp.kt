@@ -756,7 +756,7 @@ private fun Profile(vm:LemmiqViewModel){
         Header("Me","@${vm.store.username.orEmpty()}")
         Card(Modifier.fillMaxWidth().padding(20.dp)){Column(Modifier.padding(18.dp)){Text(vm.store.displayName.orEmpty(),fontSize=20.sp,fontWeight=FontWeight.Bold);Text("@${vm.store.username.orEmpty()}",color=Muted)}}
         Row(Modifier.padding(horizontal=20.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
-            BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V1.7",fontWeight=FontWeight.Bold)
+            BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V${BuildConfig.VERSION_NAME}",fontWeight=FontWeight.Bold)
         }
         TextButton({showMoments=true},modifier=Modifier.padding(horizontal=20.dp)){Text("✨ Open 24-hour Moments")}
         Text("🧠 AI memory: recent 50-message context",Modifier.padding(horizontal=20.dp,vertical=6.dp))

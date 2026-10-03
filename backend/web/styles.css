@@ -32,3 +32,6 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 @media(max-width:680px){
   .auth-shell{grid-template-columns:1fr;padding:24px 16px;gap:25px}.auth-brand img{width:230px}.auth-brand h1{font-size:46px}.auth-brand p{font-size:16px}.msg{max-width:88%}.chat-head-actions button{font-size:10px;padding:8px}.composer{grid-template-columns:auto 1fr auto}.composer .qbtn{display:none}.topbar p{display:none}.hero-card h3{font-size:26px}
 }
+
+.install-choices{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.install-choices button{flex:1;min-width:190px}

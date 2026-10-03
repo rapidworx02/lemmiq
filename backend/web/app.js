@@ -5,7 +5,8 @@ const state = {
   activeChat: null,
   messages: [],
   socket: null,
-  installPrompt: null
+  installPrompt: null,
+  appConfig: {android_download_url:"", android_play_url:"", web_install_enabled:true}
 };
 
 const $ = id => document.getElementById(id);
@@ -339,13 +340,41 @@ async function loadActivity(){
 
 function openModal(html){$("modalContent").innerHTML=html;$("modal").showModal()}
 function closeModal(){$("modal").close()}
+
+async function loadAppConfig(){
+  try{
+    state.appConfig = await api("/app-config");
+    const hasNative = !!(state.appConfig.android_play_url || state.appConfig.android_download_url);
+    $("androidBtnTop")?.classList.toggle("hidden", !hasNative);
+    if($("androidInstallHint")){
+      $("androidInstallHint").textContent = hasNative
+        ? "Choose the native Android app for WhatsApp/SMS notification intelligence and stronger background features. The web app is the universal browser/PWA version."
+        : "Native Android download is not configured yet. Set ANDROID_PLAY_URL or ANDROID_APK_URL on Render after publishing your APK or Play test link.";
+    }
+  }catch(e){
+    console.warn("App config unavailable", e);
+  }
+}
+
+function installAndroidApp(){
+  const url = state.appConfig.android_play_url || state.appConfig.android_download_url;
+  if(url){
+    window.location.href = url;
+    return;
+  }
+  openModal(`<h3>📱 Android app</h3>
+    <p>The native Android download link has not been configured yet.</p>
+    <p>For your own phone right now, build/install from Android Studio. For testers, publish the APK to a private GitHub Release or Google Play Internal Testing, then set the URL in Render.</p>
+    <p class="micro">Render environment variable: <strong>ANDROID_PLAY_URL</strong> or <strong>ANDROID_APK_URL</strong></p>`);
+}
+
 async function installHelp(){
   if(state.installPrompt){
     state.installPrompt.prompt();
     await state.installPrompt.userChoice;
     state.installPrompt=null;$("installBtn").classList.add("hidden");
   }else{
-    openModal(`<h3>Install LEMMIQ</h3><p><strong>Android / Chrome:</strong> open the browser menu and choose <em>Install app</em> or <em>Add to Home screen</em>.</p><p><strong>iPhone / iPad:</strong> open LEMMIQ in Safari → Share → <em>Add to Home Screen</em>.</p><p class="micro">The installed PWA uses the same cloud account. Android's native companion app is still required for cross-app notification intelligence.</p>`);
+    openModal(`<h3>🌐 Install LEMMIQ Web App</h3><p>This installs the browser/PWA version, not the native Android APK.</p><p><strong>Android / Chrome:</strong> browser menu → <em>Install app</em> or <em>Add to Home screen</em>.</p><p><strong>iPhone / iPad:</strong> Safari → Share → <em>Add to Home Screen</em>.</p><p class="micro">The installed PWA uses the same cloud account. Android's native companion app is still required for cross-app notification intelligence.</p>`);
   }
 }
 
@@ -369,10 +398,12 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("bizDocInput").onchange=e=>{uploadBizDoc(e.target.files[0]);e.target.value=""};
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;
+  $("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
 
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
   if("serviceWorker" in navigator) navigator.serviceWorker.register("/web/sw.js").catch(()=>{});
 
+  loadAppConfig();
   if(state.token && state.user) showApp();
 });
 

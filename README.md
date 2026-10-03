@@ -1,3 +1,7 @@
+# LEMMIQ V2.0.1
+
+Native Android and Web/PWA install flows are now separated. See `LEMMIQ_V2_0_1_INSTALL_FLOW.md`.
+
 # LEMMIQ V2 Web Beta
 
 **Messaging with social IQ — now available from Android, iPhone/iPad browsers and desktop browsers.**

@@ -73,7 +73,8 @@
           <p id="pageSub">Your conversations, understood by Q.</p>
         </div>
         <div class="top-actions">
-          <button id="installBtn" class="ghost hidden">Install app</button>
+          <button id="androidBtnTop" class="ghost hidden">📱 Android app</button>
+          <button id="installBtn" class="ghost hidden">🌐 Install web app</button>
           <button id="refreshBtn" class="ghost">↻</button>
         </div>
       </header>
@@ -225,7 +226,11 @@
             <p>This web/PWA uses the same account, chats, Q Agent, Trust and Business Agent as Android.</p>
             <div class="platform-note"><strong>Android companion</strong><span>Adds WhatsApp/SMS/bank notification intelligence and stronger background integrations.</span></div>
             <div class="platform-note"><strong>iPhone / iPad</strong><span>Use Safari or install this PWA to the Home Screen. iOS does not expose broad cross-app notification listening.</span></div>
-            <button id="installBtn2" class="primary">Install / Add to Home Screen</button>
+            <div class="install-choices">
+              <button id="androidDownloadBtn" class="primary">📱 Get LEMMIQ for Android</button>
+              <button id="installBtn2" class="ghost">🌐 Install Web App</button>
+            </div>
+            <p id="androidInstallHint" class="micro">The native Android app adds WhatsApp/SMS notification intelligence, detected payment alerts and stronger background features.</p>
           </article>
         </div>
       </section>
