@@ -148,14 +148,14 @@ private fun Auth(vm:LemmiqViewModel){
 @Composable
 private fun Home(vm:LemmiqViewModel){
     var tab by remember{mutableIntStateOf(0)}
+    var morePage by remember{mutableStateOf<String?>(null)}
     var newChat by remember{mutableStateOf(false)}
     var newGroup by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){
-        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments()
+        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls()
     }
     val nav=listOf(
-        "💬" to "Chats","⭕" to "Updates","🔔" to "Activity","Q" to "Q",
-        "💳" to "Money","💼" to "Biz","🛡" to "Trust","🙂" to "Me"
+        "💬" to "Chats","⭕" to "Updates","Q" to "Q","📞" to "Calls","☰" to "More"
     )
     Scaffold(
         containerColor=Bg,
@@ -163,10 +163,10 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=tab==i,onClick={tab=i},
-                        icon={Text(x.first,fontWeight=FontWeight.Bold)},
-                        label={Text(x.second,fontSize=9.sp)},
-                        alwaysShowLabel=false
+                        selected=tab==i,onClick={tab=i;if(i!=4)morePage=null},
+                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=18.sp)},
+                        label={Text(x.second,fontSize=10.sp)},
+                        alwaysShowLabel=true
                     )
                 }
             }
@@ -180,14 +180,23 @@ private fun Home(vm:LemmiqViewModel){
     ){pad->
         Box(Modifier.padding(pad)){
             when(tab){
-                0->V24Inbox(vm){newGroup=true}
+                0->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
+                    tab=2
+                    if(prompt.isNotBlank())vm.askAgent(prompt)
+                })
                 1->V24Updates(vm)
-                2->ActivityScreen(vm)
-                3->ChatAgent(vm)
-                4->MoneyScreen(vm)
-                5->BusinessScreen(vm)
-                6->V24Trust(vm)
-                else->Profile(vm)
+                2->ChatAgent(vm)
+                3->V241CallsScreen(vm)
+                else->{
+                    when(morePage){
+                        "trust"->V241MoreSubPage("Trust / Fact Check",{morePage=null}){V24Trust(vm)}
+                        "business"->V241MoreSubPage("Business Agent",{morePage=null}){BusinessScreen(vm)}
+                        "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
+                        "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
+                        "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
+                        else->V241MoreMenu{morePage=it}
+                    }
+                }
             }
         }
     }
@@ -200,6 +209,102 @@ private fun Header(title:String,sub:String?=null){
     Column(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=16.dp)){
         Text(title,fontSize=29.sp,fontWeight=FontWeight.Black,color=Ink)
         if(sub!=null)Text(sub,color=Muted,fontSize=12.sp)
+    }
+}
+
+
+@Composable
+private fun V241CallsScreen(vm:LemmiqViewModel){
+    val ctx=LocalContext.current
+    LaunchedEffect(Unit){vm.refreshCalls()}
+    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
+        item{Header("Calls","Missed, no-answer and completed LEMMIQ voice calls")}
+        if(vm.callHistory.isEmpty()){
+            item{Empty("📞","No calls yet","Your LEMMIQ voice call history will appear here.")}
+        }else{
+            items(vm.callHistory,key={it.id}){c->
+                val other=c.other_user?:UserDto(0,"","LEMMIQ user")
+                val status=c.status.uppercase()
+                val label=when(status){
+                    "MISSED"->"Missed voice call"
+                    "RINGING"->"No answer"
+                    "DECLINED"->"Declined voice call"
+                    else->"Voice call"
+                }
+                val statusColor=when(status){
+                    "MISSED"->Color(0xFFD63C57)
+                    "RINGING"->Color(0xFF9B6B10)
+                    else->Mint
+                }
+                Card(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp),shape=RoundedCornerShape(18.dp)){
+                    Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                        V24Avatar(other,46)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)){
+                            Text(other.display_name,fontWeight=FontWeight.Bold)
+                            Text(label,color=statusColor,fontSize=11.sp)
+                            Text(
+                                "${if(c.duration_seconds>0)"${c.duration_seconds/60}m ${c.duration_seconds%60}s · " else ""}${v24FriendlyDay(c.started_at)} · ${v24Time(c.started_at)}",
+                                color=Muted,fontSize=10.sp
+                            )
+                        }
+                        FilledTonalButton(onClick={
+                            vm.startVoiceCall(c.chat_id){join->
+                                ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
+                                    putExtra("call_id",join.call.id)
+                                    putExtra("ws_url",join.ws_url)
+                                    putExtra("token",join.token)
+                                    putExtra("person",other.display_name)
+                                    putExtra("avatar_url",other.avatar_url)
+                                    putExtra("incoming",false)
+                                })
+                            }
+                        }){Text("📞")}
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V241MoreMenu(onOpen:(String)->Unit){
+    val menuItems=listOf(
+        Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
+        Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
+        Triple("◈","Activity","Detected notification intelligence") to "activity",
+        Triple("💳","Money","Review detected payment insights") to "money",
+        Triple("🙂","Me / Profile","Photo, privacy, push and account") to "me"
+    )
+    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
+        item{Header("More","Tools, privacy and account")}
+        items(menuItems){entry->
+            val info=entry.first
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=6.dp).clickable{onOpen(entry.second)},
+                shape=RoundedCornerShape(20.dp)
+            ){
+                Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text(info.first,fontSize=26.sp)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)){Text(info.second,fontWeight=FontWeight.Bold,fontSize=16.sp);Text(info.third,color=Muted,fontSize=11.sp)}
+                    Text("›",fontSize=28.sp,color=Muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun V241MoreSubPage(title:String,onBack:()->Unit,content:@Composable ()->Unit){
+    Column(Modifier.fillMaxSize()){
+        Surface(shadowElevation=1.dp){
+            Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically){
+                Text("‹",fontSize=34.sp,modifier=Modifier.clickable(onClick=onBack).padding(8.dp))
+                Text(title,fontWeight=FontWeight.Bold,fontSize=18.sp)
+            }
+        }
+        Box(Modifier.weight(1f)){content()}
     }
 }
 
@@ -750,12 +855,43 @@ private fun Moments(vm:LemmiqViewModel){
 private fun ChatAgent(vm:LemmiqViewModel){
     var q by remember{mutableStateOf("")}
     var search by remember{mutableStateOf("")}
+    val starters=listOf(
+        "🧠 Catch me up" to "Catch me up on my important conversations and anything I may have missed.",
+        "🤝 What did I promise?" to "What did I promise people recently?",
+        "💬 Needs a reply?" to "Which chats need a reply and why?",
+        "📍 Find details" to "Find addresses, phone numbers or important details someone sent me recently.",
+        "✍️ Draft a reply" to "Help me draft a reply. Ask me which chat if needed.",
+        "📅 This week" to "Summarise the important things from my conversations this week.",
+        "🛡 Fact-check" to "I want to fact-check something.",
+        "👥 Ask about group" to "Ask me which group I want to analyse, then help me with that group."
+    )
     LaunchedEffect(Unit){vm.refreshAgent()}
     LazyColumn(
         Modifier.fillMaxSize().background(Bg),
         contentPadding=PaddingValues(bottom=24.dp)
     ){
-        item{Header("Ask Q","Messages + your opt-in phone insights")}
+        item{Header("Q","Ask across chats, groups, voice notes and Social IQ")}
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp),colors=CardDefaults.cardColors(containerColor=Ink)){
+                Column(Modifier.padding(14.dp)){
+                    Text("Good to see you. What can Q help with?",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
+                    Text("Q stays grounded in your LEMMIQ context and never sends messages on its own.",color=Color(0xFFCDCADC),fontSize=10.sp,modifier=Modifier.padding(top=4.dp))
+                    starters.chunked(2).forEach{row->
+                        Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            row.forEach{item->
+                                OutlinedButton(
+                                    onClick={q=item.second;vm.askAgent(item.second)},
+                                    modifier=Modifier.weight(1f),
+                                    colors=ButtonDefaults.outlinedButtonColors(contentColor=Color.White),
+                                    border=BorderStroke(1.dp,Color.White.copy(alpha=.25f))
+                                ){Text(item.first,fontSize=10.sp,maxLines=2)}
+                            }
+                            if(row.size==1)Spacer(Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
         item{
             Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp)){
                 Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){

@@ -395,6 +395,10 @@ class Api(private val store:SessionStore){
         val t=req(b("$base/v24/chats/$cid/calls").get().build())
         return gson.fromJson(t,object:TypeToken<List<CallDto>>(){}.type)
     }
+    suspend fun callHistory():List<CallDto>{
+        val t=req(b("$base/v24/calls").get().build())
+        return gson.fromJson(t,object:TypeToken<List<CallDto>>(){}.type)
+    }
 
     suspend fun statuses():List<StatusDto>{
         val t=req(b("$base/v24/status").get().build())

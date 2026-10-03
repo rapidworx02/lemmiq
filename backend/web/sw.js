@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v24-shell-1";
+const CACHE = "lemmiq-v241-shell-1";
 const SHELL = [
   "/web/",
   "/web/index.html",
@@ -38,7 +38,10 @@ self.addEventListener("fetch", event => {
       url.pathname.startsWith("/media") ||
       url.pathname.startsWith("/users") ||
       url.pathname.startsWith("/login") ||
-      url.pathname.startsWith("/register")) {
+      url.pathname.startsWith("/register") ||
+      url.pathname.startsWith("/download") ||
+      url.pathname.startsWith("/v24") ||
+      url.pathname.startsWith("/app-config")) {
     return;
   }
 

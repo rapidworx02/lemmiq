@@ -60,7 +60,7 @@ fun V24GroupAvatar(g:GroupDto,size:Int=50){
 }
 
 @Composable
-fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit){
+fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
     var search by remember{mutableStateOf("")}
     var mode by remember{mutableStateOf("ALL")}
     val conversations=remember(vm.chats,vm.groups,search,mode){
@@ -81,8 +81,11 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit){
         Column(Modifier.padding(horizontal=18.dp,vertical=12.dp)){
             Text("lemmiq",fontSize=28.sp,fontWeight=FontWeight.Black)
             Text(if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}",color=V24Muted,fontSize=11.sp)
-            OutlinedTextField(search,{search=it},Modifier.fillMaxWidth().padding(top=10.dp),singleLine=true,
-                placeholder={Text("Search chats, usernames, groups or messages")},shape=RoundedCornerShape(24.dp))
+            Row(Modifier.fillMaxWidth().padding(top=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                OutlinedTextField(search,{search=it},Modifier.weight(1f),singleLine=true,
+                    placeholder={Text("Search chats or ask Q")},shape=RoundedCornerShape(24.dp))
+                FilledTonalButton(onClick={onAskQ(search.trim())},contentPadding=PaddingValues(horizontal=14.dp,vertical=12.dp)){Text("Q",fontWeight=FontWeight.Black,color=V24Purple)}
+            }
             Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(7.dp)){
                 listOf("ALL" to "All","UNREAD" to "Unread","GROUPS" to "Groups").forEach{(value,label)->
                     FilterChip(mode==value,{mode=value},{Text(label)})

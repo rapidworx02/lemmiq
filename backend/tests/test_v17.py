@@ -18,7 +18,7 @@ from app.main import app
 
 def test_v17_media_contact_permissions_and_push_registration():
     with TestClient(app) as client:
-        assert client.get("/health").json()["version"]=="1.7.0"
+        assert client.get("/health").json()["version"]=="2.4.1"
         a=client.post("/register",json={"username":"tester_one","display_name":"One","password":"password123"})
         b=client.post("/register",json={"username":"tester_two","display_name":"Two","password":"password123"})
         assert a.status_code==200 and b.status_code==200,(a.text,b.text)

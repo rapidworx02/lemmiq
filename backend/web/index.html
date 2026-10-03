@@ -43,6 +43,9 @@
         <label>Password<input id="regPassword" type="password" autocomplete="new-password" required minlength="6"></label>
         <button class="primary full" type="submit">Create account</button>
       </form>
+      <div class="auth-download">
+        <button id="androidDownloadPublicBtn" class="ghost full" type="button">📱 Download LEMMIQ for Android</button>
+      </div>
       <p class="micro">Private beta. The current server architecture is not end-to-end encrypted.</p>
     </div>
   </section>
@@ -56,12 +59,9 @@
       <nav id="nav">
         <button data-view="chats" class="active"><span>💬</span>Chats</button>
         <button data-view="updates"><span>⭕</span>Updates</button>
-        <button data-view="agent"><span>Q</span>Agent</button>
-        <button data-view="trust"><span>🛡</span>Trust</button>
-        <button data-view="business"><span>💼</span>Business</button>
-        <button data-view="activity"><span>◈</span>Activity</button>
-        <button data-view="money"><span>💳</span>Money</button>
-        <button data-view="me"><span>🙂</span>Me</button>
+        <button data-view="agent"><span>Q</span>Q</button>
+        <button data-view="calls"><span>📞</span>Calls</button>
+        <button data-view="more"><span>☰</span>More</button>
       </nav>
       <div class="sidebar-foot">
         <span id="socketDot" class="dot"></span><span id="socketText">offline</span>
@@ -85,7 +85,8 @@
         <div class="chat-layout">
           <div class="conversation-list glass">
             <div class="list-tools">
-              <input id="chatFilter" placeholder="Search chats, usernames, groups or messages">
+              <input id="chatFilter" placeholder="Search chats or ask Q">
+              <button id="chatAskQBtn" class="ghost q-search-btn" title="Ask Q using this text">Q</button>
               <button id="newGroupBtn" class="ghost" title="New group">👥</button>
               <button id="newChatBtn" class="primary" title="New chat">＋</button>
             </div>
@@ -121,6 +122,22 @@
       </section>
 
       <section id="view-agent" class="view">
+        <article class="q-home hero-card purple glass">
+          <span class="eyebrow">LEMMIQ Q</span>
+          <h3>What can I help with?</h3>
+          <p>Q can work across your LEMMIQ chats, groups, voice-note transcripts and Social IQ memory. It never sends messages without you.</p>
+          <div class="q-starters">
+            <button data-q-prompt="Catch me up on my important conversations and anything I may have missed.">🧠 Catch me up</button>
+            <button data-q-prompt="What did I promise people recently?">🤝 What did I promise?</button>
+            <button data-q-prompt="Which chats need a reply and why?">💬 Which chats need a reply?</button>
+            <button data-q-prompt="Find any addresses, phone numbers or important details someone sent me recently.">📍 Find details</button>
+            <button data-q-prompt="Help me draft a reply. Ask me which chat if needed.">✍️ Draft a reply</button>
+            <button data-q-prompt="Summarise the important things from my conversations this week.">📅 Summarise this week</button>
+            <button data-q-prompt="I want to fact-check something.">🛡 Fact-check something</button>
+            <button data-q-prompt="Help me plan something using relevant context from my chats.">✨ Plan something</button>
+            <button data-q-prompt="Ask me which group I want to analyse, then help me with that group.">👥 Ask about a group</button>
+          </div>
+        </article>
         <div class="grid two">
           <article class="hero-card purple glass">
             <span class="eyebrow">Q CHAT AGENT</span>
@@ -241,6 +258,34 @@
           <p class="micro">Edit or remove incorrect/duplicate detections. Totals recalculate from the corrected data.</p>
           <div id="moneyEventList"></div>
         </article>
+      </section>
+
+      <section id="view-calls" class="view">
+        <article class="hero-card purple glass">
+          <span class="eyebrow">LEMMIQ CALLS</span>
+          <h3>Voice call history</h3>
+          <p>Missed, no-answer and completed calls appear here. Tap Call back to start another LEMMIQ voice call.</p>
+        </article>
+        <article class="card glass">
+          <div class="section-head"><div><h3>Recent calls</h3><p class="micro">1-to-1 LiveKit/WebRTC beta</p></div><button id="refreshCallsBtn" class="ghost">↻ Refresh</button></div>
+          <div id="callsList" class="history-list"></div>
+        </article>
+      </section>
+
+      <section id="view-more" class="view">
+        <article class="hero-card purple glass">
+          <span class="eyebrow">MORE</span>
+          <h3>Tools, privacy and account</h3>
+          <p>Less-used features live here so the main navigation stays clean.</p>
+        </article>
+        <div class="more-grid">
+          <button data-more-view="trust" class="more-card"><span>🛡</span><strong>Trust / Fact Check</strong><small>Check claims and reopen saved history</small></button>
+          <button data-more-view="business" class="more-card"><span>💼</span><strong>Business Agent</strong><small>Business knowledge and customer replies</small></button>
+          <button data-more-view="activity" class="more-card"><span>◈</span><strong>Activity</strong><small>Detected notification intelligence</small></button>
+          <button data-more-view="money" class="more-card"><span>💳</span><strong>Money</strong><small>Review detected payments and corrections</small></button>
+          <button data-more-view="me" class="more-card"><span>🙂</span><strong>Me / Profile</strong><small>Photo, account, privacy and sign out</small></button>
+          <button id="moreAndroidDownloadBtn" class="more-card"><span>📱</span><strong>Download Android app</strong><small>Install the native LEMMIQ companion</small></button>
+        </div>
       </section>
 
       <section id="view-me" class="view">

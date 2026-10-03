@@ -6,7 +6,7 @@ from typing import Dict, Set
 import jwt
 from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel, Field
-from fastapi.responses import StreamingResponse, RedirectResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.4.0")
+app = FastAPI(title="LEMMIQ Server", version="2.4.1")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -208,7 +208,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.4.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.4.1"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -831,6 +831,26 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 
 
 
+@app.get("/download/android", include_in_schema=False)
+def download_android():
+    """Stable public Android install URL used by the web/PWA.
+    Priority: Play testing URL -> external APK URL -> bundled private-beta APK.
+    """
+    target = os.getenv("ANDROID_PLAY_URL", "").strip() or os.getenv("ANDROID_APK_URL", "").strip()
+    if target:
+        return RedirectResponse(url=target, status_code=307)
+    bundled = Path(__file__).resolve().parents[1] / "web" / "downloads" / "LEMMIQ.apk"
+    if bundled.exists():
+        return FileResponse(
+            path=str(bundled),
+            media_type="application/vnd.android.package-archive",
+            filename="LEMMIQ.apk"
+        )
+    raise HTTPException(
+        status_code=503,
+        detail="Android download is not configured. Set ANDROID_PLAY_URL / ANDROID_APK_URL or deploy backend/web/downloads/LEMMIQ.apk."
+    )
+
 @app.get("/app-config")
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
@@ -838,6 +858,12 @@ def app_config():
         "version": "2.4.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
+        "android_install_url": "/download/android",
+        "android_download_configured": bool(
+            os.getenv("ANDROID_PLAY_URL", "").strip()
+            or os.getenv("ANDROID_APK_URL", "").strip()
+            or (Path(__file__).resolve().parents[1] / "web" / "downloads" / "LEMMIQ.apk").exists()
+        ),
         "web_install_enabled": True,
     }
 

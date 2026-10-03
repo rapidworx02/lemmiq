@@ -614,7 +614,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun savePrivacy(p:PrivacyDto)=viewModelScope.launch{runCatching{privacy=api.savePrivacy(p)}.onFailure{error=it.message}}
 
     // ---------------- Calls ----------------
-    fun refreshCalls()=viewModelScope.launch{runCatching{callStatus=api.callStatus()}}
+    fun refreshCalls()=viewModelScope.launch{runCatching{callStatus=api.callStatus();callHistory=api.callHistory()}.onFailure{error=it.message}}
     fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
         busy=true;try{onReady(api.startCall(cid))}catch(e:Exception){error=e.message}finally{busy=false}
     }

@@ -1,3 +1,21 @@
+# LEMMIQ V2.4.1 — Clean Navigation, Q Home, Calls & Android Download
+
+**Messaging with social IQ.**
+
+V2.4.1 reduces the persistent navigation to **Chats / Updates / Q / Calls / More**, adds a proper call-history tab, gives Q a dedicated starter-action home, adds “Search chats or ask Q”, and introduces the stable `/download/android` APK install route.
+
+For the quickest tester APK workflow, build the APK in Android Studio and run **`PUBLISH_ANDROID_APK.bat`**. After committing/pushing `backend/web/downloads/LEMMIQ.apk`, Render serves it from the same permanent user link:
+
+```text
+https://YOUR-RENDER-SERVICE.onrender.com/download/android
+```
+
+See **`LEMMIQ_V2_4_1_SETUP.md`** for the complete upgrade and testing steps.
+
+Important: V2.4.1 remains a private beta and is not yet end-to-end encrypted.
+
+---
+
 # LEMMIQ V2.4 — Messenger + Social IQ
 
 **Messaging with social IQ.**

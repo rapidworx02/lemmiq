@@ -19,6 +19,7 @@ Thumbs.db
 *.keystore
 *.jks
 *.apk
+!backend/web/downloads/LEMMIQ.apk
 *.aab
 .pytest_cache/
 *.sqlite3

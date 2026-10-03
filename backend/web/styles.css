@@ -45,7 +45,7 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
   }
   .brand-row,.sidebar-foot{display:none}
   .sidebar nav{
-    grid-template-columns:repeat(7,minmax(0,1fr));
+    grid-template-columns:repeat(5,minmax(0,1fr));
     gap:2px;
     width:100%;
   }
@@ -113,3 +113,33 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 .reply-quote{border-left:3px solid rgba(255,255,255,.45);padding:5px 8px;margin-bottom:5px;border-radius:8px;background:rgba(0,0,0,.08);font-size:11px}
 .theirs .reply-quote{border-left-color:var(--purple);background:rgba(122,92,255,.07)}
 .edited-tag{font-size:9px;color:var(--muted);margin-left:4px}
+
+/* LEMMIQ V2.4.1 navigation + Q + Calls */
+.q-search-btn{font-weight:900;color:var(--purple);min-width:42px}
+.q-home{margin-bottom:14px}
+.q-home h3{font-size:30px;margin:8px 0 8px}
+.q-starters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin-top:18px}
+.q-starters button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.09);color:#fff;border-radius:14px;padding:12px;text-align:left;font-weight:700;min-height:64px}
+.q-starters button:hover{background:rgba(255,255,255,.16)}
+.more-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:14px}
+.more-card{border:1px solid var(--line);background:rgba(255,255,255,.055);color:inherit;border-radius:20px;padding:18px;text-align:left;min-height:135px;display:flex;flex-direction:column;gap:8px}
+.more-card:hover{background:rgba(255,255,255,.09);transform:translateY(-1px)}
+.more-card span{font-size:25px}.more-card strong{font-size:15px}.more-card small{color:var(--muted);line-height:1.4}
+.call-history-row{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line)}
+.call-history-row .body{min-width:0;flex:1}.call-history-row strong,.call-history-row small{display:block}
+.call-history-row small{color:var(--muted);margin-top:3px}
+.call-status.missed{color:#ff708b}.call-status.completed{color:var(--green)}.call-status.noanswer{color:#e6b553}
+@media(max-width:900px){
+  .sidebar{left:8px;right:8px;height:68px}
+  .sidebar nav button{font-size:10px;padding:7px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+  .sidebar nav button span{font-size:19px}
+  .q-starters{grid-template-columns:1fr 1fr}
+  .more-grid{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){
+  .q-starters,.more-grid{grid-template-columns:1fr}
+  .list-tools{padding:10px;gap:6px}
+  .list-tools #chatFilter{font-size:12px}
+}
+
+.auth-download{margin-top:12px}.auth-download button{min-height:46px}

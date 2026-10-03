@@ -26,7 +26,7 @@ const state = {
   callTimeoutHandle: null,
   callSeconds: 0,
   ringAudio: null,
-  appConfig: {android_download_url:"", android_play_url:"", web_install_enabled:true}
+  appConfig:{android_download_url:"",android_play_url:"",android_install_url:"/download/android",android_download_configured:false,web_install_enabled:true}
 };
 
 const $ = id => document.getElementById(id);
@@ -97,12 +97,17 @@ function showApp(){
 }
 function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
-  $(`view-${name}`).classList.add("active");
-  qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
+  const target=$(`view-${name}`);if(!target)return;
+  target.classList.add("active");
+  const secondary=["trust","business","activity","money","me"];
+  const navName=secondary.includes(name)?"more":name;
+  qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
-    chats:["Chats","Search, filter, message, group chat and call."],
+    chats:["Chats","Search conversations or ask Q."],
     updates:["Updates","LEMMIQ Status — text, photo and video for 24 hours."],
-    agent:["Q Agent","Personal communication intelligence and Social IQ memory."],
+    agent:["Q","Ask across chats, groups, voice-note transcripts and Social IQ memory."],
+    calls:["Calls","Missed, no-answer and completed LEMMIQ voice calls."],
+    more:["More","Tools, privacy, account and Android app download."],
     trust:["LEMMIQ Trust","Fact / Scam Check with saved history."],
     business:["Business Agent","Teach LEMMIQ how your business operates."],
     activity:["Activity","Detected phone activity synced by your Android companion."],
@@ -117,6 +122,7 @@ async function refreshView(name){
     if(name==="chats") await loadChats();
     if(name==="updates") await loadStatuses();
     if(name==="agent") await loadAgentV24();
+    if(name==="calls") await loadCalls();
     if(name==="trust") await loadTrustHistory();
     if(name==="business") await loadBusiness();
     if(name==="activity") await loadActivity();
@@ -125,9 +131,10 @@ async function refreshView(name){
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
-  const active=document.querySelector("#nav button.active")?.dataset.view||"chats";
+  const active=document.querySelector(".view.active")?.id?.replace("view-","")||"chats";
   refreshView(active);
 }
+
 function connectSocket(){
   if(!state.token)return;
   if(state.socket)try{state.socket.close()}catch{}
@@ -591,29 +598,25 @@ function closeModal(){$("modal").close()}
 
 async function loadAppConfig(){
   try{
-    state.appConfig = await api("/app-config");
-    const hasNative = !!(state.appConfig.android_play_url || state.appConfig.android_download_url);
-    $("androidBtnTop")?.classList.toggle("hidden", !hasNative);
+    state.appConfig=await api("/app-config");
+    const configured=!!state.appConfig.android_download_configured;
+    $("androidBtnTop")?.classList.remove("hidden");
     if($("androidInstallHint")){
-      $("androidInstallHint").textContent = hasNative
-        ? "Choose the native Android app for WhatsApp/SMS notification intelligence and stronger background features. The web app is the universal browser/PWA version."
-        : "Native Android download is not configured yet. Set ANDROID_PLAY_URL or ANDROID_APK_URL on Render after publishing your APK or Play test link.";
+      $("androidInstallHint").textContent=configured
+        ? "Android download is active. Tap the button to install the native LEMMIQ app."
+        : "Android download button is ready. Configure Play/APK URL on Render or deploy backend/web/downloads/LEMMIQ.apk.";
     }
-  }catch(e){
-    console.warn("App config unavailable", e);
-  }
+  }catch(e){console.warn("App config unavailable",e)}
 }
-
 function installAndroidApp(){
-  const url = state.appConfig.android_play_url || state.appConfig.android_download_url;
-  if(url){
-    window.location.href = url;
+  if(state.appConfig?.android_download_configured){
+    window.location.href=state.appConfig.android_install_url||"/download/android";
     return;
   }
-  openModal(`<h3>📱 Android app</h3>
-    <p>The native Android download link has not been configured yet.</p>
-    <p>For your own phone right now, build/install from Android Studio. For testers, publish the APK to a private GitHub Release or Google Play Internal Testing, then set the URL in Render.</p>
-    <p class="micro">Render environment variable: <strong>ANDROID_PLAY_URL</strong> or <strong>ANDROID_APK_URL</strong></p>`);
+  openModal(`<h3>📱 Android download setup</h3>
+    <p>The LEMMIQ button is wired to <strong>/download/android</strong>, but no APK/Play destination is configured on the server yet.</p>
+    <p>Publish your V2.4.1 APK to Play/GitHub and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
+    <p class="micro">After Render redeploys, this same button becomes a direct user download link—no website code change is required.</p>`);
 }
 
 async function installHelp(){
@@ -761,15 +764,42 @@ window.downloadGroupMedia=downloadGroupMedia;window.loadVoice=loadVoice;window.v
 function startTone(kind){stopRing();try{const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC();state.ringAudio={ctx,timer:null};const beep=()=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=kind==="incoming"?740:440;g.gain.value=.035;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.22)};beep();state.ringAudio.timer=setInterval(beep,kind==="incoming"?900:1600)}catch{}}
 function stopRing(){if(state.ringAudio){clearInterval(state.ringAudio.timer);try{state.ringAudio.ctx.close()}catch{}state.ringAudio=null}}
 function startCallTimer(){clearInterval(state.callTimerHandle);state.callSeconds=0;$("callTimer").textContent="00:00";state.callTimerHandle=setInterval(()=>{$("callTimer").textContent=formatDuration(++state.callSeconds)},1000)}
-async function startVoiceCall(){
-  if(!state.activeChat)return;
+async function beginVoiceCall(chatId,person){
   try{
-    const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:state.activeChat.id})});
-    state.callPhase="ringing";$("callState").textContent="Ringing…";$("callTimer").textContent="";$("callOverlay").classList.remove("hidden");$("callAvatar").innerHTML=state.activeChat.other_user.avatar_url?`<img src="${escapeHtml(state.activeChat.other_user.avatar_url)}">`:escapeHtml(initials(state.activeChat.other_user.display_name));startTone("outgoing");
-    await connectCallRoom(join,state.activeChat.other_user.display_name,false);
-    clearTimeout(state.callTimeoutHandle);state.callTimeoutHandle=setTimeout(()=>{if(state.callPhase==="ringing"){toast("No answer");endVoiceCall()}},45000);
+    const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:chatId})});
+    state.callPhase="ringing";$("callState").textContent="Ringing…";$("callTimer").textContent="";
+    $("callOverlay").classList.remove("hidden");
+    const user=person||state.activeChat?.other_user||{};
+    $("callAvatar").innerHTML=user.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user.display_name||"LEMMIQ"));
+    startTone("outgoing");
+    await connectCallRoom(join,user.display_name||"LEMMIQ user",false);
+    clearTimeout(state.callTimeoutHandle);
+    state.callTimeoutHandle=setTimeout(()=>{if(state.callPhase==="ringing"){toast("No answer");endVoiceCall()}},45000);
   }catch(e){toast(e.message,true)}
 }
+async function startVoiceCall(){
+  if(!state.activeChat)return;
+  await beginVoiceCall(state.activeChat.id,state.activeChat.other_user);
+}
+async function loadCalls(){
+  const rows=await api("/v24/calls");
+  state.callHistory=rows;
+  const el=$("callsList");if(!el)return;
+  el.innerHTML=rows.length?rows.map(c=>{
+    const status=(c.status||"").toUpperCase();
+    const cls=status==="MISSED"?"missed":status==="RINGING"?"noanswer":"completed";
+    const label=status==="MISSED"?"Missed voice call":status==="RINGING"?"No answer":status==="DECLINED"?"Declined voice call":"Voice call";
+    const detail=c.duration_seconds?`${formatDuration(c.duration_seconds)} · ${new Date(c.started_at).toLocaleString()}`:new Date(c.started_at).toLocaleString();
+    return `<div class="call-history-row">${avatarHtml(c.other_user)}
+      <div class="body"><strong>${escapeHtml(c.other_user?.display_name||"LEMMIQ user")}</strong><small class="call-status ${cls}">${escapeHtml(label)} · ${escapeHtml(detail)}</small></div>
+      <button class="ghost" data-callback="${c.chat_id}">📞 Call back</button></div>`;
+  }).join(""):`<p class="micro">No LEMMIQ calls yet.</p>`;
+  qsa("[data-callback]").forEach(b=>b.onclick=()=>{
+    const c=rows.find(x=>x.chat_id===Number(b.dataset.callback));
+    if(c)beginVoiceCall(c.chat_id,c.other_user);
+  });
+}
+
 async function connectCallRoom(join,person,incoming){
   if(!window.LivekitClient)throw new Error("LiveKit client unavailable");
   const {Room,RoomEvent,Track}=LivekitClient,room=new Room();state.callRoom=room;state.callId=join.call.id;$("callPerson").textContent=person;
@@ -827,6 +857,17 @@ function openTrustHistory(id){const h=state.trustHistory.find(x=>x.id===id);if(h
 async function deleteTrustHistory(id){await api(`/trust/history/${id}`,{method:"DELETE"});await loadTrustHistory()}
 window.openTrustHistory=openTrustHistory;window.deleteTrustHistory=deleteTrustHistory;
 
+function runQStarter(prompt){
+  setView("agent");
+  $("agentQuestion").value=prompt;
+  setTimeout(()=>askAgent(),30);
+}
+function askQFromChatSearch(){
+  const q=$("chatFilter").value.trim();
+  if(!q){setView("agent");$("agentQuestion").focus();return}
+  runQStarter(q);
+}
+
 async function loadAgentV24(){await loadAgent();try{state.socialBrief=await api("/v24/social-iq/brief");renderSocialIq()}catch{}}
 function renderSocialIq(){
   const b=state.socialBrief||{count:0,promises:0,follow_ups:0,items:[]};
@@ -841,15 +882,20 @@ async function uploadProfilePhoto(file){if(!file)return;const fd=new FormData();
 async function removeProfilePhoto(){try{const u=await api("/v24/profile/avatar",{method:"DELETE"});state.user={...state.user,...u};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));renderMeAvatar();await loadChats();toast("Profile photo removed")}catch(e){toast(e.message,true)}}
 
 document.addEventListener("DOMContentLoaded",()=>{
+  $("androidDownloadPublicBtn").onclick=installAndroidApp;
   $("loginTab").onclick=()=>{$("loginTab").classList.add("active");$("registerTab").classList.remove("active");$("loginForm").classList.remove("hidden");$("registerForm").classList.add("hidden")};
   $("registerTab").onclick=()=>{$("registerTab").classList.add("active");$("loginTab").classList.remove("active");$("registerForm").classList.remove("hidden");$("loginForm").classList.add("hidden")};
   $("loginForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUsername").value,password:$("loginPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
   $("registerForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/register",{method:"POST",body:JSON.stringify({display_name:$("regName").value,username:$("regUsername").value,password:$("regPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
 
   qsa("#nav button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
+  qsa("[data-q-prompt]").forEach(b=>b.onclick=()=>runQStarter(b.dataset.qPrompt));
+  $("moreAndroidDownloadBtn").onclick=installAndroidApp;
+  $("refreshCallsBtn").onclick=loadCalls;
   $("refreshBtn").onclick=refreshCurrent;$("logoutBtn").onclick=logout;
 
-  $("newChatBtn").onclick=showNewChat;$("newGroupBtn").onclick=showNewGroup;$("chatFilter").oninput=renderChats;
+  $("newChatBtn").onclick=showNewChat;$("newGroupBtn").onclick=showNewGroup;$("chatFilter").oninput=renderChats;$("chatAskQBtn").onclick=askQFromChatSearch;
   qsa("[data-chat-filter]").forEach(b=>b.onclick=()=>{state.chatFilterMode=b.dataset.chatFilter;qsa("[data-chat-filter]").forEach(x=>x.classList.toggle("active",x===b));renderChats()});
 
   $("sendBtn").onclick=sendMessage;$("suggestBtn").onclick=suggestReply;$("assistBarBtn").onclick=suggestReply;
