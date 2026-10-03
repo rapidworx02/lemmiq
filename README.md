@@ -1,3 +1,11 @@
+# LEMMIQ V2.1
+
+Cross-platform Chat Intelligence plus user-controlled Money/Activity data management.
+
+See `LEMMIQ_V2_1_UPGRADE.md`.
+
+---
+
 # LEMMIQ V2.0.1
 
 Native Android and Web/PWA install flows are now separated. See `LEMMIQ_V2_0_1_INSTALL_FLOW.md`.

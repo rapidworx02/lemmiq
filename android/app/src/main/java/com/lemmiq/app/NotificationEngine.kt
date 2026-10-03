@@ -161,6 +161,17 @@ class PhoneEventDb(ctx:Context):SQLiteOpenHelper(ctx,"lemmiq_phone_insights.db",
         val v=android.content.ContentValues().apply{put("synced",1)}
         writableDatabase.update("events",v,"uid=? AND id=?",arrayOf(uid.toString(),id))
     }
+    fun update(uid:Int,e:PhoneEvent){
+        val v=android.content.ContentValues().apply{
+            put("category",e.category);put("source",e.source);put("title",e.title);put("detail",e.detail)
+            if(e.amount_cents!=null)put("amount",e.amount_cents) else putNull("amount")
+            put("direction",e.direction);put("occurred",e.occurred_at);put("synced",if(e.synced)1 else 0)
+        }
+        writableDatabase.update("events",v,"uid=? AND id=?",arrayOf(uid.toString(),e.client_event_id))
+    }
+    fun delete(uid:Int,id:String){writableDatabase.delete("events","uid=? AND id=?",arrayOf(uid.toString(),id))}
+    fun clearCategory(uid:Int,category:String){writableDatabase.delete("events","uid=? AND category=?",arrayOf(uid.toString(),category))}
+    fun clearNonMoney(uid:Int){writableDatabase.delete("events","uid=? AND category<>?",arrayOf(uid.toString(),"MONEY"))}
     fun prune(days:Int){
         val before=(System.currentTimeMillis()-days.coerceIn(1,30)*86_400_000L).toString()
         writableDatabase.delete("events","saved_ms<?",arrayOf(before))

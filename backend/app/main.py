@@ -22,7 +22,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.0.1")
+app = FastAPI(title="LEMMIQ Server", version="2.1.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -158,7 +158,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.0.1"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.1.0"}
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -383,6 +383,29 @@ class InsightIn(BaseModel):
     direction: str = Field(default="UNKNOWN", max_length=12)
     occurred_at: datetime
 
+class InsightEdit(BaseModel):
+    category: str = Field(max_length=20)
+    source: str = Field(max_length=80)
+    title: str = Field(max_length=100)
+    detail: str = Field(default="", max_length=220)
+    amount_cents: int | None = Field(default=None, ge=0, le=100_000_000_000)
+    direction: str = Field(default="UNKNOWN", max_length=12)
+    occurred_at: datetime
+
+def apply_insight_edit(e: InsightEvent, body: InsightEdit):
+    if body.category not in CATEGORIES or body.direction not in DIRECTIONS:
+        raise HTTPException(422, "Unsupported category or direction")
+    when = body.occurred_at if body.occurred_at.tzinfo else body.occurred_at.replace(tzinfo=timezone.utc)
+    if when > datetime.now(timezone.utc) + timedelta(minutes=5) or when < datetime.now(timezone.utc) - timedelta(days=90):
+        raise HTTPException(422, "Event outside allowed window")
+    e.category = body.category
+    e.source = body.source.strip()[:80]
+    e.title = body.title.strip()[:100]
+    e.detail = body.detail.strip()[:220]
+    e.amount_cents = body.amount_cents
+    e.direction = body.direction
+    e.occurred_at = when
+
 @app.post("/insights/events")
 def ingest_event(body: InsightIn, u: User = Depends(current_user), db: Session = Depends(get_db)):
     if body.category not in CATEGORIES or body.direction not in DIRECTIONS:
@@ -402,11 +425,68 @@ def ingest_event(body: InsightIn, u: User = Depends(current_user), db: Session =
 def get_insights(days:int=30,u:User=Depends(current_user),db:Session=Depends(get_db)):
     return insight_brief(db,u.id,days)
 
+@app.put("/insights/client-events/{client_event_id}")
+def update_insight_by_client(client_event_id: str, body: InsightEdit,
+                             u: User = Depends(current_user), db: Session = Depends(get_db)):
+    e = db.scalar(select(InsightEvent).where(
+        InsightEvent.user_id == u.id,
+        InsightEvent.client_event_id == client_event_id
+    ))
+    if not e:
+        raise HTTPException(404, "Detected event not found")
+    apply_insight_edit(e, body)
+    db.commit(); db.refresh(e)
+    return event_json(e)
+
+@app.delete("/insights/client-events/{client_event_id}")
+def delete_insight_by_client(client_event_id: str,
+                             u: User = Depends(current_user), db: Session = Depends(get_db)):
+    e = db.scalar(select(InsightEvent).where(
+        InsightEvent.user_id == u.id,
+        InsightEvent.client_event_id == client_event_id
+    ))
+    if not e:
+        raise HTTPException(404, "Detected event not found")
+    db.delete(e); db.commit()
+    return {"deleted": True, "client_event_id": client_event_id}
+
+@app.put("/insights/events/{event_id}")
+def update_insight_event(event_id: int, body: InsightEdit,
+                         u: User = Depends(current_user), db: Session = Depends(get_db)):
+    e = db.get(InsightEvent, event_id)
+    if not e or e.user_id != u.id:
+        raise HTTPException(404, "Detected event not found")
+    apply_insight_edit(e, body)
+    db.commit(); db.refresh(e)
+    return event_json(e)
+
+@app.delete("/insights/events/{event_id}")
+def delete_insight_event(event_id: int,
+                         u: User = Depends(current_user), db: Session = Depends(get_db)):
+    e = db.get(InsightEvent, event_id)
+    if not e or e.user_id != u.id:
+        raise HTTPException(404, "Detected event not found")
+    db.delete(e); db.commit()
+    return {"deleted": True, "id": event_id}
+
 @app.delete("/insights/events")
-def delete_insights(u:User=Depends(current_user),db:Session=Depends(get_db)):
-    for e in db.scalars(select(InsightEvent).where(InsightEvent.user_id==u.id)).all(): db.delete(e)
+def delete_insights(scope: str = "ALL",
+                    u: User = Depends(current_user), db: Session = Depends(get_db)):
+    scope = scope.upper().strip()
+    if scope not in {"ALL", "MONEY", "ACTIVITY"}:
+        raise HTTPException(422, "scope must be ALL, MONEY or ACTIVITY")
+    rows = db.scalars(select(InsightEvent).where(InsightEvent.user_id == u.id)).all()
+    removed = 0
+    for e in rows:
+        should_delete = (
+            scope == "ALL" or
+            (scope == "MONEY" and e.category == "MONEY") or
+            (scope == "ACTIVITY" and e.category != "MONEY")
+        )
+        if should_delete:
+            db.delete(e); removed += 1
     db.commit()
-    return {"deleted":True}
+    return {"deleted": True, "scope": scope, "count": removed}
 
 
 # V1.7: Authenticated attachments, contacts, optional push registration and on-demand external reply assistance.
@@ -660,7 +740,7 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.0.1",
+        "version": "2.1.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "web_install_enabled": True,

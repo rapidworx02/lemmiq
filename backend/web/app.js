@@ -59,7 +59,8 @@ function setView(name){
     agent:["Q Agent","Personal communication intelligence across your LEMMIQ chats."],
     trust:["LEMMIQ Trust","Check claims, suspicious links and possible scams."],
     business:["Business Agent","Teach LEMMIQ how your business operates."],
-    activity:["Activity & Money","Detected phone activity synced by your Android companion."],
+    activity:["Activity","Detected phone activity synced by your Android companion."],
+    money:["Money","Review and correct notification-derived payment insights."],
     me:["Me","Your account and LEMMIQ access."]
   }[name];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
@@ -71,6 +72,7 @@ async function refreshView(name){
     if(name==="agent") await loadAgent();
     if(name==="business") await loadBusiness();
     if(name==="activity") await loadActivity();
+    if(name==="money") await loadMoney();
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -298,6 +300,51 @@ async function uploadBizDoc(file){
   catch(e){toast(e.message,true)}
 }
 
+
+async function personalChatSettings(){
+  if(!state.activeChat)return;
+  const c=state.activeChat;
+  const categories=["PARTNER","DATING","BESTIE","FRIEND","FAMILY","WORK","CUSTOMER","SALES","STUDY","CUSTOM"];
+  const tones=["Natural","Warm","Casual","Professional","Direct","Playful","Respectful"];
+  openModal(`<h3>⚙ Chat Intelligence — ${escapeHtml(c.other_user.display_name)}</h3>
+    <div class="settings-grid">
+      <label>AI mode
+        <select id="personalAiMode">
+          ${["OFF","ASSIST","AUTO"].map(x=>`<option ${c.ai_mode===x?"selected":""}>${x}</option>`).join("")}
+        </select>
+      </label>
+      <label>Relationship / category
+        <select id="personalCategory">
+          ${categories.map(x=>`<option ${c.category===x?"selected":""}>${x}</option>`).join("")}
+        </select>
+      </label>
+      <label class="wide">Tone
+        <select id="personalTone">${tones.map(x=>`<option ${c.tone===x?"selected":""}>${x}</option>`).join("")}</select>
+      </label>
+    </div>
+    <div class="answer-box" style="margin-top:14px">
+      <strong>How it works</strong>
+      <p class="micro"><b>ASSIST</b> drafts replies for you. <b>AUTO</b> can reply server-side even when you are using Safari/iPhone. If the Business Agent is enabled for this customer chat, Business AUTO takes priority over Personal AUTO.</p>
+    </div>
+    <div class="suggestion-actions"><button id="savePersonalAi" class="primary">Save Chat Intelligence</button></div>`);
+  $("savePersonalAi").onclick=async()=>{
+    try{
+      const updated=await api(`/chats/${c.id}/settings`,{
+        method:"PUT",
+        body:JSON.stringify({
+          category:$("personalCategory").value,
+          ai_mode:$("personalAiMode").value,
+          tone:$("personalTone").value
+        })
+      });
+      state.activeChat=updated;
+      state.chats=state.chats.map(x=>x.id===updated.id?updated:x);
+      $("chatMeta").textContent=`@${updated.other_user.username} · ${updated.category} · AI ${updated.ai_mode}`;
+      renderChats();closeModal();toast("Chat Intelligence saved");
+    }catch(e){toast(e.message,true)}
+  };
+}
+
 async function businessChatSettings(){
   if(!state.activeChat)return;
   let data;
@@ -331,11 +378,105 @@ function showBusinessSuggestion(r){
   <div class="suggestion-actions"><button class="ghost" onclick="discardSuggestion()">Discard</button><button class="ghost" onclick="editSuggestion(${JSON.stringify(r.reply||"")})">Edit</button><button class="primary" onclick="sendSuggested(${JSON.stringify(r.reply||"")})">Send</button></div>`;
 }
 
+
+let lastInsightBrief=null;
+
+function eventHtml(e){
+  const amount=e.amount_cents==null?"":`${e.direction==="IN"?"+":e.direction==="OUT"?"−":""}${money(e.amount_cents)}`;
+  return `<div class="event">
+    <div>
+      <strong>${escapeHtml(e.title)}</strong>
+      <small>${escapeHtml(e.source)} · ${escapeHtml(e.category)} · ${new Date(e.occurred_at).toLocaleString()}</small>
+      <small>${escapeHtml(e.detail||"")}</small>
+      <div class="event-actions"><button class="mini" onclick="manageInsightEvent(${Number(e.id)})">Edit / manage</button></div>
+    </div>
+    ${amount?`<div class="money">${amount}</div>`:""}
+  </div>`;
+}
+
+async function fetchInsights(){
+  lastInsightBrief=await api("/insights/brief?days=30");
+  return lastInsightBrief;
+}
+
 async function loadActivity(){
-  const r=await api("/insights/brief?days=30");
+  const r=await fetchInsights();
   $("spendingValue").textContent=money(r.spending_cents);
   $("activityStats").innerHTML=`<div class="stat"><strong>${r.detected_count||0}</strong><span>Detected events</span></div><div class="stat"><strong>${r.transactions||0}</strong><span>Transactions</span></div><div class="stat"><strong>${money(r.incoming_cents)}</strong><span>Detected incoming</span></div>`;
-  $("activityList").innerHTML=(r.events||[]).length?(r.events||[]).map(e=>`<div class="event"><div><strong>${escapeHtml(e.title)}</strong><small>${escapeHtml(e.source)} · ${escapeHtml(e.category)} · ${new Date(e.occurred_at).toLocaleString()}</small><small>${escapeHtml(e.detail||"")}</small></div>${e.amount_cents!=null?`<div class="money">${e.direction==="OUT"?"−":e.direction==="IN"?"+":""}${money(e.amount_cents)}</div>`:""}</div>`).join(""):"<p class='micro'>No synced notification activity yet.</p>";
+  $("activityList").innerHTML=(r.events||[]).length?(r.events||[]).map(eventHtml).join(""):"<p class='micro'>No synced notification activity yet.</p>";
+}
+
+async function loadMoney(){
+  const r=await fetchInsights();
+  $("moneySpendValue").textContent=money(r.spending_cents);
+  const payments=(r.events||[]).filter(x=>x.category==="MONEY");
+  $("moneyStats").innerHTML=`<div class="stat"><strong>${money(r.incoming_cents)}</strong><span>Detected income</span></div><div class="stat"><strong>${payments.length}</strong><span>Payment alerts shown</span></div>`;
+  $("moneyEventList").innerHTML=payments.length?payments.map(eventHtml).join(""):"<p class='micro'>No synced Money events yet.</p>";
+}
+
+async function manageInsightEvent(id){
+  if(!lastInsightBrief)await fetchInsights();
+  const e=(lastInsightBrief.events||[]).find(x=>Number(x.id)===Number(id));
+  if(!e)return toast("Event is no longer available",true);
+  const amount=e.amount_cents==null?"":(e.amount_cents/100).toFixed(2);
+  const cats=["MONEY","BILL","DELIVERY","WORK","TRAVEL","TRUST","GENERAL"];
+  const dirs=["OUT","IN","UNKNOWN"];
+  openModal(`<h3>Manage detected event</h3>
+    <p class="micro">Correct notification-derived data or remove incorrect/duplicate events. Totals recalculate automatically.</p>
+    <div class="settings-grid">
+      <label>Category<select id="eventCategory">${cats.map(x=>`<option ${e.category===x?"selected":""}>${x}</option>`).join("")}</select></label>
+      <label>Direction<select id="eventDirection">${dirs.map(x=>`<option ${e.direction===x?"selected":""}>${x}</option>`).join("")}</select></label>
+      <label class="wide">Title<input id="eventTitle" value="${escapeHtml(e.title)}"></label>
+      <label>Source<input id="eventSource" value="${escapeHtml(e.source)}"></label>
+      <label>Amount AUD<input id="eventAmount" value="${escapeHtml(amount)}" placeholder="Blank if none"></label>
+      <label class="wide">Description<textarea id="eventDetail">${escapeHtml(e.detail||"")}</textarea></label>
+      <label class="wide">Date/time<input id="eventOccurred" value="${escapeHtml(e.occurred_at)}"></label>
+    </div>
+    <div class="suggestion-actions">
+      <button id="deleteEventBtn" class="danger">Delete / duplicate / incorrect</button>
+      <button id="saveEventBtn" class="primary">Save changes</button>
+    </div>`);
+  $("saveEventBtn").onclick=async()=>{
+    const raw=$("eventAmount").value.trim().replace(/,/g,"");
+    const amountCents=raw===""?null:Math.round(Number(raw)*100);
+    if(raw!=="" && !Number.isFinite(amountCents))return toast("Enter a valid amount",true);
+    try{
+      await api(`/insights/events/${id}`,{
+        method:"PUT",
+        body:JSON.stringify({
+          category:$("eventCategory").value,
+          source:$("eventSource").value,
+          title:$("eventTitle").value,
+          detail:$("eventDetail").value,
+          amount_cents:amountCents,
+          direction:$("eventDirection").value,
+          occurred_at:$("eventOccurred").value
+        })
+      });
+      closeModal();toast("Detected event updated");await refreshInsightViews();
+    }catch(err){toast(err.message,true)}
+  };
+  $("deleteEventBtn").onclick=async()=>{
+    if(!confirm("Remove this event from detected data and totals?"))return;
+    try{await api(`/insights/events/${id}`,{method:"DELETE"});closeModal();toast("Detected event removed");await refreshInsightViews()}
+    catch(err){toast(err.message,true)}
+  };
+}
+window.manageInsightEvent=manageInsightEvent;
+
+async function resetInsights(scope){
+  const label=scope==="MONEY"?"Money data":scope==="ACTIVITY"?"Activity data":"all detected data";
+  if(!confirm(`Reset ${label}? This cannot be undone.`))return;
+  try{
+    await api(`/insights/events?scope=${encodeURIComponent(scope)}`,{method:"DELETE"});
+    toast(`${label} reset`);
+    await refreshInsightViews();
+  }catch(e){toast(e.message,true)}
+}
+async function refreshInsightViews(){
+  lastInsightBrief=null;
+  const current=document.querySelector("#nav button.active")?.dataset.view;
+  if(current==="money")await loadMoney(); else if(current==="activity")await loadActivity();
 }
 
 function openModal(html){$("modalContent").innerHTML=html;$("modal").showModal()}
@@ -391,9 +532,10 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("sendBtn").onclick=sendMessage;$("suggestBtn").onclick=suggestReply;
   $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}});
   $("fileInput").onchange=e=>{uploadAttachment(e.target.files[0]);e.target.value=""};
-  $("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
+  $("chatAiBtn").onclick=personalChatSettings;$("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
 
   $("askAgentBtn").onclick=askAgent;$("trustBtn").onclick=()=>{const t=$("trustText").value.trim();if(t)runTrust(t)};
+  $("resetMoneyBtn").onclick=()=>resetInsights("MONEY");$("resetActivityBtn").onclick=()=>resetInsights("ACTIVITY");$("resetAllInsightsBtn").onclick=()=>resetInsights("ALL");
   $("saveBizBtn").onclick=saveBusiness;$("addKbBtn").onclick=addKnowledge;
   $("bizDocInput").onchange=e=>{uploadBizDoc(e.target.files[0]);e.target.value=""};
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});

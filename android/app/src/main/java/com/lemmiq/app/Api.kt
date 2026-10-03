@@ -148,7 +148,24 @@ class Api(private val store:SessionStore){
     suspend fun insightBrief():InsightBrief {
         return gson.fromJson(req(b("$base/insights/brief").get().build()),InsightBrief::class.java)
     }
-    suspend fun clearInsights(){req(b("$base/insights/events").delete().build())}
+    suspend fun updateInsight(e:PhoneEvent):PhoneEvent {
+        val payload=mapOf(
+            "category" to e.category,"source" to e.source,"title" to e.title,"detail" to e.detail,
+            "amount_cents" to e.amount_cents,"direction" to e.direction,"occurred_at" to e.occurred_at
+        )
+        val id=URLEncoder.encode(e.client_event_id,"UTF-8")
+        return gson.fromJson(
+            req(b("$base/insights/client-events/$id").put(gson.toJson(payload).toRequestBody(json)).build()),
+            PhoneEvent::class.java
+        )
+    }
+    suspend fun deleteInsight(clientEventId:String){
+        val id=URLEncoder.encode(clientEventId,"UTF-8")
+        req(b("$base/insights/client-events/$id").delete().build())
+    }
+    suspend fun clearInsights(scope:String="ALL"){
+        req(b("$base/insights/events?scope=${URLEncoder.encode(scope,"UTF-8")}").delete().build())
+    }
 
     suspend fun upload(cid:Int,name:String,mime:String,bytes:ByteArray):MessageDto {
         val body=MultipartBody.Builder().setType(MultipartBody.FORM)

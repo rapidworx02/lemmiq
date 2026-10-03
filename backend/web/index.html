@@ -59,6 +59,7 @@
         <button data-view="trust"><span>🛡</span>Trust</button>
         <button data-view="business"><span>💼</span>Business</button>
         <button data-view="activity"><span>◈</span>Activity</button>
+        <button data-view="money"><span>💳</span>Money</button>
         <button data-view="me"><span>🙂</span>Me</button>
       </nav>
       <div class="sidebar-foot">
@@ -102,6 +103,7 @@
                   <small id="chatMeta">LEMMIQ chat</small>
                 </div>
                 <div class="chat-head-actions">
+                  <button id="chatAiBtn" class="ghost">⚙ Chat AI</button>
                   <button id="summaryBtn" class="ghost">🧠 Summary</button>
                   <button id="businessChatBtn" class="ghost">💼 Agent</button>
                 </div>
@@ -207,9 +209,36 @@
           </article>
         </div>
         <article class="card glass">
-          <h3>Recent detected activity</h3>
+          <div class="section-head">
+            <h3>Recent detected activity</h3>
+            <div class="data-actions">
+              <button id="resetActivityBtn" class="ghost">Reset Activity</button>
+              <button id="resetAllInsightsBtn" class="danger">Reset all</button>
+            </div>
+          </div>
           <div id="activityList"></div>
           <p class="micro">Cross-app notification intelligence is captured by the Android companion app. Browsers cannot read other apps' notifications.</p>
+        </article>
+      </section>
+
+
+      <section id="view-money" class="view">
+        <div class="grid two">
+          <article class="hero-card money-card glass">
+            <span class="eyebrow">LEMMIQ MONEY</span>
+            <h3 id="moneySpendValue">$0.00</h3>
+            <p>Detected outgoing payments from selected notification alerts. Not a verified bank balance.</p>
+          </article>
+          <article class="card glass">
+            <h3>Money overview</h3>
+            <div id="moneyStats" class="stats"></div>
+            <button id="resetMoneyBtn" class="danger">Reset Money data</button>
+          </article>
+        </div>
+        <article class="card glass">
+          <h3>Recent detected payments</h3>
+          <p class="micro">Edit or remove incorrect/duplicate detections. Totals recalculate from the corrected data.</p>
+          <div id="moneyEventList"></div>
         </article>
       </section>
 

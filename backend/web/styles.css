@@ -35,3 +35,9 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 
 .install-choices{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
 .install-choices button{flex:1;min-width:190px}
+
+.data-actions{display:flex;gap:8px;flex-wrap:wrap}
+.event-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.settings-grid .wide{grid-column:1/-1}
+@media(max-width:680px){.settings-grid{grid-template-columns:1fr}.settings-grid .wide{grid-column:auto}}

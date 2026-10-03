@@ -923,6 +923,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
     var showSources by remember{mutableStateOf(false)}
     var appQuery by remember{mutableStateOf("")}
     var deleteConfirm by remember{mutableStateOf(false)}
+    var editEvent by remember{mutableStateOf<PhoneEvent?>(null)}
     var confirmBulkSelection by remember{mutableStateOf(false)}
     val filteredApps=vm.appChoices.filter{
         it.name.contains(appQuery.trim(),ignoreCase=true) ||
@@ -1047,10 +1048,10 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
                     Modifier.padding(18.dp),color=Muted,fontSize=12.sp)
             }
         }
-        items(vm.localEvents.take(25)){e->EventCard(e)}
+        items(vm.localEvents.take(25)){e->EventCard(e){editEvent=it}}
         item{
             OutlinedButton(onClick={deleteConfirm=true},modifier=Modifier.fillMaxWidth().padding(horizontal=18.dp)){
-                Text("Delete all my phone insight data")
+                Text("Manage / reset detected data")
             }
         }
     }
@@ -1066,10 +1067,18 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
         dismissButton={TextButton(onClick={confirmBulkSelection=false}){Text("Cancel")}}
     )
     if(deleteConfirm)AlertDialog(onDismissRequest={deleteConfirm=false},
-      title={Text("Delete your detected events?")},
-      text={Text("This clears your local records and your synced desktop copy. If the desktop is offline, deletion must be retried.")},
-      confirmButton={Button({vm.deleteInsights();deleteConfirm=false}){Text("Delete data")}},
+      title={Text("Reset detected data")},
+      text={
+          Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+              Text("Choose what to clear. Totals recalculate immediately.")
+              OutlinedButton({vm.resetInsightData("ACTIVITY");deleteConfirm=false},Modifier.fillMaxWidth()){Text("Reset Activity only")}
+              OutlinedButton({vm.resetInsightData("MONEY");deleteConfirm=false},Modifier.fillMaxWidth()){Text("Reset Money only")}
+              Button({vm.resetInsightData("ALL");deleteConfirm=false},Modifier.fillMaxWidth()){Text("Reset everything")}
+          }
+      },
+      confirmButton={},
       dismissButton={TextButton({deleteConfirm=false}){Text("Cancel")}})
+    editEvent?.let{e->EventEditDialog(vm,e){editEvent=null}}
 }
 
 @Composable private fun ExternalChatPanel(vm:LemmiqViewModel){
@@ -1140,7 +1149,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
         dismissButton={TextButton({confirmDelete=false}){Text("Cancel")}})
 }
 
-@Composable private fun EventCard(e:PhoneEvent){
+@Composable private fun EventCard(e:PhoneEvent,onManage:(PhoneEvent)->Unit={}){
     val mark=when(e.category){"MONEY"->"💳";"BILL"->"📅";"DELIVERY"->"📦";
        "TRAVEL"->"✈️";"WORK"->"💼";"TRUST"->"🛡️";else->"🔔"}
     Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(19.dp),
@@ -1155,10 +1164,69 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
                 Text("${e.source} · ${e.occurred_at.take(16).replace("T"," ")}",fontSize=10.sp,color=Muted)
                 if(e.detail.isNotBlank())Text(e.detail,maxLines=2,overflow=TextOverflow.Ellipsis,fontSize=11.sp,color=Muted)
             }
-            if(e.amount_cents!=null)Text("${if(e.direction=="IN")"+" else "−"}${moneyString(e.amount_cents)}",
-                fontWeight=FontWeight.Black,fontSize=12.sp,color=if(e.direction=="IN")Mint else Ink)
+            Column(horizontalAlignment=Alignment.End){
+                if(e.amount_cents!=null)Text("${if(e.direction=="IN")"+" else if(e.direction=="OUT")"−" else ""}${moneyString(e.amount_cents)}",
+                    fontWeight=FontWeight.Black,fontSize=12.sp,color=if(e.direction=="IN")Mint else Ink)
+                TextButton({onManage(e)},contentPadding=PaddingValues(horizontal=4.dp,vertical=2.dp)){Text("Manage",fontSize=10.sp)}
+            }
         }
     }
+}
+
+@Composable private fun EventEditDialog(vm:LemmiqViewModel,e:PhoneEvent,dismiss:()->Unit){
+    var category by remember(e.client_event_id){mutableStateOf(e.category)}
+    var source by remember(e.client_event_id){mutableStateOf(e.source)}
+    var title by remember(e.client_event_id){mutableStateOf(e.title)}
+    var detail by remember(e.client_event_id){mutableStateOf(e.detail)}
+    var amount by remember(e.client_event_id){mutableStateOf(e.amount_cents?.let{String.format(java.util.Locale.US,"%.2f",it/100.0)}?:"")}
+    var direction by remember(e.client_event_id){mutableStateOf(e.direction)}
+    var occurred by remember(e.client_event_id){mutableStateOf(e.occurred_at)}
+    var confirmDelete by remember{mutableStateOf(false)}
+    AlertDialog(
+        onDismissRequest=dismiss,
+        title={Text("Manage detected event")},
+        text={
+            LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                item{Text("You are the final authority. Correct or remove notification-derived data before using Money totals.",fontSize=11.sp,color=Muted)}
+                item{
+                    Text("Category",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                        listOf("MONEY","BILL","DELIVERY","WORK","TRAVEL","TRUST","GENERAL").take(4).forEach{x->
+                            FilterChip(category==x,{category=x},{Text(x,fontSize=9.sp)})
+                        }
+                    }
+                    Row(horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                        listOf("TRAVEL","TRUST","GENERAL").forEach{x->FilterChip(category==x,{category=x},{Text(x,fontSize=9.sp)})}
+                    }
+                }
+                item{OutlinedTextField(title,{title=it},Modifier.fillMaxWidth(),label={Text("Title")})}
+                item{OutlinedTextField(source,{source=it},Modifier.fillMaxWidth(),label={Text("Source")})}
+                item{OutlinedTextField(detail,{detail=it},Modifier.fillMaxWidth(),label={Text("Description")})}
+                item{OutlinedTextField(amount,{amount=it.filter{c->c.isDigit()||c=='.'||c==','}},Modifier.fillMaxWidth(),label={Text("Amount in AUD · blank if none")})}
+                item{
+                    Text("Direction",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        listOf("OUT","IN","UNKNOWN").forEach{x->FilterChip(direction==x,{direction=x},{Text(x)})}
+                    }
+                }
+                item{OutlinedTextField(occurred,{occurred=it},Modifier.fillMaxWidth(),label={Text("Date/time (ISO)")})}
+                item{
+                    OutlinedButton({confirmDelete=true},Modifier.fillMaxWidth()){Text("Delete / mark incorrect / duplicate")}
+                }
+            }
+        },
+        confirmButton={Button({
+            vm.editInsightEvent(e,category,source,title,detail,amount,direction,occurred);dismiss()
+        }){Text("Save changes")}},
+        dismissButton={TextButton(dismiss){Text("Cancel")}}
+    )
+    if(confirmDelete)AlertDialog(
+        onDismissRequest={confirmDelete=false},
+        title={Text("Remove this detected event?")},
+        text={Text("Use this for incorrect or duplicate detections. It will be removed from totals and, when synced, from your cloud copy.")},
+        confirmButton={Button({vm.deleteInsightEvent(e);confirmDelete=false;dismiss()}){Text("Remove")}},
+        dismissButton={TextButton({confirmDelete=false}){Text("Keep")}}
+    )
 }
 
 private fun moneyString(cents:Long):String = String.format(java.util.Locale.US,"$%,.2f",cents/100.0)
@@ -1167,6 +1235,8 @@ private fun moneyString(cents:Long):String = String.format(java.util.Locale.US,"
     var amount by remember{mutableStateOf("")}
     var description by remember{mutableStateOf("")}
     var incoming by remember{mutableStateOf(false)}
+    var editEvent by remember{mutableStateOf<PhoneEvent?>(null)}
+    var resetMoney by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){vm.refreshInsights()}
     val transactions=vm.localEvents.filter{it.category=="MONEY"}
     val outgoing=vm.detectedSpendingCents
@@ -1218,10 +1288,23 @@ private fun moneyString(cents:Long):String = String.format(java.util.Locale.US,"
                 }
             }
         }
-        item{Text("Recent detected payments",Modifier.padding(horizontal=20.dp),fontSize=19.sp,fontWeight=FontWeight.Bold)}
+        item{
+            Row(Modifier.fillMaxWidth().padding(horizontal=20.dp),verticalAlignment=Alignment.CenterVertically){
+                Text("Recent detected payments",Modifier.weight(1f),fontSize=19.sp,fontWeight=FontWeight.Bold)
+                TextButton({resetMoney=true}){Text("Reset Money")}
+            }
+        }
         if(transactions.isEmpty())item{
             Text("No transactions detected yet.",Modifier.padding(horizontal=20.dp),color=Muted)
         }
-        items(transactions.take(35)){e->EventCard(e)}
+        items(transactions.take(35)){e->EventCard(e){editEvent=it}}
     }
+    editEvent?.let{e->EventEditDialog(vm,e){editEvent=null}}
+    if(resetMoney)AlertDialog(
+        onDismissRequest={resetMoney=false},
+        title={Text("Reset LEMMIQ Money?")},
+        text={Text("This removes detected/manual Money events from this account and recalculates totals. Other Activity categories stay intact.")},
+        confirmButton={Button({vm.resetInsightData("MONEY");resetMoney=false}){Text("Reset Money")}},
+        dismissButton={TextButton({resetMoney=false}){Text("Cancel")}}
+    )
 }

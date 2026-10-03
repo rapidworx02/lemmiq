@@ -288,14 +288,55 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             PhoneEventDb(appCtx).use{localEvents=it.list(store.userId,retentionDays)}
         }catch(e:Exception){error="Insight sync: ${e.message}"}finally{insightWorking=false}
     }
-    fun deleteInsights()=viewModelScope.launch {
-        insightWorking=true
+    fun resetInsightData(scope:String)=viewModelScope.launch {
+        insightWorking=true;error=null
         try {
-            // Delete server copy before deleting local copy; repeatable if network fails.
-            api.clearInsights()
-            PhoneEventDb(appCtx).use{it.clear(store.userId)}
-            localEvents=emptyList();remoteInsightBrief=null
-        }catch(e:Exception){error="Could not clear synced events: ${e.message}"}
+            api.clearInsights(scope)
+            PhoneEventDb(appCtx).use{db->
+                when(scope.uppercase()){
+                    "MONEY"->db.clearCategory(store.userId,"MONEY")
+                    "ACTIVITY"->db.clearNonMoney(store.userId)
+                    else->db.clear(store.userId)
+                }
+                localEvents=db.list(store.userId,retentionDays)
+            }
+            remoteInsightBrief=runCatching{api.insightBrief()}.getOrNull()
+        }catch(e:Exception){error="Could not reset detected data: ${e.message}"}
+        finally{insightWorking=false}
+    }
+
+    fun deleteInsights()=resetInsightData("ALL")
+
+    fun deleteInsightEvent(e:PhoneEvent)=viewModelScope.launch{
+        insightWorking=true;error=null
+        try{
+            if(e.synced)api.deleteInsight(e.client_event_id)
+            PhoneEventDb(appCtx).use{db->
+                db.delete(store.userId,e.client_event_id)
+                localEvents=db.list(store.userId,retentionDays)
+            }
+            remoteInsightBrief=runCatching{api.insightBrief()}.getOrNull()
+        }catch(ex:Exception){error="Could not delete detected event: ${ex.message}"}
+        finally{insightWorking=false}
+    }
+
+    fun editInsightEvent(original:PhoneEvent,category:String,source:String,title:String,detail:String,
+                         amountText:String,direction:String,occurredAt:String)=viewModelScope.launch{
+        insightWorking=true;error=null
+        try{
+            val cents=amountText.trim().replace(",","").takeIf{it.isNotBlank()}
+                ?.toBigDecimalOrNull()?.multiply(java.math.BigDecimal(100))?.toLong()
+            val updated=original.copy(
+                category=category,source=source.take(80),title=title.take(100),detail=detail.take(220),
+                amount_cents=cents,direction=direction,occurred_at=occurredAt
+            )
+            if(original.synced)api.updateInsight(updated)
+            PhoneEventDb(appCtx).use{db->
+                db.update(store.userId,updated)
+                localEvents=db.list(store.userId,retentionDays)
+            }
+            remoteInsightBrief=runCatching{api.insightBrief()}.getOrNull()
+        }catch(ex:Exception){error="Could not update detected event: ${ex.message}"}
         finally{insightWorking=false}
     }
 
