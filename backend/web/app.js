@@ -97,8 +97,14 @@ function showApp(){
 }
 function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
-  $(`view-${name}`).classList.add("active");
-  qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===name));
+  const target = $(`view-${name}`);
+  if(!target) return;
+  target.classList.add("active");
+  const secondaryViews = new Set(["updates","activity","money","me"]);
+  qsa("#nav button").forEach(b=>b.classList.toggle(
+    "active",
+    b.dataset.view===name || (secondaryViews.has(name) && b.dataset.view==="more")
+  ));
   const meta={
     chats:["Chats","Search, filter, message, group chat and call."],
     updates:["Updates","LEMMIQ Status — text, photo and video for 24 hours."],
@@ -107,7 +113,8 @@ function setView(name){
     business:["Business Agent","Teach LEMMIQ how your business operates."],
     activity:["Activity","Detected phone activity synced by your Android companion."],
     money:["Money","Review and correct notification-derived payment insights."],
-    me:["Me","Your profile photo, account and LEMMIQ access."]
+    me:["Me","Your profile photo, account and LEMMIQ access."],
+    more:["More","Profile, updates, activity, money and app installation."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -125,7 +132,7 @@ async function refreshView(name){
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
-  const active=document.querySelector("#nav button.active")?.dataset.view||"chats";
+  const active=document.querySelector(".view.active")?.id?.replace("view-","")||"chats";
   refreshView(active);
 }
 function connectSocket(){
@@ -582,7 +589,7 @@ async function resetInsights(scope){
 }
 async function refreshInsightViews(){
   lastInsightBrief=null;
-  const current=document.querySelector("#nav button.active")?.dataset.view;
+  const current=document.querySelector(".view.active")?.id?.replace("view-","");
   if(current==="money")await loadMoney(); else if(current==="activity")await loadActivity();
 }
 
@@ -597,7 +604,12 @@ async function loadAppConfig(){
     if($("androidInstallHint")){
       $("androidInstallHint").textContent = hasNative
         ? "Choose the native Android app for WhatsApp/SMS notification intelligence and stronger background features. The web app is the universal browser/PWA version."
-        : "Native Android download is not configured yet. Set ANDROID_PLAY_URL or ANDROID_APK_URL on Render after publishing your APK or Play test link.";
+        : "The Android app download is not available yet. You can still use or install the LEMMIQ web app.";
+    }
+    if($("moreAndroidStatus")){
+      $("moreAndroidStatus").textContent = hasNative
+        ? "Android download is available"
+        : "Android download is not published yet";
     }
   }catch(e){
     console.warn("App config unavailable", e);
@@ -847,6 +859,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("registerForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/register",{method:"POST",body:JSON.stringify({display_name:$("regName").value,username:$("regUsername").value,password:$("regPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
 
   qsa("#nav button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
   $("refreshBtn").onclick=refreshCurrent;$("logoutBtn").onclick=logout;
 
   $("newChatBtn").onclick=showNewChat;$("newGroupBtn").onclick=showNewGroup;$("chatFilter").oninput=renderChats;
@@ -880,6 +893,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
+  $("moreInstallBtn").onclick=installHelp;$("moreAndroidBtn").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
   if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js").catch(()=>{});
 
