@@ -1,5 +1,5 @@
 from .trust import check_text, media_capabilities, unavailable_result
-import os, hashlib, hmac, secrets, logging, re
+import os, hashlib, hmac, secrets, logging, re, json
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
@@ -11,8 +11,10 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from .database import Base, engine, SessionLocal
+from .migrations import apply_compat_migrations
 from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
-    BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote)
+    BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote, TrustHistory,
+    MessageMeta, MessageReaction, MessageHidden, ChatPreference, UserPrivacy, UserBlock)
 from . import media_store, push_service
 from .chat_agent import daily_brief, needs_reply, communication_profile, search_memory, summarize_chat, ask_agent
 from .insights import CATEGORIES, DIRECTIONS, event_json, list_events, brief as insight_brief
@@ -22,12 +24,13 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.3.0")
+app = FastAPI(title="LEMMIQ Server", version="2.4.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
+    apply_compat_migrations(engine)
 
 def get_db():
     db = SessionLocal()
@@ -59,7 +62,7 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     return u
 
 def user_json(u: User):
-    return {"id": u.id, "username": u.username, "display_name": u.display_name, "avatar": u.avatar}
+    return {"id": u.id, "username": u.username, "display_name": u.display_name, "avatar": u.avatar, "avatar_url": f"/v24/profile/avatar/{u.id}" if u.avatar else None}
 
 def ensure_member(db: Session, cid: int, uid: int):
     c = db.get(Chat, cid)
@@ -75,18 +78,37 @@ def get_settings(db: Session, cid: int, uid: int):
     return s
 
 def msg_json(m: Message, db: Session | None = None):
-    data = {"id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id, "text": m.text,
+    meta = db.get(MessageMeta, m.id) if db is not None else None
+    deleted = bool(meta and meta.deleted_for_everyone)
+    effective_text = "This message was deleted" if deleted else ((meta.edited_text if meta and meta.edited_text is not None else m.text) or "")
+    data = {"id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id, "text": effective_text,
             "created_at": m.created_at.isoformat(), "read_at": m.read_at.isoformat() if m.read_at else None,
-            "ai_generated": m.ai_generated}
-    attach = db.get(MessageAttachment, m.id) if db is not None else None
-    voice = db.get(VoiceNote, m.id) if db is not None and attach and attach.kind=="VOICE" else None
+            "ai_generated": m.ai_generated, "edited_at": meta.edited_at.isoformat() if meta and meta.edited_at else None,
+            "deleted_for_everyone": deleted, "reply_to_message_id": meta.reply_to_message_id if meta else None}
+    attach = None if deleted else (db.get(MessageAttachment, m.id) if db is not None else None)
+    voice = db.get(VoiceNote, m.id) if db is not None and attach and attach.kind == "VOICE" else None
     data["attachment"] = ({"kind": attach.kind, "name": attach.original_name,
         "mime_type": attach.mime_type, "size_bytes": attach.size_bytes,
         "media_id": attach.message_id if attach.object_key else None,
         "contact_name": attach.contact_name, "contact_phone": attach.contact_phone,
-        "duration_ms": voice.duration_ms if voice else None,
-        "transcript": voice.transcript if voice else None}
+        "duration_ms": voice.duration_ms if voice else None, "transcript": voice.transcript if voice else None}
         if attach else None)
+    if db is not None:
+        reactions = db.scalars(select(MessageReaction).where(MessageReaction.message_id == m.id)).all()
+        grouped = {}
+        for r in reactions:
+            grouped.setdefault(r.emoji, []).append(r.user_id)
+        data["reactions"] = [{"emoji": emoji, "user_ids": uids, "count": len(uids)} for emoji, uids in grouped.items()]
+        if meta and meta.reply_to_message_id:
+            parent = db.get(Message, meta.reply_to_message_id)
+            if parent:
+                pm = db.get(MessageMeta, parent.id)
+                ptext = "This message was deleted" if pm and pm.deleted_for_everyone else ((pm.edited_text if pm and pm.edited_text is not None else parent.text) or "")
+                data["reply_to"] = {"id": parent.id, "sender_id": parent.sender_id, "text": ptext[:300]}
+            else:
+                data["reply_to"] = None
+        else:
+            data["reply_to"] = None
     return data
 
 def push_tokens(db:Session, uid:int):
@@ -108,10 +130,23 @@ def chat_json(db: Session, c: Chat, uid: int):
     oid = c.user2_id if c.user1_id == uid else c.user1_id
     other = db.get(User, oid)
     s = get_settings(db, c.id, uid)
-    last = db.scalar(select(Message).where(Message.chat_id == c.id).order_by(Message.id.desc()).limit(1))
-    unread = db.scalar(select(func.count()).select_from(Message).where(Message.chat_id == c.id, Message.sender_id != uid, Message.read_at.is_(None))) or 0
+    pref = db.get(ChatPreference, {"chat_id": c.id, "user_id": uid})
+    if not pref:
+        pref = ChatPreference(chat_id=c.id, user_id=uid)
+        db.add(pref); db.commit(); db.refresh(pref)
+    hidden_ids = select(MessageHidden.message_id).where(MessageHidden.user_id == uid)
+    last = db.scalar(select(Message).where(Message.chat_id == c.id, ~Message.id.in_(hidden_ids)).order_by(Message.id.desc()).limit(1))
+    last_text = None
+    if last:
+        lm = db.get(MessageMeta, last.id)
+        last_text = "This message was deleted" if lm and lm.deleted_for_everyone else ((lm.edited_text if lm and lm.edited_text is not None else last.text) or "")
+    unread = db.scalar(select(func.count()).select_from(Message).where(
+        Message.chat_id == c.id, Message.sender_id != uid, Message.read_at.is_(None), ~Message.id.in_(hidden_ids)
+    )) or 0
     return {"id": c.id, "other_user": user_json(other), "category": s.category, "ai_mode": s.ai_mode, "tone": s.tone,
-            "last_message": last.text if last else None, "updated_at": c.updated_at.isoformat(), "unread": int(unread)}
+            "last_message": last_text, "updated_at": c.updated_at.isoformat(), "unread": int(unread),
+            "pinned": pref.pinned, "archived": pref.archived, "favourite": pref.favourite,
+            "muted_until": pref.muted_until.isoformat() if pref.muted_until else None, "draft_text": pref.draft_text}
 
 def sensitive(text: str):
     t = text.lower()
@@ -173,7 +208,11 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.3.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.4.0"}
+
+@app.get("/me")
+def me(u: User = Depends(current_user)):
+    return user_json(u)
 
 @app.post("/register")
 def register(body: Register, db: Session = Depends(get_db)):
@@ -213,6 +252,8 @@ def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(
         raise HTTPException(400, "Cannot message yourself")
     if not db.get(User, body.user_id):
         raise HTTPException(404, "User not found")
+    if db.get(UserBlock, {"blocker_id": u.id, "blocked_id": body.user_id}) or db.get(UserBlock, {"blocker_id": body.user_id, "blocked_id": u.id}):
+        raise HTTPException(403, "This conversation is blocked")
     a, b = sorted([u.id, body.user_id])
     c = db.scalar(select(Chat).where(Chat.user1_id == a, Chat.user2_id == b))
     if not c:
@@ -225,17 +266,20 @@ def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(
 @app.get("/chats/{cid}/messages")
 def messages(cid: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
     ensure_member(db, cid, u.id)
-    rows = db.scalars(select(Message).where(Message.chat_id == cid).order_by(Message.id.asc()).limit(500)).all()
+    hidden_ids = select(MessageHidden.message_id).where(MessageHidden.user_id == u.id)
+    rows = db.scalars(select(Message).where(Message.chat_id == cid, ~Message.id.in_(hidden_ids)).order_by(Message.id.asc()).limit(700)).all()
     return [msg_json(m, db) for m in rows]
 
 @app.post("/chats/{cid}/messages")
 async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depends(current_user), db: Session = Depends(get_db)):
     c = ensure_member(db, cid, u.id)
+    oid = c.user2_id if c.user1_id == u.id else c.user1_id
+    if db.get(UserBlock, {"blocker_id": u.id, "blocked_id": oid}) or db.get(UserBlock, {"blocker_id": oid, "blocked_id": u.id}):
+        raise HTTPException(403, "This conversation is blocked")
     m = Message(chat_id=cid, sender_id=u.id, text=body.text.strip())
     c.updated_at = datetime.now(timezone.utc)
     db.add(m); db.commit(); db.refresh(m)
     data = msg_json(m, db)
-    oid = c.user2_id if c.user1_id == u.id else c.user1_id
     await push(oid, {"type":"message","data":data}); await push(u.id, {"type":"message","data":data})
     background.add_task(push_service.notify, push_tokens(db, oid), u.display_name, cid, m.text, unread_count_for_user(db, oid))
     # Business Agent AUTO takes priority over the personal Auto agent when enabled for this chat.
@@ -342,13 +386,40 @@ async def websocket_endpoint(ws: WebSocket, token: str):
 class TrustIn(BaseModel):
     text: str = Field(min_length=1, max_length=12000)
 
+def trust_history_json(x: TrustHistory):
+    return {"id":x.id,"checked_text":x.checked_text,"status":x.status,"confidence":x.confidence,"summary":x.summary,
+            "reasons":json.loads(x.reasons_json or "[]"),"sources":json.loads(x.sources_json or "[]"),"advice":x.advice,
+            "checked_at":x.checked_at.isoformat()}
+
 @app.post("/trust/check")
-def trust_check(body: TrustIn, u: User = Depends(current_user)):
-    try:
-        return check_text(body.text)
+def trust_check(body: TrustIn, refresh: bool=False, u: User = Depends(current_user), db: Session = Depends(get_db)):
+    clean=" ".join(body.text.strip().split());digest=hashlib.sha256(clean.lower().encode()).hexdigest();cutoff=datetime.now(timezone.utc)-timedelta(hours=24)
+    if not refresh:
+        cached=db.scalar(select(TrustHistory).where(TrustHistory.user_id==u.id,TrustHistory.content_hash==digest,TrustHistory.checked_at>=cutoff).order_by(TrustHistory.checked_at.desc()).limit(1))
+        if cached:
+            out=trust_history_json(cached);out["cached"]=True;return out
+    try:result=check_text(body.text)
     except Exception:
-        logging.getLogger("lemmiq.trust").exception("Trust endpoint failed")
-        return unavailable_result()
+        logging.getLogger("lemmiq.trust").exception("Trust endpoint failed");result=unavailable_result()
+    h=TrustHistory(user_id=u.id,content_hash=digest,checked_text=body.text[:12000],status=str(result.get("status","UNVERIFIED")),confidence=int(result.get("confidence",0) or 0),summary=str(result.get("summary","") or ""),reasons_json=json.dumps(result.get("reasons",[]) or []),sources_json=json.dumps(result.get("sources",[]) or []),advice=str(result.get("advice","") or ""));db.add(h);db.commit();db.refresh(h);out=trust_history_json(h);out["cached"]=False;return out
+
+@app.get("/trust/history")
+def trust_history(q: str="", u: User = Depends(current_user), db: Session = Depends(get_db)):
+    stmt=select(TrustHistory).where(TrustHistory.user_id==u.id)
+    if q.strip():stmt=stmt.where(or_(TrustHistory.checked_text.ilike(f"%{q}%"),TrustHistory.summary.ilike(f"%{q}%")))
+    rows=db.scalars(stmt.order_by(TrustHistory.checked_at.desc()).limit(100)).all();return [trust_history_json(x) for x in rows]
+
+@app.delete("/trust/history/{hid}")
+def delete_trust_history(hid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    x=db.get(TrustHistory,hid)
+    if not x or x.user_id!=u.id:raise HTTPException(404,"Trust result not found")
+    db.delete(x);db.commit();return {"ok":True}
+
+@app.delete("/trust/history")
+def clear_trust_history(u:User=Depends(current_user),db:Session=Depends(get_db)):
+    rows=db.scalars(select(TrustHistory).where(TrustHistory.user_id==u.id)).all()
+    for x in rows:db.delete(x)
+    db.commit();return {"ok":True}
 
 @app.get("/trust/media-capabilities")
 def trust_media(u: User = Depends(current_user)):
@@ -764,15 +835,15 @@ def approve_business_learning(body:LearnCandidateIn,u:User=Depends(current_user)
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.3.0",
+        "version": "2.4.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "web_install_enabled": True,
     }
 
-# ---------------- LEMMIQ V2.3 feature routes ----------------
-from .v23 import register_v23_routes
-register_v23_routes(app,current_user,get_db,push,push_tokens,user_json)
+# ---------------- LEMMIQ V2.4 feature routes ----------------
+from .v24 import register_v24
+register_v24(app,current_user,get_db,push,push_tokens,user_json,msg_json)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

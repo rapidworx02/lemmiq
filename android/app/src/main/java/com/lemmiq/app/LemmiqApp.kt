@@ -103,7 +103,7 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
     }
     when{
         !vm.authenticated->Auth(vm)
-        vm.activeGroup!=null->V23GroupChat(vm)
+        vm.activeGroup!=null->V24GroupChat(vm)
         vm.active!=null->Chat(vm)
         else->Home(vm)
     }
@@ -150,14 +150,24 @@ private fun Home(vm:LemmiqViewModel){
     var tab by remember{mutableIntStateOf(0)}
     var newChat by remember{mutableStateOf(false)}
     var newGroup by remember{mutableStateOf(false)}
-    var calls by remember{mutableStateOf(false)}
-    LaunchedEffect(Unit){vm.refreshChats();vm.refreshGroups();vm.refreshMoments();vm.refreshCalls()}
+    LaunchedEffect(Unit){
+        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments()
+    }
+    val nav=listOf(
+        "💬" to "Chats","⭕" to "Updates","🔔" to "Activity","Q" to "Q",
+        "💳" to "Money","💼" to "Biz","🛡" to "Trust","🙂" to "Me"
+    )
     Scaffold(
         containerColor=Bg,
         bottomBar={
             NavigationBar{
-                listOf("💬" to "Chats","🔔" to "Activity","Q" to "Agent","💳" to "Money","💼" to "Biz","🙂" to "Me").forEachIndexed{i,x->
-                    NavigationBarItem(tab==i,{tab=i},{Text(x.first,fontWeight=FontWeight.Bold)},{Text(x.second)})
+                nav.forEachIndexed{i,x->
+                    NavigationBarItem(
+                        selected=tab==i,onClick={tab=i},
+                        icon={Text(x.first,fontWeight=FontWeight.Bold)},
+                        label={Text(x.second,fontSize=9.sp)},
+                        alwaysShowLabel=false
+                    )
                 }
             }
         },
@@ -167,21 +177,22 @@ private fun Home(vm:LemmiqViewModel){
                 FloatingActionButton({newChat=true},containerColor=Purple,contentColor=Color.White){Text("+",fontSize=28.sp)}
             }
         }
-    ){p->
-        Box(Modifier.padding(p)){
+    ){pad->
+        Box(Modifier.padding(pad)){
             when(tab){
-                0->Inbox(vm){calls=true}
-                1->ActivityScreen(vm)
-                2->ChatAgent(vm)
-                3->MoneyScreen(vm)
-                4->BusinessScreen(vm)
+                0->V24Inbox(vm){newGroup=true}
+                1->V24Updates(vm)
+                2->ActivityScreen(vm)
+                3->ChatAgent(vm)
+                4->MoneyScreen(vm)
+                5->BusinessScreen(vm)
+                6->V24Trust(vm)
                 else->Profile(vm)
             }
         }
     }
     if(newChat)NewChat(vm){newChat=false}
-    if(newGroup)V23NewGroupDialog(vm,{newGroup=false}){g->newGroup=false;vm.openGroup(g)}
-    if(calls)V23CallsDialog(vm){calls=false}
+    if(newGroup)V24NewGroupDialog(vm){newGroup=false}
 }
 
 @Composable
@@ -193,8 +204,8 @@ private fun Header(title:String,sub:String?=null){
 }
 
 @Composable
-private fun Inbox(vm:LemmiqViewModel,onCalls:()->Unit={}){
-    LaunchedEffect(Unit){vm.refreshAgent()}
+private fun Inbox(vm:LemmiqViewModel){
+    LaunchedEffect(Unit){vm.refreshAgent();vm.refreshSocialIq()}
     Column(Modifier.fillMaxSize()){
         Header("lemmiq",if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}")
         GradientPanel("Q · AI Inbox","Your conversations, intelligently organised"){
@@ -204,15 +215,6 @@ private fun Inbox(vm:LemmiqViewModel,onCalls:()->Unit={}){
                 Text("Each chat can be Off, Assist or Auto.",color=Color(0xFFB9AAFF),fontSize=11.sp,modifier=Modifier.padding(top=6.dp))
                 vm.agentBrief?.let{b->Text("${b.needs_reply_count} conversations may need a reply.",color=Color.White,fontSize=11.sp)}
         }
-        Row(Modifier.fillMaxWidth().padding(20.dp,16.dp,20.dp,4.dp),verticalAlignment=Alignment.CenterVertically){
-            Text("Groups",fontSize=20.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
-            TextButton({vm.refreshCalls();onCalls()}){Text("📞 Calls")}
-        }
-        if(vm.groups.isNotEmpty()){
-            LazyRow(contentPadding=PaddingValues(horizontal=16.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                items(vm.groups,key={it.id}){g->V23GroupChip(g){vm.openGroup(g)}}
-            }
-        }else Text("Create a group with the 👥 button.",color=Muted,fontSize=11.sp,modifier=Modifier.padding(horizontal=20.dp))
         Text("Chats",fontSize=20.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,18.dp,20.dp,6.dp))
         if(vm.chats.isEmpty())Empty("💬","No conversations yet","Tap + and search another username.")
         else LazyColumn{items(vm.chats,key={it.id}){c->ChatRow(c){vm.open(c)}}}
@@ -241,11 +243,8 @@ private fun ChatRow(c:ChatDto,click:()->Unit){
     }
 }
 @Composable
-private fun Avatar(u:UserDto){
-    Box(Modifier.size(50.dp).clip(CircleShape).background(Soft),contentAlignment=Alignment.Center){
-        Text(u.display_name.firstOrNull()?.uppercase()?:"?",color=Purple,fontWeight=FontWeight.Bold,fontSize=18.sp)
-    }
-}
+private fun Avatar(u:UserDto){ V24Avatar(u) }
+
 @Composable
 private fun Mode(m:String){
     val label=when(m){"AUTO"->"⚡ Auto";"ASSIST"->"✨ Assist";else->"AI Off"}
@@ -281,10 +280,14 @@ private fun NewChat(vm:LemmiqViewModel,dismiss:()->Unit){
 @Composable
 private fun Chat(vm:LemmiqViewModel){
     val c=vm.active?:return
-    var draft by remember{mutableStateOf("")}
+    var draft by remember(c.id){mutableStateOf(c.draft_text)}
     var settings by remember{mutableStateOf(false)}
     var businessSettings by remember{mutableStateOf(false)}
     var showAttach by remember{mutableStateOf(false)}
+    var showSearch by remember{mutableStateOf(false)}
+    var showMore by remember{mutableStateOf(false)}
+    var actionMessage by remember{mutableStateOf<MessageDto?>(null)}
+    var forwardMessage by remember{mutableStateOf<MessageDto?>(null)}
     val ctx=LocalContext.current
     val voiceRecorder=remember{LemmiqVoiceRecorder(ctx)}
     var voiceRecording by remember{mutableStateOf(false)}
@@ -316,12 +319,15 @@ private fun Chat(vm:LemmiqViewModel){
             }
         }
     }
-    // Reverse layout pins the latest message to the composer. Typing never changes scroll state.
     val messageListState=rememberLazyListState()
-    LaunchedEffect(c.id,vm.messages.lastOrNull()?.id){
-        if(vm.messages.isNotEmpty() && messageListState.firstVisibleItemIndex<=1){
-            messageListState.scrollToItem(0)
-        }
+    val timeline=remember(vm.messages,vm.activeCalls){
+        buildList<Pair<String,Any>>{
+            vm.messages.forEach{add("message" to it)}
+            vm.activeCalls.forEach{add("call" to it)}
+        }.sortedBy{(_,x)->when(x){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}}
+    }
+    LaunchedEffect(c.id,timeline.size){
+        if(timeline.isNotEmpty())runCatching{messageListState.scrollToItem(timeline.lastIndex)}
     }
     Scaffold(
         containerColor=Bg,
@@ -341,19 +347,29 @@ private fun Chat(vm:LemmiqViewModel){
                         vm.startVoiceCall(c.id){join->
                             ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
                                 putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
-                                putExtra("person",c.other_user.display_name);putExtra("incoming",false)
+                                putExtra("person",c.other_user.display_name);putExtra("avatar_url",c.other_user.avatar_url);putExtra("incoming",false)
                             })
                         }
                     }.padding(8.dp))
-                    if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(10.dp))
-                    if(vm.businessProfile.enabled)Text("💼",fontSize=18.sp,modifier=Modifier.clickable{businessSettings=true}.padding(8.dp))
-                    Text("⚙",fontSize=19.sp,modifier=Modifier.clickable{settings=true}.padding(10.dp))
+                    Text("🔎",fontSize=17.sp,modifier=Modifier.clickable{showSearch=true}.padding(7.dp))
+                    Text("⋮",fontSize=22.sp,modifier=Modifier.clickable{showMore=true}.padding(7.dp))
+                    if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(8.dp))
+                    if(vm.businessProfile.enabled)Text("💼",fontSize=18.sp,modifier=Modifier.clickable{businessSettings=true}.padding(6.dp))
+                    Text("⚙",fontSize=19.sp,modifier=Modifier.clickable{settings=true}.padding(8.dp))
                 }
             }
         },
         bottomBar={
             // Keep composer above the keyboard without re-scrolling on every character.
             Column(Modifier.background(Color.White).navigationBarsPadding().imePadding()){
+                vm.replyTo?.let{r->
+                    Surface(color=Soft,shape=RoundedCornerShape(14.dp),modifier=Modifier.padding(horizontal=10.dp,vertical=4.dp)){
+                        Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){
+                            Column(Modifier.weight(1f)){Text("Replying",color=Purple,fontWeight=FontWeight.Bold,fontSize=10.sp);Text(r.text,maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=11.sp)}
+                            TextButton({vm.setReply(null)}){Text("×")}
+                        }
+                    }
+                }
                 vm.businessSuggestion?.let{bs->
                     Surface(color=Color(0xFFEAF8F2),shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
@@ -422,19 +438,16 @@ private fun Chat(vm:LemmiqViewModel){
                         keyboardActions=KeyboardActions(onSend={if(draft.isNotBlank()){vm.send(draft);draft=""}})
                     )
                     Spacer(Modifier.width(6.dp))
-                    Surface(
-                        Modifier.size(44.dp).clickable{
-                            if(voiceRecording){
-                                voiceRecorder.stop()?.let{(file,duration)->vm.sendVoiceFile(file,duration)}
-                                voiceRecording=false
-                            }else{
-                                if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){
-                                    runCatching{voiceRecorder.start()}.onSuccess{voiceRecording=true}.onFailure{vm.error=it.message}
-                                }else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-                            }
-                        },
-                        color=if(voiceRecording)Color(0xFFFFE8EC) else Soft,shape=CircleShape
-                    ){Box(contentAlignment=Alignment.Center){Text(if(voiceRecording)"■" else "🎙",color=if(voiceRecording)Color(0xFFC82D4A) else Purple)}}
+                    Surface(Modifier.size(44.dp).clickable{
+                        if(voiceRecording){
+                            voiceRecorder.stop()?.let{vm.sendVoiceFile(it.first,it.second)}
+                            voiceRecording=false
+                        }else if(ContextCompat.checkSelfPermission(ctx,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){
+                            runCatching{voiceRecorder.start()}.onSuccess{voiceRecording=true}.onFailure{vm.error=it.message}
+                        }else micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                    },color=if(voiceRecording)Color(0xFFFFE7EA) else Soft,shape=CircleShape){
+                        Box(contentAlignment=Alignment.Center){Text(if(voiceRecording)"■" else "🎙",color=if(voiceRecording)Color(0xFFC72B48) else Purple)}
+                    }
                     Spacer(Modifier.width(6.dp))
                     Surface(Modifier.size(48.dp).clickable{if(draft.isNotBlank()){vm.send(draft);draft=""}},color=Purple,shape=CircleShape){
                         Box(contentAlignment=Alignment.Center){Text("➤",color=Color.White)}
@@ -462,22 +475,84 @@ private fun Chat(vm:LemmiqViewModel){
                     if(c.ai_mode=="AUTO")Text("⚡ Auto enabled",color=Color(0xFF11844F),fontSize=11.sp,fontWeight=FontWeight.Bold)
                 }
             }
-            if(vm.messages.isEmpty())Empty("👋","Start the conversation","Messages appear here in real time.")
+            if(timeline.isEmpty())Empty("👋","Start the conversation","Messages appear here in real time.")
             else LazyColumn(
                 modifier=Modifier.fillMaxSize(),
                 state=messageListState,
-                reverseLayout=true,
                 contentPadding=PaddingValues(14.dp),
                 verticalArrangement=Arrangement.spacedBy(7.dp)
             ){
-                // Messages are stored oldest-first; reverse items to show newest at the bottom.
-                // The message list does not depend on the draft field, preventing typing-induced jumps.
-                items(vm.messages.asReversed(),key={it.id}){m->
-                    Bubble(m,vm.store.userId,vm){vm.trustCheck(m.text)}
+                itemsIndexed(timeline,key={_,item->
+                    val x=item.second
+                    when(x){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->item.hashCode().toString()}
+                }){index,item->
+                    val at=when(val x=item.second){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}
+                    val day=v24FriendlyDay(at)
+                    val prev=if(index>0)when(val x=timeline[index-1].second){is MessageDto->v24FriendlyDay(x.created_at);is CallDto->v24FriendlyDay(x.started_at);else->""} else null
+                    if(day!=prev)V24DateSeparator(day)
+                    when(val x=item.second){
+                        is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x})
+                        is CallDto->{
+                            val label=when(x.status){"MISSED"->"Missed voice call";"DECLINED"->"Voice call · declined";"RINGING"->"Voice call · no answer";else->"Voice call"}
+                            Card(Modifier.fillMaxWidth(.72f),colors=CardDefaults.cardColors(containerColor=Color.White)){
+                                Column(Modifier.padding(10.dp)){Text("📞 $label",fontWeight=FontWeight.Bold);Text((if(x.duration_seconds>0)"${x.duration_seconds/60}m ${x.duration_seconds%60}s · " else "")+v24Time(x.started_at),fontSize=10.sp,color=Muted)}
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+    if(showSearch){
+        var q by remember{mutableStateOf("")}
+        AlertDialog(onDismissRequest={showSearch=false;vm.insideSearchResults=emptyList()},title={Text("Search this chat")},
+            text={Column{OutlinedTextField(q,{q=it;vm.searchInsideChat(it)},Modifier.fillMaxWidth(),placeholder={Text("Search messages")});LazyColumn(Modifier.heightIn(max=300.dp)){items(vm.insideSearchResults,key={it.id}){m->Column(Modifier.fillMaxWidth().padding(vertical=7.dp)){Text(m.text,maxLines=3);Text(v24FriendlyDay(m.created_at)+" · "+v24Time(m.created_at),fontSize=10.sp,color=Muted)}}}}},
+            confirmButton={TextButton({showSearch=false;vm.insideSearchResults=emptyList()}){Text("Close")}})
+    }
+    if(showMore){
+        AlertDialog(onDismissRequest={showMore=false},title={Text(c.other_user.display_name)},
+            text={Column{
+                TextButton({vm.togglePin();showMore=false}){Text(if(c.pinned)"Unpin chat" else "📌 Pin chat")}
+                TextButton({vm.toggleFavourite();showMore=false}){Text(if(c.favourite)"Remove favourite" else "⭐ Favourite")}
+                TextButton({vm.toggleArchive();showMore=false}){Text(if(c.archived)"Unarchive" else "Archive")}
+                TextButton({vm.mute8Hours();showMore=false}){Text("🔕 Mute 8 hours")}
+                TextButton({vm.blockActiveUser();showMore=false}){Text("Block user",color=Color.Red)}
+                TextButton({vm.reportActiveUser("Reported from Android V2.4");showMore=false}){Text("Report",color=Color.Red)}
+            }},confirmButton={})
+    }
+    actionMessage?.let{m->
+        var editText by remember(m.id){mutableStateOf(m.text)}
+        AlertDialog(onDismissRequest={actionMessage=null},title={Text("Message actions")},
+            text={Column{
+                TextButton({vm.setReply(m);actionMessage=null}){Text("↩ Reply")}
+                TextButton({forwardMessage=m;actionMessage=null}){Text("↗ Forward")}
+                Row{listOf("👍","❤️","😂","😮","😢","🙏").forEach{e->Text(e,fontSize=24.sp,modifier=Modifier.clickable{vm.reactMessage(m.id,e);actionMessage=null}.padding(5.dp))}}
+                if(m.sender_id==vm.store.userId&&!m.deleted_for_everyone){
+                    OutlinedTextField(editText,{editText=it},Modifier.fillMaxWidth(),label={Text("Edit message")})
+                    TextButton({vm.editMessage(m.id,editText);actionMessage=null}){Text("Save edit")}
+                    TextButton({vm.deleteMessage(m.id,"everyone");actionMessage=null}){Text("Delete for everyone",color=Color.Red)}
+                }
+                TextButton({vm.deleteMessage(m.id,"me");actionMessage=null}){Text("Delete for me",color=Color.Red)}
+            }},confirmButton={})
+    }
+
+    forwardMessage?.let{m->
+        val selected=remember(m.id){mutableStateListOf<Int>()}
+        AlertDialog(onDismissRequest={forwardMessage=null},title={Text("Forward message")},
+            text={LazyColumn(Modifier.heightIn(max=360.dp)){
+                item{Text(m.text,maxLines=3,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(bottom=8.dp))}
+                items(vm.chats,key={it.id}){chat->
+                    val checked=selected.contains(chat.id)
+                    Row(Modifier.fillMaxWidth().clickable{if(checked)selected.remove(chat.id)else selected.add(chat.id)}.padding(vertical=7.dp),verticalAlignment=Alignment.CenterVertically){
+                        Checkbox(checked,{if(it)selected.add(chat.id)else selected.remove(chat.id)})
+                        V24Avatar(chat.other_user,38);Spacer(Modifier.width(8.dp));Text(chat.other_user.display_name)
+                    }
+                }
+            }},
+            confirmButton={Button({vm.forwardMessage(m.id,selected.toList());forwardMessage=null},enabled=selected.isNotEmpty()){Text("Forward")}},
+            dismissButton={TextButton({forwardMessage=null}){Text("Cancel")}})
+    }
+
     if(settings)Settings(c,vm){settings=false}
     if(businessSettings)BusinessChatDialog(c,vm){businessSettings=false}
     if(vm.businessLearnCandidates.isNotEmpty())BusinessLearnDialog(vm)
@@ -512,7 +587,7 @@ private fun Chat(vm:LemmiqViewModel){
 }
 
 @Composable
-private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
+private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onActions:()->Unit){
     val mine=m.sender_id==me
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
@@ -536,11 +611,15 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
         Surface(color=if(mine)Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
             Column(Modifier.widthIn(max=300.dp).padding(12.dp)){
-                if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                    if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
+                    Spacer(Modifier.weight(1f));Text("⋯",color=if(mine)Color.White else Muted,modifier=Modifier.clickable(onClick=onActions).padding(horizontal=4.dp))
+                }
+                m.reply_to?.let{q->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(8.dp)){Text(q.text,Modifier.padding(7.dp),fontSize=10.sp,color=if(mine)Color.White else Ink,maxLines=2,overflow=TextOverflow.Ellipsis)}}
                 val a=m.attachment
                 if(a!=null){
                     if(a.kind=="VOICE"){
-                        V23VoiceBubble(a,m.id,false,vm,mine){reply->}
+                        V24VoiceContent(a,m.id,false,vm,mine)
                     } else if(a.kind=="PHOTO"){
                         bitmap?.let{bmp->
                             Image(bmp.asImageBitmap(),contentDescription="Shared photo",
@@ -574,9 +653,13 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit){
                         }){Text("Open / share",color=if(mine)Color.White else Purple)}
                     }
                 }else Text(m.text,color=if(mine)Color.White else Ink)
+                if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}}
                 if(mediaError!=null)Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
-                if(mine)Text(if(m.read_at!=null)"✓✓" else "✓",color=Color(0xFFDCD6FF),fontSize=10.sp,modifier=Modifier.align(Alignment.End))
-                else if(a==null) TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
+                Row(Modifier.align(Alignment.End),verticalAlignment=Alignment.CenterVertically){
+                    Text(v24Time(m.created_at)+(if(m.edited_at!=null)" · edited" else ""),color=if(mine)Color(0xFFDCD6FF) else Muted,fontSize=9.sp)
+                    if(mine)Text(if(m.read_at!=null)"  ✓✓" else "  ✓",color=Color(0xFFDCD6FF),fontSize=10.sp)
+                }
+                if(!mine && a==null && !m.deleted_for_everyone) TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
                     contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)){
                     Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }
@@ -700,6 +783,8 @@ private fun ChatAgent(vm:LemmiqViewModel){
             }
         }
 
+        item{V24SocialIqCard(vm)}
+
         vm.agentBrief?.needs_reply?.take(5)?.let{itemsToReply->
             if(itemsToReply.isNotEmpty()){
                 item{Text("Needs reply",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,20.dp,20.dp,8.dp))}
@@ -818,9 +903,11 @@ private fun Profile(vm:LemmiqViewModel){
     }
     var showMoments by remember{mutableStateOf(false)}
     if(showMoments){Column{TextButton({showMoments=false}){Text("‹ Back to Me")};Moments(vm)};return}
-    Column{
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())){
         Header("Me","@${vm.store.username.orEmpty()}")
-        Card(Modifier.fillMaxWidth().padding(20.dp)){Column(Modifier.padding(18.dp)){Text(vm.store.displayName.orEmpty(),fontSize=20.sp,fontWeight=FontWeight.Bold);Text("@${vm.store.username.orEmpty()}",color=Muted)}}
+        V24ProfilePhotoCard(vm)
+        V24PrivacyCard(vm)
+        Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)){Column(Modifier.padding(18.dp)){Text(vm.store.displayName.orEmpty(),fontSize=20.sp,fontWeight=FontWeight.Bold);Text("@${vm.store.username.orEmpty()}",color=Muted)}}
         Row(Modifier.padding(horizontal=20.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
             BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V${BuildConfig.VERSION_NAME}",fontWeight=FontWeight.Bold)
         }

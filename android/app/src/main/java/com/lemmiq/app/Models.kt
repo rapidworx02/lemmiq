@@ -1,15 +1,22 @@
 package com.lemmiq.app
 
-data class UserDto(val id:Int,val username:String,val display_name:String,val avatar:String?=null)
+data class UserDto(val id:Int,val username:String,val display_name:String,val avatar:String?=null,val avatar_url:String?=null)
 data class AuthResponse(val token:String,val user:UserDto)
 data class ChatDto(
     val id:Int,val other_user:UserDto,val category:String="FRIEND",val ai_mode:String="ASSIST",
-    val tone:String="Natural",val last_message:String?=null,val updated_at:String?=null,val unread:Int=0
+    val tone:String="Natural",val last_message:String?=null,val updated_at:String?=null,val unread:Int=0,
+    val pinned:Boolean=false,val archived:Boolean=false,val favourite:Boolean=false,val muted_until:String?=null,val draft_text:String=""
 )
 data class MessageDto(
     val id:Int,val chat_id:Int,val sender_id:Int,val text:String,val created_at:String,
-    val read_at:String?=null,val ai_generated:Boolean=false,val attachment:AttachmentDto?=null
+    val read_at:String?=null,val ai_generated:Boolean=false,val attachment:AttachmentDto?=null,
+    val edited_at:String?=null,val deleted_for_everyone:Boolean=false,val reply_to_message_id:Int?=null,
+    val reply_to:ReplyPreviewDto?=null,val reactions:List<ReactionDto> = emptyList()
 )
+
+data class ReplyPreviewDto(val id:Int=0,val sender_id:Int=0,val text:String="")
+data class ReactionDto(val emoji:String="",val user_ids:List<Int> = emptyList(),val count:Int=0)
+
 data class MomentDto(val id:Int,val user:UserDto,val text:String,val created_at:String,val expires_at:String)
 data class SuggestResponse(val reply:String)
 
@@ -108,29 +115,51 @@ data class BusinessLearnResponse(
 data class PushStatusDto(val firebase_configured:Boolean=false,val registered_devices:Int=0)
 
 
-// LEMMIQ V2.3 Groups + Voice + Calls
-data class GroupMemberDto(
-    val id:Int=0,val username:String="",val display_name:String="",val avatar:String?=null,val role:String="MEMBER"
-)
+// LEMMIQ V2.4
+data class GroupMemberDto(val id:Int=0,val username:String="",val display_name:String="",val avatar:String?=null,val avatar_url:String?=null,val role:String="MEMBER")
 data class GroupDto(
-    val id:Int=0,val name:String="",val created_by:Int=0,val has_photo:Boolean=false,
-    val member_count:Int=0,val role:String="MEMBER",val ai_mode:String="ASSIST",val tone:String="Natural",val unread:Int=0,
-    val last_message:String?=null,val updated_at:String?=null,val members:List<GroupMemberDto> = emptyList()
+    val id:Int=0,val name:String="",val created_by:Int=0,val has_photo:Boolean=false,val photo_url:String?=null,
+    val member_count:Int=0,val role:String="MEMBER",val ai_mode:String="ASSIST",val tone:String="Natural",
+    val last_message:String?=null,val updated_at:String?=null,val unread:Int=0,val members:List<GroupMemberDto> = emptyList()
 )
 data class GroupMessageDto(
     val id:Int=0,val group_id:Int=0,val sender_id:Int=0,val sender:UserDto?=null,val text:String="",
     val created_at:String="",val ai_generated:Boolean=false,val attachment:AttachmentDto?=null
 )
-data class GroupSummaryDto(
-    val summary:String="",val decisions:List<String> = emptyList(),val actions:List<String> = emptyList()
-)
+data class GroupSummaryDto(val summary:String="",val decisions:List<String> = emptyList(),val actions:List<String> = emptyList())
 data class GroupAskDto(val answer:String="",val references:List<String> = emptyList())
+
 data class VoiceAiDto(val transcript:String="",val summary:String="",val suggested_reply:String="")
 data class CallDto(
     val id:String="",val chat_id:Int=0,val caller_id:Int=0,val callee_id:Int=0,val other_user:UserDto?=null,
-    val status:String="",val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
+    val status:String="",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
 )
-data class CallJoinDto(
-    val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false
-)
+data class CallJoinDto(val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false)
 data class CallStatusDto(val configured:Boolean=false,val provider:String="LiveKit",val voice:Boolean=true,val video:Boolean=false)
+
+data class StatusDto(
+    val id:Int=0,val user:UserDto=UserDto(0,"",""),val kind:String="TEXT",val text:String="",
+    val media_url:String?=null,val mime_type:String?=null,val visibility:String="ALL",
+    val created_at:String="",val expires_at:String="",val view_count:Int?=null,val viewed:Boolean=false
+)
+
+data class TrustHistoryDto(
+    val id:Int=0,val checked_text:String="",val status:String="UNVERIFIED",val confidence:Int=0,val summary:String="",
+    val reasons:List<String> = emptyList(),val sources:List<TrustSource> = emptyList(),val advice:String="",
+    val checked_at:String="",val cached:Boolean=false
+)
+
+data class SocialMemoryDto(
+    val id:Int=0,val chat_id:Int?=null,val contact:String?=null,val memory_type:String="IMPORTANT",val title:String="",
+    val detail:String="",val source_message_id:Int?=null,val due_at:String?=null,val resolved:Boolean=false,val created_at:String=""
+)
+data class SocialBriefDto(
+    val count:Int=0,val items:List<SocialMemoryDto> = emptyList(),val promises:Int=0,val follow_ups:Int=0
+)
+data class SocialScanDto(val added:Int=0,val items:List<SocialMemoryDto> = emptyList(),val note:String?=null)
+
+data class ChatPrefDto(
+    val pinned:Boolean=false,val archived:Boolean=false,val favourite:Boolean=false,val muted_until:String?=null,val draft_text:String=""
+)
+data class PrivacyDto(val profile_photo:String="EVERYONE",val last_seen:String="EVERYONE",val status_visibility:String="EVERYONE")
+data class MediaItemDto(val message_id:Int=0,val kind:String="",val name:String?=null,val mime_type:String?=null,val size_bytes:Long?=null)

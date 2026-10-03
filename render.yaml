@@ -38,14 +38,15 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LEMMIQ_VOICE_TRANSCRIPTION
+        value: "true"
+      - key: LEMMIQ_TRANSCRIPTION_MODEL
+        value: gpt-4o-mini-transcribe
 
 databases:
   - name: lemmiq-db
     plan: free  # Expires after 30 days; export or upgrade to retain data.
     databaseName: lemmiq
     user: lemmiq
-
-# V2.3 LiveKit Cloud secrets: add these manually to lemmiq-api in Render:
-# LIVEKIT_URL
-# LIVEKIT_API_KEY
-# LIVEKIT_API_SECRET

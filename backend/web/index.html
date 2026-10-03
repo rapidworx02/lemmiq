@@ -55,6 +55,7 @@
       </div>
       <nav id="nav">
         <button data-view="chats" class="active"><span>💬</span>Chats</button>
+        <button data-view="updates"><span>⭕</span>Updates</button>
         <button data-view="agent"><span>Q</span>Agent</button>
         <button data-view="trust"><span>🛡</span>Trust</button>
         <button data-view="business"><span>💼</span>Business</button>
@@ -84,69 +85,39 @@
         <div class="chat-layout">
           <div class="conversation-list glass">
             <div class="list-tools">
-              <input id="chatFilter" placeholder="Search conversations">
+              <input id="chatFilter" placeholder="Search chats, usernames, groups or messages">
               <button id="newGroupBtn" class="ghost" title="New group">👥</button>
               <button id="newChatBtn" class="primary" title="New chat">＋</button>
             </div>
-            <div id="groupList" class="group-strip"></div>
-            <div id="chatList" class="list-scroll"></div>
+            <div class="chat-filters"><button data-chat-filter="ALL" class="active">All</button><button data-chat-filter="UNREAD">Unread</button><button data-chat-filter="GROUPS">Groups</button></div>
+            <div id="conversationList" class="list-scroll"></div>
           </div>
 
           <div id="chatPane" class="chat-pane glass">
-            <div id="emptyChat" class="empty-state">
-              <img src="/web/brand-icon.png" alt="">
-              <h3>Choose a conversation</h3>
-              <p>Message someone, ask Q for a reply, or enable the Business Agent.</p>
-            </div>
+            <div id="emptyChat" class="empty-state"><img src="/web/brand-icon.png" alt=""><h3>Choose a conversation</h3><p>Message someone, open a group, ask Q, or make a voice call.</p></div>
             <div id="activeChat" class="hidden chat-inner">
-              <div class="chat-head">
-                <div>
-                  <strong id="chatName">Contact</strong>
-                  <small id="chatMeta">LEMMIQ chat</small>
-                </div>
-                <div class="chat-head-actions">
-                  <button id="callBtn" class="ghost" title="Voice call">📞</button>
-                  <button id="chatAiBtn" class="ghost">⚙ Chat AI</button>
-                  <button id="summaryBtn" class="ghost">🧠 Summary</button>
-                  <button id="businessChatBtn" class="ghost">💼 Agent</button>
-                </div>
-              </div>
+              <div class="chat-head"><div class="chat-person"><div id="chatAvatar" class="avatar big"></div><div><strong id="chatName">Contact</strong><small id="chatMeta">LEMMIQ chat</small></div></div>
+                <div class="chat-head-actions"><button id="callBtn" class="ghost">📞</button><button id="chatSearchBtn" class="ghost">🔎</button><button id="chatMoreBtn" class="ghost">⋮</button><button id="chatAiBtn" class="ghost">⚙ Chat AI</button><button id="summaryBtn" class="ghost">🧠</button><button id="businessChatBtn" class="ghost">💼</button></div></div>
               <div id="messageList" class="messages"></div>
               <div id="assistBar" class="assist-bar hidden"><button id="assistBarBtn" class="ghost">✨ Suggest reply</button><span>ASSIST drafts only — you choose what to send.</span></div>
               <div id="suggestionCard" class="suggestion hidden"></div>
-              <div class="composer">
-                <label class="attach-btn" title="Send file">＋<input id="fileInput" type="file" hidden></label>
-                <button id="voiceBtn" class="ghost voice-btn" title="Record voice message">🎙</button>
-                <textarea id="messageInput" rows="1" placeholder="Message"></textarea>
-                <button id="suggestBtn" class="ghost qbtn">Q</button>
-                <button id="sendBtn" class="primary send">➤</button>
-              </div>
+              <div id="replyPreview" class="reply-preview hidden"></div>
+              <div class="composer"><label class="attach-btn">＋<input id="fileInput" type="file" hidden></label><button id="voiceBtn" class="ghost voice-btn">🎙</button><textarea id="messageInput" rows="1" placeholder="Message"></textarea><button id="suggestBtn" class="ghost qbtn">Q</button><button id="sendBtn" class="primary send">➤</button></div>
             </div>
-
             <div id="activeGroup" class="hidden chat-inner">
-              <div class="chat-head">
-                <div>
-                  <strong id="groupName">Group</strong>
-                  <small id="groupMeta">LEMMIQ group</small>
-                </div>
-                <div class="chat-head-actions">
-                  <button id="groupCatchupBtn" class="ghost">🧠 Catch me up</button>
-                  <button id="groupQBtn" class="ghost">Q</button>
-                  <button id="groupSettingsBtn" class="ghost">⋮</button>
-                </div>
-              </div>
+              <div class="chat-head"><div class="chat-person"><div id="groupAvatar" class="avatar big"></div><div><strong id="groupName">Group</strong><small id="groupMeta">LEMMIQ group</small></div></div>
+                <div class="chat-head-actions"><button id="groupSuggestTop" class="ghost">✨</button><button id="groupCatchupBtn" class="ghost">🧠</button><button id="groupQBtn" class="ghost">Q</button><button id="groupSettingsBtn" class="ghost">⋮</button></div></div>
               <div id="groupMessageList" class="messages"></div>
               <div id="groupAssistBar" class="assist-bar hidden"><button id="groupSuggestBtn" class="ghost">✨ Suggest reply</button><span>Group ASSIST drafts only.</span></div>
               <div id="groupSuggestionCard" class="suggestion hidden"></div>
-              <div class="composer">
-                <label class="attach-btn" title="Send file">＋<input id="groupFileInput" type="file" hidden></label>
-                <button id="groupVoiceBtn" class="ghost voice-btn" title="Record voice message">🎙</button>
-                <textarea id="groupMessageInput" rows="1" placeholder="Message group"></textarea>
-                <button id="groupSendBtn" class="primary send">➤</button>
-              </div>
+              <div class="composer"><label class="attach-btn">＋<input id="groupFileInput" type="file" hidden></label><button id="groupVoiceBtn" class="ghost voice-btn">🎙</button><textarea id="groupMessageInput" rows="1" placeholder="Message group"></textarea><button id="groupSendBtn" class="primary send">➤</button></div>
             </div>
           </div>
         </div>
+      </section>
+
+      <section id="view-updates" class="view">
+        <div class="grid two"><article class="hero-card purple glass"><span class="eyebrow">LEMMIQ STATUS</span><h3>Share what’s happening.</h3><p>Text, photo or video status automatically expires after 24 hours.</p><button id="addTextStatusBtn" class="primary">＋ Text status</button><label class="upload ghost">📷 Photo / video<input id="statusMediaInput" type="file" accept="image/*,video/*" hidden></label></article><article class="card glass"><h3>My status</h3><div id="myStatusList"></div></article></div><article class="card glass"><h3>Recent updates</h3><div id="statusList" class="status-grid"></div></article>
       </section>
 
       <section id="view-agent" class="view">
@@ -169,6 +140,7 @@
           <button id="askAgentBtn" class="primary">Ask Q</button>
           <div id="agentAnswer" class="answer"></div>
         </article>
+        <article class="card glass"><div class="section-head"><div><span class="eyebrow">SOCIAL IQ MEMORY</span><h3>What Q should help you remember</h3></div><button id="scanSocialBtn" class="ghost">✨ Scan recent chats</button></div><div id="socialIqStats" class="stats"></div><div id="socialMemoryList"></div><p class="micro">Q extracts only explicit commitments, follow-ups, plans, addresses and deadlines. You can delete any memory.</p></article>
       </section>
 
       <section id="view-trust" class="view">
@@ -184,6 +156,7 @@
           </article>
         </div>
         <article id="trustResult" class="card glass hidden"></article>
+        <article class="card glass"><div class="section-head"><div><h3>Trust history</h3><p class="micro">Previous checks reopen instantly; refresh only when you want updated evidence.</p></div><button id="clearTrustHistoryBtn" class="danger">Clear history</button></div><input id="trustHistorySearch" placeholder="Search checked claims"><div id="trustHistoryList" class="history-list"></div></article>
       </section>
 
       <section id="view-business" class="view">
@@ -273,8 +246,9 @@
       <section id="view-me" class="view">
         <div class="grid two">
           <article class="profile-card glass">
-            <img src="/web/brand-icon.png" alt="">
+            <div id="meAvatar" class="profile-avatar"><img src="/web/brand-icon.png" alt=""></div>
             <h3 id="meName">LEMMIQ User</h3>
+            <div class="profile-photo-actions"><label class="upload ghost">📷 Add / change photo<input id="profilePhotoInput" type="file" accept="image/*" hidden></label><button id="removeProfilePhotoBtn" class="ghost">Remove photo</button></div>
             <p id="meUsername">@username</p>
             <button id="logoutBtn" class="danger">Log out</button>
           </article>
@@ -294,23 +268,7 @@
     </section>
   </main>
 
-
-  <div id="callOverlay" class="call-overlay hidden">
-    <div class="call-card glass">
-      <img src="/web/brand-icon.png" alt="LEMMIQ">
-      <span class="eyebrow">LEMMIQ VOICE</span>
-      <h2 id="callPerson">Connecting…</h2>
-      <p id="callState">Preparing secure internet call</p>
-      <div id="remoteAudio"></div>
-      <div class="call-actions">
-        <button id="muteCallBtn" class="ghost round">🎙</button>
-        <button id="speakerCallBtn" class="ghost round">🔊</button>
-        <button id="endCallBtn" class="danger round">☎</button>
-      </div>
-      <p class="micro">V2.3 voice-call beta uses LiveKit/WebRTC. Internet data charges may apply.</p>
-    </div>
-  </div>
-
+  <div id="callOverlay" class="call-overlay hidden"><div class="call-card glass"><div id="callAvatar" class="avatar call-avatar">Q</div><span class="eyebrow">LEMMIQ VOICE</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><p class="micro">Voice-call beta · LiveKit/WebRTC</p></div></div>
   <dialog id="modal">
     <div class="modal-card glass">
       <button id="closeModal" class="modal-close">×</button>

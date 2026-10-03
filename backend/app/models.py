@@ -139,8 +139,7 @@ class BusinessCustomerMemory(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
-# ---------------- LEMMIQ V2.3: Groups, Voice Notes and Calls ----------------
-
+# ---------------- LEMMIQ V2.4 messenger expansion ----------------
 class LemmiqGroup(Base):
     __tablename__ = "lemmiq_groups"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -154,14 +153,14 @@ class GroupMember(Base):
     __tablename__ = "group_members"
     group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    role: Mapped[str] = mapped_column(String(12), default="MEMBER")  # ADMIN / MEMBER
+    role: Mapped[str] = mapped_column(String(12), default="MEMBER")
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 class GroupSetting(Base):
     __tablename__ = "group_settings"
     group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
-    ai_mode: Mapped[str] = mapped_column(String(20), default="ASSIST")  # OFF / ASSIST / SUMMARY
+    ai_mode: Mapped[str] = mapped_column(String(20), default="ASSIST")
     tone: Mapped[str] = mapped_column(String(40), default="Natural")
 
 class GroupRead(Base):
@@ -169,7 +168,6 @@ class GroupRead(Base):
     group_id: Mapped[int] = mapped_column(ForeignKey("lemmiq_groups.id"), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
-
 
 class GroupMessage(Base):
     __tablename__ = "group_messages"
@@ -194,12 +192,14 @@ class VoiceNote(Base):
     message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     transcript: Mapped[str] = mapped_column(Text, default="")
+    transcribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class GroupVoiceNote(Base):
     __tablename__ = "group_voice_notes"
     message_id: Mapped[int] = mapped_column(ForeignKey("group_messages.id"), primary_key=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     transcript: Mapped[str] = mapped_column(Text, default="")
+    transcribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 class CallRecord(Base):
     __tablename__ = "call_records"
@@ -208,7 +208,108 @@ class CallRecord(Base):
     caller_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     callee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     room_name: Mapped[str] = mapped_column(String(100), unique=True)
-    status: Mapped[str] = mapped_column(String(20), default="RINGING")  # RINGING/CONNECTED/DECLINED/ENDED/MISSED
+    status: Mapped[str] = mapped_column(String(20), default="RINGING")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+class StatusPost(Base):
+    __tablename__ = "status_posts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(12), default="TEXT")
+    text: Mapped[str] = mapped_column(Text, default="")
+    media_key: Mapped[str | None] = mapped_column(String(190), nullable=True)
+    mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    visibility: Mapped[str] = mapped_column(String(20), default="ALL")
+    allow_user_ids: Mapped[str] = mapped_column(Text, default="")
+    exclude_user_ids: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+class StatusView(Base):
+    __tablename__ = "status_views"
+    status_id: Mapped[int] = mapped_column(ForeignKey("status_posts.id"), primary_key=True)
+    viewer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class TrustHistory(Base):
+    __tablename__ = "trust_history"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    content_hash: Mapped[str] = mapped_column(String(64), index=True)
+    checked_text: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24), default="UNVERIFIED")
+    confidence: Mapped[int] = mapped_column(Integer, default=0)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    reasons_json: Mapped[str] = mapped_column(Text, default="[]")
+    sources_json: Mapped[str] = mapped_column(Text, default="[]")
+    advice: Mapped[str] = mapped_column(Text, default="")
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+class SocialMemory(Base):
+    __tablename__ = "social_memories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    chat_id: Mapped[int | None] = mapped_column(ForeignKey("chats.id"), nullable=True, index=True)
+    memory_type: Mapped[str] = mapped_column(String(24), default="IMPORTANT")
+    title: Mapped[str] = mapped_column(String(160))
+    detail: Mapped[str] = mapped_column(Text, default="")
+    source_message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+# ---------------- LEMMIQ V2.4 messenger polish ----------------
+
+class MessageMeta(Base):
+    __tablename__ = "message_meta"
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
+    reply_to_message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    edited_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_for_everyone: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    emoji: Mapped[str] = mapped_column(String(16))
+
+class MessageHidden(Base):
+    __tablename__ = "message_hidden"
+    message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+
+class ChatPreference(Base):
+    __tablename__ = "chat_preferences"
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    favourite: Mapped[bool] = mapped_column(Boolean, default=False)
+    muted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    draft_text: Mapped[str] = mapped_column(Text, default="")
+
+class UserPrivacy(Base):
+    __tablename__ = "user_privacy"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    profile_photo: Mapped[str] = mapped_column(String(20), default="EVERYONE")
+    last_seen: Mapped[str] = mapped_column(String(20), default="EVERYONE")
+    status_visibility: Mapped[str] = mapped_column(String(20), default="EVERYONE")
+
+class UserBlock(Base):
+    __tablename__ = "user_blocks"
+    blocker_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    blocked_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class UserReport(Base):
+    __tablename__ = "user_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    reporter_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    reported_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    reason: Mapped[str] = mapped_column(String(60), default="OTHER")
+    details: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

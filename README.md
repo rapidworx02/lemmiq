@@ -1,8 +1,12 @@
-# LEMMIQ V2.3
+# LEMMIQ V2.4 — Messenger + Social IQ
 
-Groups, voice messages, group Q intelligence, always-visible mobile-web ASSIST, and LiveKit one-to-one voice-call beta.
+**Messaging with social IQ.**
 
-See `LEMMIQ_V2_3_SETUP.md`.
+V2.4 expands LEMMIQ into a more complete private-beta messenger: groups, voice notes with optional transcription, LiveKit voice calls, profile photos, Status, WhatsApp-style chat dates/times, search and filters, message actions, Trust history and Q Social IQ memory.
+
+Start with **`LEMMIQ_V2_4_SETUP.md`** for deployment, Render environment variables, Android Studio steps and the recommended test checklist.
+
+Important: LEMMIQ V2.4 is still a private beta. Stored messages are server-readable and the product is not yet end-to-end encrypted.
 
 ---
 

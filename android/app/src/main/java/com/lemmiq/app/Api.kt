@@ -61,6 +61,7 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("username" to u,"password" to p)).toRequestBody(json)
         return gson.fromJson(req(Request.Builder().url("$base/login").post(rb).build()),AuthResponse::class.java)
     }
+    suspend fun me():UserDto = gson.fromJson(req(b("$base/me").get().build()),UserDto::class.java)
     suspend fun chats():List<ChatDto>{
         val t=req(b("$base/chats").get().build())
         return gson.fromJson(t,object:TypeToken<List<ChatDto>>(){}.type)
@@ -279,40 +280,39 @@ class Api(private val store:SessionStore){
     }
 
 
-    // ---------- V2.3 Groups ----------
+    // ---------- LEMMIQ V2.4 ----------
     suspend fun groups():List<GroupDto>{
-        val t=req(b("$base/v23/groups").get().build())
+        val t=req(b("$base/v24/groups").get().build())
         return gson.fromJson(t,object:TypeToken<List<GroupDto>>(){}.type)
     }
     suspend fun group(gid:Int):GroupDto =
-        gson.fromJson(req(b("$base/v23/groups/$gid").get().build()),GroupDto::class.java)
+        gson.fromJson(req(b("$base/v24/groups/$gid").get().build()),GroupDto::class.java)
     suspend fun createGroup(name:String,memberIds:List<Int>):GroupDto{
         val rb=gson.toJson(mapOf("name" to name,"member_ids" to memberIds)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups").post(rb).build()),GroupDto::class.java)
+        return gson.fromJson(req(b("$base/v24/groups").post(rb).build()),GroupDto::class.java)
     }
-    suspend fun readGroup(gid:Int){req(b("$base/v23/groups/$gid/read").post("{}".toRequestBody(json)).build())}
     suspend fun groupMessages(gid:Int):List<GroupMessageDto>{
-        val t=req(b("$base/v23/groups/$gid/messages").get().build())
+        val t=req(b("$base/v24/groups/$gid/messages").get().build())
         return gson.fromJson(t,object:TypeToken<List<GroupMessageDto>>(){}.type)
     }
+    suspend fun readGroup(gid:Int){req(b("$base/v24/groups/$gid/read").post("{}".toRequestBody(json)).build())}
     suspend fun sendGroup(gid:Int,text:String):GroupMessageDto{
         val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups/$gid/messages").post(rb).build()),GroupMessageDto::class.java)
+        return gson.fromJson(req(b("$base/v24/groups/$gid/messages").post(rb).build()),GroupMessageDto::class.java)
     }
-    suspend fun addGroupMember(gid:Int,uid:Int):GroupDto{
-        val rb=gson.toJson(mapOf("user_id" to uid)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups/$gid/members").post(rb).build()),GroupDto::class.java)
+    suspend fun groupSuggest(gid:Int):SuggestResponse =
+        gson.fromJson(req(b("$base/v24/groups/$gid/suggest").post("{}".toRequestBody(json)).build()),SuggestResponse::class.java)
+    suspend fun groupSummary(gid:Int):GroupSummaryDto =
+        gson.fromJson(req(b("$base/v24/groups/$gid/summary").post("{}".toRequestBody(json)).build()),GroupSummaryDto::class.java)
+    suspend fun groupAsk(gid:Int,question:String):GroupAskDto{
+        val rb=gson.toJson(mapOf("question" to question)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/groups/$gid/ask").post(rb).build()),GroupAskDto::class.java)
     }
-    suspend fun setGroupRole(gid:Int,uid:Int,role:String):GroupDto{
-        val rb=gson.toJson(mapOf("role" to role)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups/$gid/members/$uid").put(rb).build()),GroupDto::class.java)
-    }
-    suspend fun removeGroupMember(gid:Int,uid:Int){req(b("$base/v23/groups/$gid/members/$uid").delete().build())}
     suspend fun uploadGroupPhoto(gid:Int,name:String,mime:String,bytes:ByteArray):GroupDto{
         val body=MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("file",name,bytes.toRequestBody(mime.toMediaType())).build()
         val text=withContext(Dispatchers.IO){
-            mediaClient.newCall(b("$base/v23/groups/$gid/photo").post(body).build()).execute().use{res->
+            mediaClient.newCall(b("$base/v24/groups/$gid/photo").post(body).build()).execute().use{res->
                 val response=res.body?.string().orEmpty()
                 if(!res.isSuccessful)throw IOException("Group photo HTTP ${res.code}: ${response.take(220)}")
                 response
@@ -320,24 +320,24 @@ class Api(private val store:SessionStore){
         }
         return gson.fromJson(text,GroupDto::class.java)
     }
-
     suspend fun saveGroupSettings(gid:Int,mode:String,tone:String):GroupDto{
         val rb=gson.toJson(mapOf("ai_mode" to mode,"tone" to tone)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups/$gid/settings").put(rb).build()),GroupDto::class.java)
+        return gson.fromJson(req(b("$base/v24/groups/$gid/settings").put(rb).build()),GroupDto::class.java)
     }
-    suspend fun groupSuggest(gid:Int):SuggestResponse =
-        gson.fromJson(req(b("$base/v23/groups/$gid/suggest").post("{}".toRequestBody(json)).build()),SuggestResponse::class.java)
-    suspend fun groupSummary(gid:Int):GroupSummaryDto =
-        gson.fromJson(req(b("$base/v23/groups/$gid/summary").post("{}".toRequestBody(json)).build()),GroupSummaryDto::class.java)
-    suspend fun groupAsk(gid:Int,question:String):GroupAskDto{
-        val rb=gson.toJson(mapOf("question" to question)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/groups/$gid/ask").post(rb).build()),GroupAskDto::class.java)
+    suspend fun addGroupMember(gid:Int,uid:Int):GroupDto{
+        val rb=gson.toJson(mapOf("user_id" to uid)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/groups/$gid/members").post(rb).build()),GroupDto::class.java)
     }
+    suspend fun setGroupRole(gid:Int,uid:Int,role:String):GroupDto{
+        val rb=gson.toJson(mapOf("role" to role)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/groups/$gid/members/$uid").put(rb).build()),GroupDto::class.java)
+    }
+    suspend fun removeGroupMember(gid:Int,uid:Int){req(b("$base/v24/groups/$gid/members/$uid").delete().build())}
     suspend fun uploadGroup(gid:Int,name:String,mime:String,bytes:ByteArray):GroupMessageDto{
         val body=MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("file",name,bytes.toRequestBody(mime.toMediaType())).build()
         val text=withContext(Dispatchers.IO){
-            mediaClient.newCall(b("$base/v23/groups/$gid/attachments").post(body).build()).execute().use{res->
+            mediaClient.newCall(b("$base/v24/groups/$gid/attachments").post(body).build()).execute().use{res->
                 val response=res.body?.string().orEmpty()
                 if(!res.isSuccessful)throw IOException("Group upload HTTP ${res.code}: ${response.take(220)}")
                 response
@@ -346,21 +346,18 @@ class Api(private val store:SessionStore){
         return gson.fromJson(text,GroupMessageDto::class.java)
     }
     suspend fun groupMediaBytes(id:Int):ByteArray=withContext(Dispatchers.IO){
-        mediaClient.newCall(b("$base/v23/group-media/$id").get().build()).execute().use { response->
-            if(!response.isSuccessful)throw IOException("Group media HTTP ${response.code}")
-            response.body?.bytes()?:throw IOException("Empty group attachment")
+        mediaClient.newCall(b("$base/v24/group-media/$id").get().build()).execute().use{res->
+            if(!res.isSuccessful)throw IOException("Group media HTTP ${res.code}")
+            res.body?.bytes()?:throw IOException("Empty group media")
         }
     }
 
-    // ---------- V2.3 Voice notes ----------
-    suspend fun sendVoice(cid:Int,bytes:ByteArray,durationMs:Int,transcript:String=""):MessageDto{
+    suspend fun sendVoice(cid:Int,bytes:ByteArray,durationMs:Int):MessageDto{
         val body=MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("duration_ms",durationMs.toString())
-            .addFormDataPart("transcript",transcript)
-            .addFormDataPart("file","voice-note.m4a",bytes.toRequestBody("audio/mp4".toMediaType()))
-            .build()
+            .addFormDataPart("file","voice-note.m4a",bytes.toRequestBody("audio/mp4".toMediaType())).build()
         val text=withContext(Dispatchers.IO){
-            mediaClient.newCall(b("$base/v23/chats/$cid/voice").post(body).build()).execute().use{res->
+            mediaClient.newCall(b("$base/v24/chats/$cid/voice").post(body).build()).execute().use{res->
                 val response=res.body?.string().orEmpty()
                 if(!res.isSuccessful)throw IOException("Voice HTTP ${res.code}: ${response.take(220)}")
                 response
@@ -368,14 +365,12 @@ class Api(private val store:SessionStore){
         }
         return gson.fromJson(text,MessageDto::class.java)
     }
-    suspend fun sendGroupVoice(gid:Int,bytes:ByteArray,durationMs:Int,transcript:String=""):GroupMessageDto{
+    suspend fun sendGroupVoice(gid:Int,bytes:ByteArray,durationMs:Int):GroupMessageDto{
         val body=MultipartBody.Builder().setType(MultipartBody.FORM)
             .addFormDataPart("duration_ms",durationMs.toString())
-            .addFormDataPart("transcript",transcript)
-            .addFormDataPart("file","voice-note.m4a",bytes.toRequestBody("audio/mp4".toMediaType()))
-            .build()
+            .addFormDataPart("file","voice-note.m4a",bytes.toRequestBody("audio/mp4".toMediaType())).build()
         val text=withContext(Dispatchers.IO){
-            mediaClient.newCall(b("$base/v23/groups/$gid/voice").post(body).build()).execute().use{res->
+            mediaClient.newCall(b("$base/v24/groups/$gid/voice").post(body).build()).execute().use{res->
                 val response=res.body?.string().orEmpty()
                 if(!res.isSuccessful)throw IOException("Group voice HTTP ${res.code}: ${response.take(220)}")
                 response
@@ -383,24 +378,126 @@ class Api(private val store:SessionStore){
         }
         return gson.fromJson(text,GroupMessageDto::class.java)
     }
-    suspend fun voiceAi(messageId:Int):VoiceAiDto =
-        gson.fromJson(req(b("$base/v23/voice/$messageId/ai").post("{}".toRequestBody(json)).build()),VoiceAiDto::class.java)
+    suspend fun voiceAi(mid:Int):VoiceAiDto =
+        gson.fromJson(req(b("$base/v24/voice/$mid/ai").post("{}".toRequestBody(json)).build()),VoiceAiDto::class.java)
 
-    // ---------- V2.3 LiveKit voice-call beta ----------
     suspend fun callStatus():CallStatusDto =
-        gson.fromJson(req(b("$base/v23/calls/status").get().build()),CallStatusDto::class.java)
-    suspend fun callHistory():List<CallDto>{
-        val t=req(b("$base/v23/calls").get().build())
-        return gson.fromJson(t,object:TypeToken<List<CallDto>>(){}.type)
-    }
+        gson.fromJson(req(b("$base/v24/calls/status").get().build()),CallStatusDto::class.java)
     suspend fun startCall(cid:Int):CallJoinDto{
         val rb=gson.toJson(mapOf("chat_id" to cid)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v23/calls/start").post(rb).build()),CallJoinDto::class.java)
+        return gson.fromJson(req(b("$base/v24/calls/start").post(rb).build()),CallJoinDto::class.java)
     }
-    suspend fun joinCall(callId:String):CallJoinDto =
-        gson.fromJson(req(b("$base/v23/calls/$callId/join").post("{}".toRequestBody(json)).build()),CallJoinDto::class.java)
-    suspend fun declineCall(callId:String){req(b("$base/v23/calls/$callId/decline").post("{}".toRequestBody(json)).build())}
-    suspend fun endCall(callId:String){req(b("$base/v23/calls/$callId/end").post("{}".toRequestBody(json)).build())}
+    suspend fun joinCall(id:String):CallJoinDto =
+        gson.fromJson(req(b("$base/v24/calls/$id/join").post("{}".toRequestBody(json)).build()),CallJoinDto::class.java)
+    suspend fun declineCall(id:String){req(b("$base/v24/calls/$id/decline").post("{}".toRequestBody(json)).build())}
+    suspend fun endCall(id:String){req(b("$base/v24/calls/$id/end").post("{}".toRequestBody(json)).build())}
+    suspend fun chatCalls(cid:Int):List<CallDto>{
+        val t=req(b("$base/v24/chats/$cid/calls").get().build())
+        return gson.fromJson(t,object:TypeToken<List<CallDto>>(){}.type)
+    }
+
+    suspend fun statuses():List<StatusDto>{
+        val t=req(b("$base/v24/status").get().build())
+        return gson.fromJson(t,object:TypeToken<List<StatusDto>>(){}.type)
+    }
+    suspend fun postStatusText(text:String):StatusDto{
+        val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/status/text").post(rb).build()),StatusDto::class.java)
+    }
+    suspend fun postStatusMedia(name:String,mime:String,bytes:ByteArray,caption:String=""):StatusDto{
+        val body=MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("caption",caption)
+            .addFormDataPart("file",name,bytes.toRequestBody(mime.toMediaType())).build()
+        val text=withContext(Dispatchers.IO){
+            mediaClient.newCall(b("$base/v24/status/media").post(body).build()).execute().use{res->
+                val response=res.body?.string().orEmpty()
+                if(!res.isSuccessful)throw IOException("Status upload HTTP ${res.code}: ${response.take(220)}")
+                response
+            }
+        }
+        return gson.fromJson(text,StatusDto::class.java)
+    }
+    suspend fun viewStatus(id:Int):StatusDto =
+        gson.fromJson(req(b("$base/v24/status/$id/view").post("{}".toRequestBody(json)).build()),StatusDto::class.java)
+    suspend fun deleteStatus(id:Int){req(b("$base/v24/status/$id").delete().build())}
+    suspend fun statusMediaBytes(id:Int):ByteArray=withContext(Dispatchers.IO){
+        mediaClient.newCall(b("$base/v24/status/$id/media").get().build()).execute().use{res->
+            if(!res.isSuccessful)throw IOException("Status media HTTP ${res.code}")
+            res.body?.bytes()?:throw IOException("Empty status media")
+        }
+    }
+
+
+    suspend fun trustCheckV24(text:String,refresh:Boolean=false):TrustHistoryDto{
+        val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/trust/check${if(refresh)"?refresh=true" else ""}").post(rb).build(),forTrust=true),TrustHistoryDto::class.java)
+    }
+    suspend fun trustHistory(q:String=""):List<TrustHistoryDto>{
+        val url="$base/trust/history"+if(q.isBlank())"" else "?q=${URLEncoder.encode(q,"UTF-8")}"
+        val t=req(b(url).get().build())
+        return gson.fromJson(t,object:TypeToken<List<TrustHistoryDto>>(){}.type)
+    }
+    suspend fun deleteTrustHistory(id:Int){req(b("$base/trust/history/$id").delete().build())}
+    suspend fun clearTrustHistory(){req(b("$base/trust/history").delete().build())}
+
+    suspend fun socialBrief():SocialBriefDto =
+        gson.fromJson(req(b("$base/v24/social-iq/brief").get().build()),SocialBriefDto::class.java)
+    suspend fun scanSocial():SocialScanDto =
+        gson.fromJson(req(b("$base/v24/social-iq/scan").post("{}".toRequestBody(json)).build()),SocialScanDto::class.java)
+    suspend fun deleteSocialMemory(id:Int){req(b("$base/v24/social-iq/memories/$id").delete().build())}
+
+    suspend fun uploadProfilePhoto(name:String,mime:String,bytes:ByteArray):UserDto{
+        val body=MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file",name,bytes.toRequestBody(mime.toMediaType())).build()
+        val text=withContext(Dispatchers.IO){
+            mediaClient.newCall(b("$base/v24/profile/avatar").post(body).build()).execute().use{res->
+                val response=res.body?.string().orEmpty()
+                if(!res.isSuccessful)throw IOException("Profile photo HTTP ${res.code}: ${response.take(220)}")
+                response
+            }
+        }
+        return gson.fromJson(text,UserDto::class.java)
+    }
+    suspend fun removeProfilePhoto():UserDto =
+        gson.fromJson(req(b("$base/v24/profile/avatar").delete().build()),UserDto::class.java)
+
+    suspend fun editMessage(mid:Int,text:String):MessageDto{
+        val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/messages/$mid").put(rb).build()),MessageDto::class.java)
+    }
+    suspend fun deleteMessage(mid:Int,scope:String){req(b("$base/v24/messages/$mid?scope=$scope").delete().build())}
+    suspend fun reactMessage(mid:Int,emoji:String):MessageDto{
+        val rb=gson.toJson(mapOf("emoji" to emoji)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/messages/$mid/reaction").post(rb).build()),MessageDto::class.java)
+    }
+    suspend fun replyMessage(cid:Int,text:String,replyTo:Int):MessageDto{
+        val rb=gson.toJson(mapOf("text" to text,"reply_to_message_id" to replyTo)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/chats/$cid/reply").post(rb).build()),MessageDto::class.java)
+    }
+    suspend fun forwardMessage(mid:Int,chatIds:List<Int>){
+        val rb=gson.toJson(mapOf("chat_ids" to chatIds)).toRequestBody(json)
+        req(b("$base/v24/messages/$mid/forward").post(rb).build())
+    }
+    suspend fun searchChat(cid:Int,q:String):List<MessageDto>{
+        val t=req(b("$base/v24/chats/$cid/search?q=${URLEncoder.encode(q,"UTF-8")}").get().build())
+        return gson.fromJson(t,object:TypeToken<List<MessageDto>>(){}.type)
+    }
+    suspend fun chatPreferences(cid:Int):ChatPrefDto =
+        gson.fromJson(req(b("$base/v24/chats/$cid/preferences").get().build()),ChatPrefDto::class.java)
+    suspend fun updateChatPreferences(cid:Int,payload:Map<String,Any?>):ChatPrefDto{
+        val rb=gson.toJson(payload).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v24/chats/$cid/preferences").put(rb).build()),ChatPrefDto::class.java)
+    }
+    suspend fun privacy():PrivacyDto =
+        gson.fromJson(req(b("$base/v24/privacy").get().build()),PrivacyDto::class.java)
+    suspend fun savePrivacy(p:PrivacyDto):PrivacyDto =
+        gson.fromJson(req(b("$base/v24/privacy").put(gson.toJson(p).toRequestBody(json)).build()),PrivacyDto::class.java)
+    suspend fun blockUser(uid:Int){req(b("$base/v24/users/$uid/block").post("{}".toRequestBody(json)).build())}
+    suspend fun unblockUser(uid:Int){req(b("$base/v24/users/$uid/block").delete().build())}
+    suspend fun reportUser(uid:Int,details:String){
+        val rb=gson.toJson(mapOf("reason" to "OTHER","details" to details)).toRequestBody(json)
+        req(b("$base/v24/users/$uid/report").post(rb).build())
+    }
 
     fun socket(listener:WebSocketListener):WebSocket{
         val u="$base/ws?token=${store.token.orEmpty()}".replace("http://","ws://").replace("https://","wss://")

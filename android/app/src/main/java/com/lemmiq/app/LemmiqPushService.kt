@@ -55,20 +55,22 @@ class LemmiqPushService:FirebaseMessagingService(){
     }
 
     override fun onMessageReceived(message:RemoteMessage){
-        val type=message.data["type"].orEmpty()
-        if(SessionStore(this).token.isNullOrEmpty())return
+        val store=SessionStore(this)
+        if(store.token.isNullOrEmpty())return
         PushControl.ensureChannel(this)
 
         if(Build.VERSION.SDK_INT>=33 &&
             ContextCompat.checkSelfPermission(this,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return
 
+        val type=message.data["type"].orEmpty()
         val nm=getSystemService(NotificationManager::class.java)
 
         if(type=="call"){
             val callId=message.data["call_id"].orEmpty()
             val caller=message.data["caller_name"]?.take(60)?.ifBlank{"LEMMIQ user"}?:"LEMMIQ user"
+            val callerAvatar=message.data["caller_avatar_url"].orEmpty()
             val intent=Intent(this,LemmiqCallActivity::class.java).apply{
-                putExtra("call_id",callId);putExtra("person",caller);putExtra("incoming",true)
+                putExtra("call_id",callId);putExtra("person",caller);putExtra("avatar_url",callerAvatar);putExtra("incoming",true)
             }
             val pending=PendingIntent.getActivity(this,callId.hashCode(),intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -103,10 +105,11 @@ class LemmiqPushService:FirebaseMessagingService(){
                 .setSmallIcon(R.drawable.lemmiq_icon)
                 .setContentTitle(group)
                 .setContentText("$sender: $body")
-                .setAutoCancel(true).setContentIntent(pending)
+                .setAutoCancel(true)
+                .setContentIntent(pending)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-                .setShowWhen(true).build()
+                .build()
             nm.notify(100000+gid,notification)
             return
         }
@@ -116,18 +119,27 @@ class LemmiqPushService:FirebaseMessagingService(){
         val sender=message.data["sender_name"]?.take(60)?.ifBlank{"LEMMIQ"}?:"LEMMIQ"
         val text=message.data["body"]?.take(180)?.ifBlank{"New message"}?:"New message"
         val unread=message.data["unread_count"]?.toIntOrNull()?.coerceAtLeast(1)?:1
+
         val intent=Intent(this,MainActivity::class.java).apply{
             flags=Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("chat_id",chatId)
         }
         val pending=PendingIntent.getActivity(this,chatId,intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
         val notification=NotificationCompat.Builder(this,PushControl.CHANNEL_ID)
-            .setSmallIcon(R.drawable.lemmiq_icon).setContentTitle(sender).setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text)).setAutoCancel(true)
-            .setContentIntent(pending).setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_MESSAGE).setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
-            .setNumber(unread).setGroup("lemmiq_messages").build()
+            .setSmallIcon(R.drawable.lemmiq_icon)
+            .setContentTitle(sender)
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setAutoCancel(true)
+            .setContentIntent(pending)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setBadgeIconType(NotificationCompat.BADGE_ICON_SMALL)
+            .setNumber(unread)
+            .setGroup("lemmiq_messages")
+            .build()
         nm.notify(chatId,notification)
     }
 }
