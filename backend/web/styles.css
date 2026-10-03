@@ -45,7 +45,7 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
   }
   .brand-row,.sidebar-foot{display:none}
   .sidebar nav{
-    grid-template-columns:repeat(7,minmax(0,1fr));
+    grid-template-columns:repeat(5,minmax(0,1fr));
     gap:2px;
     width:100%;
   }
@@ -113,3 +113,18 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 .reply-quote{border-left:3px solid rgba(255,255,255,.45);padding:5px 8px;margin-bottom:5px;border-radius:8px;background:rgba(0,0,0,.08);font-size:11px}
 .theirs .reply-quote{border-left-color:var(--purple);background:rgba(122,92,255,.07)}
 .edited-tag{font-size:9px;color:var(--muted);margin-left:4px}
+
+
+/* V2.4.1: compact navigation + More hub */
+.more-card{max-width:780px;margin:0 auto}
+.more-menu-grid{display:grid;gap:10px;margin-top:16px}
+.more-link{width:100%;display:grid;grid-template-columns:46px 1fr auto;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:rgba(255,255,255,.045);color:inherit;border-radius:16px;padding:13px 14px;cursor:pointer}
+.more-link:hover{background:rgba(122,92,255,.12);border-color:rgba(122,92,255,.28)}
+.more-link .more-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:rgba(122,92,255,.14);font-size:20px}
+.more-link strong,.more-link small{display:block}
+.more-link small{color:var(--muted);margin-top:3px;font-size:11px}
+.more-link b{font-size:24px;color:var(--muted);font-weight:400}
+@media(max-width:900px){
+  .sidebar nav{overflow:visible}
+  .more-card{padding:16px}
+}
