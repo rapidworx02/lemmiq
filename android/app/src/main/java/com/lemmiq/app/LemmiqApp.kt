@@ -116,6 +116,7 @@ private fun Auth(vm:LemmiqViewModel){
     var user by remember{mutableStateOf("")}
     var name by remember{mutableStateOf("")}
     var pass by remember{mutableStateOf("")}
+    var referral by remember{mutableStateOf("")}
     Box(Modifier.fillMaxSize().background(Bg),contentAlignment=Alignment.Center){
         Card(Modifier.fillMaxWidth().padding(24.dp),shape=RoundedCornerShape(28.dp)){
             Column(Modifier.padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){
@@ -128,13 +129,22 @@ private fun Auth(vm:LemmiqViewModel){
                 if(signup){
                     Spacer(Modifier.height(10.dp))
                     OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Display name")},singleLine=true)
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        referral,
+                        {referral=it.uppercase().filter{ch->ch.isLetterOrDigit()||ch=='-'}},
+                        Modifier.fillMaxWidth(),
+                        label={Text("Referral code (optional)")},
+                        placeholder={Text("Q123-ABCDEF")},
+                        singleLine=true
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 OutlinedTextField(pass,{pass=it},Modifier.fillMaxWidth(),label={Text("Password")},singleLine=true,visualTransformation=PasswordVisualTransformation())
                 vm.error?.let{Text(it,color=MaterialTheme.colorScheme.error,fontSize=12.sp,modifier=Modifier.padding(top=8.dp))}
                 Spacer(Modifier.height(14.dp))
                 Button(
-                    onClick={if(signup)vm.register(user,name.ifBlank{user},pass) else vm.login(user,pass)},
+                    onClick={if(signup)vm.register(user,name.ifBlank{user},pass,referral) else vm.login(user,pass)},
                     enabled=!vm.busy&&user.length>=3&&pass.length>=6&&(!signup||name.isNotBlank()),
                     modifier=Modifier.fillMaxWidth().height(50.dp),
                     shape=RoundedCornerShape(18.dp)
@@ -156,7 +166,7 @@ private fun Home(vm:LemmiqViewModel){
         vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls()
     }
     val nav=listOf(
-        "💬" to "Chats","⭕" to "Updates","Q" to "Q","📞" to "Calls","☰" to "More"
+        "💬" to "Chats","⭕" to "Updates","Q" to "Q","Q+" to "Q Economy","📞" to "Calls","☰" to "More"
     )
     Scaffold(
         containerColor=Bg,
@@ -164,7 +174,7 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=tab==i,onClick={tab=i;if(i!=4)morePage=null},
+                        selected=tab==i,onClick={tab=i;if(i!=5)morePage=null},
                         icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=18.sp)},
                         label={Text(x.second,fontSize=10.sp)},
                         alwaysShowLabel=true
@@ -187,7 +197,8 @@ private fun Home(vm:LemmiqViewModel){
                 })
                 1->V24Updates(vm)
                 2->ChatAgent(vm)
-                3->V241CallsScreen(vm)
+                3->V28QEconomyScreen(vm)
+                4->V241CallsScreen(vm)
                 else->{
                     when(morePage){
                         "trust"->V241MoreSubPage("Trust / Fact Check",{morePage=null}){V24Trust(vm)}
@@ -195,7 +206,6 @@ private fun Home(vm:LemmiqViewModel){
                         "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
                         "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
                         "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
-                        "qeconomy"->V241MoreSubPage("Q Economy",{morePage=null}){V28QEconomyScreen(vm)}
                         else->V241MoreMenu{morePage=it}
                     }
                 }
@@ -272,7 +282,6 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
 @Composable
 private fun V241MoreMenu(onOpen:(String)->Unit){
     val menuItems=listOf(
-        Triple("Q","Q Economy","Wallet, mining, subscriptions, referrals and Q Market") to "qeconomy",
         Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
