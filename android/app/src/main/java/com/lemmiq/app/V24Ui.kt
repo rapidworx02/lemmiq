@@ -477,7 +477,8 @@ private fun V26StatusViewer(
                     when{
                         st.kind=="TEXT" -> Text(st.text,color=Color.White,fontSize=28.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(32.dp))
                         st.kind=="IMAGE" && imageBytes!=null -> {
-                            val bitmap=remember(imageBytes){BitmapFactory.decodeByteArray(imageBytes,0,imageBytes!!.size)?.asImageBitmap()}
+                            val bytes=imageBytes
+                            val bitmap=remember(bytes){bytes?.let{BitmapFactory.decodeByteArray(it,0,it.size)?.asImageBitmap()}}
                             if(bitmap!=null)Image(bitmap=bitmap,contentDescription="Status image",modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Fit)
                         }
                         st.kind=="VIDEO" -> Column(horizontalAlignment=Alignment.CenterHorizontally){
