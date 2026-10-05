@@ -23,8 +23,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -258,61 +260,219 @@ private fun V24GroupSettings(vm:LemmiqViewModel,dismiss:()->Unit){
 
 @Composable
 fun V24Updates(vm:LemmiqViewModel){
+    var creator by remember{mutableStateOf(false)}
     var text by remember{mutableStateOf("")}
     var opened by remember{mutableStateOf<StatusDto?>(null)}
-    val mediaPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)vm.uploadStatusUri(uri)}
-    LaunchedEffect(Unit){vm.refreshStatuses()}
-    LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-        item{Text("Updates",fontSize=29.sp,fontWeight=FontWeight.Black);Text("LEMMIQ Status · expires after 24 hours",color=V24Muted,fontSize=11.sp)}
-        item{Card(Modifier.fillMaxWidth()){Column(Modifier.padding(14.dp)){
-            OutlinedTextField(text,{text=it},Modifier.fillMaxWidth(),label={Text("Text status")},maxLines=3)
-            Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                Button({vm.postStatusText(text);text=""}){Text("＋ Text")}
-                OutlinedButton({mediaPicker.launch("*/*")}){Text("📷 Photo / video")}
-            }
-        }}}
-        item{Text("My status",fontSize=18.sp,fontWeight=FontWeight.Bold)}
-        items(vm.statuses.filter{it.user.id==vm.store.userId},key={it.id}){s->V24StatusRow(s,true,vm){opened=it}}
-        item{Text("Recent updates",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=8.dp))}
-        items(vm.statuses.filter{it.user.id!=vm.store.userId},key={it.id}){s->V24StatusRow(s,false,vm){opened=it}}
+    val mediaPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
+        if(uri!=null)vm.uploadStatusUri(uri)
     }
-    opened?.let{st->
-        AlertDialog(onDismissRequest={opened=null},title={Text("${st.user.display_name} · Status")},
-            text={Column{Text(st.text.ifBlank{st.kind});Text(v24FriendlyDay(st.created_at)+" · "+v24Time(st.created_at),fontSize=10.sp,color=V24Muted);if(st.view_count!=null)Text("${st.view_count} views",fontSize=10.sp,color=V24Muted)}},
-            confirmButton={
-                if(st.user.id!=vm.store.userId)Button({vm.replyToStatus(st.user.id,st.text.ifBlank{st.kind});opened=null}){Text("Reply in chat")}
-                else TextButton({opened=null}){Text("Close")}
+    LaunchedEffect(Unit){vm.refreshStatuses()}
+
+    val mine=vm.statuses.filter{it.user.id==vm.store.userId}.sortedByDescending{it.created_at}
+    val recent=vm.statuses.filter{it.user.id!=vm.store.userId}
+        .groupBy{it.user.id}.mapNotNull{(_,items)->items.maxByOrNull{it.created_at}}
+        .sortedByDescending{it.created_at}
+
+    LazyColumn(
+        Modifier.fillMaxSize().background(V24Bg),
+        contentPadding=PaddingValues(bottom=28.dp),
+        verticalArrangement=Arrangement.spacedBy(8.dp)
+    ){
+        item{
+            Column(Modifier.padding(horizontal=18.dp,vertical=14.dp)){
+                Text("Updates",fontSize=30.sp,fontWeight=FontWeight.Black)
+                Text("Status · disappears after 24 hours",fontSize=11.sp,color=V24Muted)
+                Text("Status",fontSize=21.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=18.dp,bottom=10.dp))
+                LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)){
+                    item{V27AddStatusCard(vm){creator=true}}
+                    if(mine.isNotEmpty())item{V27StatusCard(mine.first(),vm,true){vm.viewStatus(mine.first().id){opened=it}}}
+                    items(recent,key={it.user.id}){s->V27StatusCard(s,vm,false){vm.viewStatus(s.id){opened=it}}}
+                }
+                Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    OutlinedButton(onClick={creator=true},modifier=Modifier.weight(1f)){Text("✎ Text status")}
+                    Button(onClick={mediaPicker.launch("*/*")},modifier=Modifier.weight(1f)){Text("📷 Photo / video")}
+                }
+            }
+        }
+        if(recent.isNotEmpty()){
+            item{Text("Recent updates",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=6.dp))}
+            items(recent,key={"recent_"+it.user.id}){s->
+                Row(
+                    Modifier.fillMaxWidth().clickable{vm.viewStatus(s.id){opened=it}}.padding(horizontal=18.dp,vertical=9.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ){
+                    Box(
+                        Modifier.size(56.dp).clip(CircleShape).background(if(s.viewed)Color(0xFFD9D9E1) else V24Purple).padding(3.dp),
+                        contentAlignment=Alignment.Center
+                    ){
+                        Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.White).padding(2.dp)){V24Avatar(s.user,46)}
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)){
+                        Text(s.user.display_name,fontWeight=FontWeight.Bold)
+                        Text(v24Time(s.created_at),fontSize=10.sp,color=V24Muted)
+                    }
+                    Text(if(s.viewed)"Viewed" else "New",fontSize=10.sp,color=if(s.viewed)V24Muted else V24Purple,fontWeight=FontWeight.Bold)
+                }
+            }
+        }else{
+            item{
+                Card(Modifier.fillMaxWidth().padding(horizontal=18.dp)){
+                    Text("No recent updates yet.",modifier=Modifier.padding(16.dp),color=V24Muted)
+                }
+            }
+        }
+        if(mine.isNotEmpty()){
+            item{Text("My status",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=6.dp))}
+            items(mine,key={"mine_"+it.id}){s->
+                Row(
+                    Modifier.fillMaxWidth().clickable{vm.viewStatus(s.id){opened=it}}.padding(horizontal=18.dp,vertical=9.dp),
+                    verticalAlignment=Alignment.CenterVertically
+                ){
+                    V24Avatar(s.user,50);Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)){
+                        Text(s.text.ifBlank{s.kind},fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("${v24Time(s.created_at)} · ${s.view_count?:0} views",fontSize=10.sp,color=V24Muted)
+                    }
+                    TextButton({vm.deleteStatus(s.id)}){Text("Delete")}
+                }
+            }
+        }
+    }
+
+    if(creator){
+        AlertDialog(
+            onDismissRequest={creator=false},
+            title={Text("Add status")},
+            text={
+                Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+                    OutlinedTextField(value=text,onValueChange={text=it.take(1500)},modifier=Modifier.fillMaxWidth(),placeholder={Text("Type a status…")},minLines=4,maxLines=7)
+                    Text("Status disappears automatically after 24 hours.",fontSize=10.sp,color=V24Muted)
+                    OutlinedButton(onClick={creator=false;mediaPicker.launch("*/*")},modifier=Modifier.fillMaxWidth()){Text("📷 Choose photo / video")}
+                }
             },
-            dismissButton={if(st.user.id==vm.store.userId)TextButton({vm.deleteStatus(st.id);opened=null}){Text("Delete")}else TextButton({opened=null}){Text("Close")}}
+            confirmButton={Button(onClick={vm.postStatusText(text);text="";creator=false},enabled=text.isNotBlank()){Text("Post")}},
+            dismissButton={TextButton({creator=false}){Text("Cancel")}}
         )
+    }
+
+    opened?.let{st->
+        V27StatusViewer(st,vm,onClose={opened=null},onReply={
+            vm.replyToStatus(st.user.id,st.text.ifBlank{st.kind});opened=null
+        },onDelete={vm.deleteStatus(st.id);opened=null})
     }
 }
 
 @Composable
-private fun V24StatusRow(s:StatusDto,mine:Boolean,vm:LemmiqViewModel,onOpen:(StatusDto)->Unit){
+private fun V27AddStatusCard(vm:LemmiqViewModel,onClick:()->Unit){
+    Card(
+        Modifier.width(112.dp).height(170.dp).clickable(onClick=onClick),
+        shape=RoundedCornerShape(22.dp),
+        colors=CardDefaults.cardColors(containerColor=Color.White)
+    ){
+        Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){
+            Column(horizontalAlignment=Alignment.CenterHorizontally){
+                vm.currentUser?.let{V24Avatar(it,62)}
+                Box(Modifier.offset(y=(-10).dp).size(24.dp).clip(CircleShape).background(V24Purple),contentAlignment=Alignment.Center){
+                    Text("+",color=Color.White,fontWeight=FontWeight.Black)
+                }
+                Text("Add status",fontSize=11.sp,fontWeight=FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun V27StatusCard(s:StatusDto,vm:LemmiqViewModel,mine:Boolean,onClick:()->Unit){
+    val ctx=LocalContext.current
+    Card(
+        Modifier.width(120.dp).height(170.dp).clickable(onClick=onClick),
+        shape=RoundedCornerShape(22.dp),
+        colors=CardDefaults.cardColors(containerColor=V24Ink)
+    ){
+        Box(Modifier.fillMaxSize()){
+            if(s.kind=="IMAGE"&&s.media_url!=null){
+                val url=if(s.media_url.startsWith("http"))s.media_url else "${BuildConfig.API_BASE_URL.trimEnd('/')}${s.media_url}"
+                AsyncImage(
+                    model=ImageRequest.Builder(ctx).data(url).addHeader("Authorization","Bearer ${vm.store.token.orEmpty()}").crossfade(true).build(),
+                    contentDescription="Status",
+                    modifier=Modifier.fillMaxSize()
+                )
+            }else{
+                Box(Modifier.fillMaxSize().background(if(s.kind=="VIDEO")Color(0xFF20243A) else V24Purple),contentAlignment=Alignment.Center){
+                    Text(if(s.kind=="VIDEO")"▶" else (s.text.take(22).ifBlank{"Status"}),color=Color.White,fontWeight=FontWeight.Bold,fontSize=if(s.kind=="VIDEO")28.sp else 16.sp,modifier=Modifier.padding(12.dp))
+                }
+            }
+            Box(Modifier.fillMaxWidth().height(58.dp).align(Alignment.BottomCenter).background(Color.Black.copy(alpha=.45f)))
+            Box(Modifier.padding(9.dp).size(38.dp).clip(CircleShape).background(if(mine||!s.viewed)V24Purple else Color.Gray).padding(2.dp)){
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(Color.White).padding(2.dp)){V24Avatar(s.user,30)}
+            }
+            Text(if(mine)"My status" else s.user.display_name,color=Color.White,fontWeight=FontWeight.Bold,fontSize=11.sp,modifier=Modifier.align(Alignment.BottomStart).padding(9.dp),maxLines=1,overflow=TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun V27StatusViewer(st:StatusDto,vm:LemmiqViewModel,onClose:()->Unit,onReply:()->Unit,onDelete:()->Unit){
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
-    Card(Modifier.fillMaxWidth()){
-        Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-            V24Avatar(s.user,46);Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f).clickable{vm.viewStatus(s.id,onOpen)}){
-                Text(if(mine)"My status" else s.user.display_name,fontWeight=FontWeight.Bold)
-                Text(s.text.ifBlank{s.kind},maxLines=2,overflow=TextOverflow.Ellipsis)
-                Text(v24Time(s.created_at)+(if(mine&&s.view_count!=null)" · ${s.view_count} views" else ""),fontSize=10.sp,color=V24Muted)
-            }
-            Column{
-                if(s.media_url!=null)TextButton({
-                    scope.launch{
-                        try{
-                            val bytes=withContext(Dispatchers.IO){vm.statusMediaBytes(s.id)}
-                            val ext=if((s.mime_type?:"").contains("video"))".mp4" else ".jpg"
-                            val f=File(ctx.cacheDir,"status_${s.id}$ext");withContext(Dispatchers.IO){f.writeBytes(bytes)}
-                            val uri=androidx.core.content.FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",f)
-                            ctx.startActivity(Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,s.mime_type?:"application/octet-stream");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})
-                        }catch(e:Exception){vm.error=e.message}
+    Dialog(onDismissRequest=onClose){
+        Surface(
+            Modifier.fillMaxWidth().heightIn(min=520.dp,max=720.dp),
+            color=Color(0xFF080A12),
+            shape=RoundedCornerShape(24.dp)
+        ){
+            Column(Modifier.fillMaxSize()){
+                Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
+                    V24Avatar(st.user,42);Spacer(Modifier.width(9.dp))
+                    Column(Modifier.weight(1f)){
+                        Text(st.user.display_name,color=Color.White,fontWeight=FontWeight.Bold)
+                        Text(v24Time(st.created_at),color=Color.White.copy(alpha=.65f),fontSize=10.sp)
                     }
-                }){Text("View")}
-                if(mine)TextButton({vm.deleteStatus(s.id)}){Text("Delete")}
+                    TextButton(onClose){Text("✕",color=Color.White)}
+                }
+                Box(Modifier.fillMaxWidth().height(3.dp).padding(horizontal=12.dp).background(Color.White.copy(alpha=.25f))){
+                    Box(Modifier.fillMaxSize().background(Color.White))
+                }
+                Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){
+                    if(st.kind=="IMAGE"&&st.media_url!=null){
+                        val url=if(st.media_url.startsWith("http"))st.media_url else "${BuildConfig.API_BASE_URL.trimEnd('/')}${st.media_url}"
+                        AsyncImage(
+                            model=ImageRequest.Builder(ctx).data(url).addHeader("Authorization","Bearer ${vm.store.token.orEmpty()}").build(),
+                            contentDescription="Status image",modifier=Modifier.fillMaxSize()
+                        )
+                    }else if(st.kind=="VIDEO"){
+                        Column(horizontalAlignment=Alignment.CenterHorizontally){
+                            Text("▶",color=Color.White,fontSize=48.sp)
+                            Button(onClick={
+                                scope.launch{
+                                    try{
+                                        val bytes=withContext(Dispatchers.IO){vm.statusMediaBytes(st.id)}
+                                        val f=File(ctx.cacheDir,"status/status_${st.id}.mp4").apply{parentFile?.mkdirs()}
+                                        withContext(Dispatchers.IO){f.writeBytes(bytes)}
+                                        val uri=androidx.core.content.FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",f)
+                                        ctx.startActivity(Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,st.mime_type?:"video/*");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)})
+                                    }catch(e:Exception){vm.error=e.message}
+                                }
+                            }){Text("Play video")}
+                        }
+                    }else{
+                        Text(st.text,color=Color.White,fontSize=28.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(28.dp))
+                    }
+                    if(st.kind!="TEXT"&&st.text.isNotBlank()){
+                        Surface(color=Color.Black.copy(alpha=.55f),shape=RoundedCornerShape(12.dp),modifier=Modifier.align(Alignment.BottomCenter).padding(16.dp)){
+                            Text(st.text,color=Color.White,modifier=Modifier.padding(10.dp))
+                        }
+                    }
+                }
+                if(st.user.id==vm.store.userId){
+                    Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
+                        Text("${st.view_count?:0} views",color=Color.White.copy(alpha=.7f),fontSize=11.sp,modifier=Modifier.weight(1f))
+                        TextButton(onDelete){Text("Delete",color=Color.White)}
+                    }
+                }else{
+                    Button(onClick=onReply,modifier=Modifier.fillMaxWidth().padding(12.dp)){Text("Reply in chat")}
+                }
             }
         }
     }
