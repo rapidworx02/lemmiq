@@ -871,6 +871,10 @@ def app_config():
 from .v24 import register_v24
 register_v24(app,current_user,get_db,push,push_tokens,user_json,msg_json)
 
+# ---------------- LEMMIQ V2.6 Q Agent + Q-to-Q routes ----------------
+from .v26 import register_v26
+register_v26(app,current_user,get_db,push,user_json)
+
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 
