@@ -300,10 +300,10 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         externalQ=ExternalConsent.includeInQ(appCtx)
         externalDays=ExternalConsent.days(appCtx)
     }
-    fun setExternalEnabled(v:Boolean){ExternalConsent.setEnabled(appCtx,v);if(!v)ExternalConsent.setQ(appCtx,false);reloadExternalSettings();refreshExternal()}
+    fun updateExternalEnabled(v:Boolean){ExternalConsent.setEnabled(appCtx,v);if(!v)ExternalConsent.setQ(appCtx,false);reloadExternalSettings();refreshExternal()}
     fun setExternalSource(name:String,v:Boolean){ExternalConsent.setSource(appCtx,name,v);reloadExternalSettings();refreshExternal()}
-    fun setExternalQ(v:Boolean){ExternalConsent.setQ(appCtx,v);reloadExternalSettings()}
-    fun setExternalDays(days:Int){ExternalConsent.setDays(appCtx,days);reloadExternalSettings();refreshExternal()}
+    fun updateExternalQ(v:Boolean){ExternalConsent.setQ(appCtx,v);reloadExternalSettings()}
+    fun updateExternalDays(days:Int){ExternalConsent.setDays(appCtx,days);reloadExternalSettings();refreshExternal()}
     fun refreshExternal(){
         if(store.userId<1)return
         externalMessages=ExternalChatDb(appCtx).use{it.list(store.userId,externalDays)}
@@ -438,8 +438,6 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             }
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
-
-    fun setQMode(mode:String){qMode=if(mode=="DO")"DO" else "ASK";qDoAnswer=null;agentAnswer=null}
 
     fun askAgent(question:String)=viewModelScope.launch{
         if(question.isBlank())return@launch
