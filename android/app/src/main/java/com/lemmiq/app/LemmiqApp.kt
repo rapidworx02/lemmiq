@@ -1155,20 +1155,20 @@ private fun Profile(vm:LemmiqViewModel){
             BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V${BuildConfig.VERSION_NAME}",fontWeight=FontWeight.Bold)
         }
         TextButton({showMoments=true},modifier=Modifier.padding(horizontal=20.dp)){Text("✨ Open 24-hour Moments")}
-        Text("🧠 AI memory: recent 50-message context",Modifier.padding(horizontal=20.dp,vertical=6.dp))
+        Text("🧠 Q Memory: smart context + relevant conversation history",Modifier.padding(horizontal=20.dp,vertical=6.dp))
+        Text("Q keeps about 100 recent messages ready, can retrieve up to ~200 when useful, and uses rolling summaries for older history.",
+            Modifier.padding(horizontal=20.dp,vertical=4.dp),fontSize=10.sp,color=Muted)
         Text("🔒 Private beta: messenger and synced events are server-readable, not E2EE.",
             Modifier.padding(horizontal=20.dp,vertical=6.dp),fontSize=12.sp,color=Muted)
-        OutlinedButton(onClick={
-            if(Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(ctx,Manifest.permission.POST_NOTIFICATIONS)
-                !=PackageManager.PERMISSION_GRANTED){
-                PushControl.markPermissionAsked(ctx)
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else vm.registerPush()
-        }){Text("🔔 Enable / refresh message push alerts")}
-        Row(Modifier.padding(horizontal=20.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
-            Text(if(vm.pushRegistered)"●" else "○",color=if(vm.pushRegistered)Mint else Muted,fontSize=13.sp)
+        Row(Modifier.padding(horizontal=20.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
+            val permissionOff=Build.VERSION.SDK_INT>=33 && ContextCompat.checkSelfPermission(ctx,Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED
+            Text(if(vm.pushRegistered&&!permissionOff)"●" else "○",color=if(vm.pushRegistered&&!permissionOff)Mint else Muted,fontSize=13.sp)
             Spacer(Modifier.width(6.dp))
-            Text(vm.pushStatusText,fontSize=10.sp,color=Muted)
+            Column{
+                Text(if(permissionOff)"Notifications disabled" else if(vm.pushRegistered)"Push notifications active" else vm.pushStatusText,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                if(permissionOff)Text("Enable notification permission in Android settings.",fontSize=9.sp,color=Muted)
+                else Text("Registration and token refresh are automatic.",fontSize=9.sp,color=Muted)
+            }
         }
         Text("LEMMIQ never reads its own notifications. Cross-app intelligence only processes permitted third-party apps.",
             fontSize=10.sp,color=Muted,modifier=Modifier.padding(horizontal=20.dp))
