@@ -206,6 +206,7 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
     var desc by remember{mutableStateOf("")}
     var price by remember{mutableStateOf("")}
     var showSell by remember{mutableStateOf(false)}
+    var editListing by remember{mutableStateOf<QMarketListingDto?>(null)}
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
@@ -223,7 +224,7 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
                 Button(onClick={vm.qCreateListing(title,desc,price.toDoubleOrNull()?:0.0);title="";desc="";price="";showSell=false},enabled=title.isNotBlank()&&(price.toDoubleOrNull()?:0.0)>0){Text("List for Q")}
             }}
         }
-        items(vm.qMarketListings,key={it.id}){x->
+        items(vm.qMarketListings,key={"market-${it.id}"}){x->
             Card(shape=RoundedCornerShape(18.dp)){
                 Column(Modifier.padding(15.dp)){
                     Text(x.title,fontWeight=FontWeight.Black,fontSize=17.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
@@ -235,6 +236,17 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
                     }
                 }
             }
+        }
+        item{Text("My listings",fontWeight=FontWeight.Black,fontSize=19.sp,modifier=Modifier.padding(top=7.dp))}
+        if(vm.qMyListings.isEmpty())item{Text("No listings yet.",color=Q28Muted)}
+        items(vm.qMyListings,key={"mine-${it.id}"}){x->
+            Card(shape=RoundedCornerShape(17.dp)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
+                Column(Modifier.weight(1f)){
+                    Text(x.title,fontWeight=FontWeight.Bold)
+                    Text("${q28Q(x.price_q)} Q · ${x.inventory} available · ${if(x.active)"Active" else "Paused"}",fontSize=10.sp,color=Q28Muted)
+                }
+                TextButton(onClick={editListing=x}){Text("Edit")}
+            }}
         }
         item{Text("My Q Market orders",fontWeight=FontWeight.Black,fontSize=19.sp,modifier=Modifier.padding(top=7.dp))}
         if(vm.qMarketOrders.isEmpty())item{Text("No marketplace orders yet.",color=Q28Muted)}
@@ -252,6 +264,29 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
                 }
             }}
         }
+    }
+    editListing?.let{x->
+        var etitle by remember(x.id){mutableStateOf(x.title)}
+        var edesc by remember(x.id){mutableStateOf(x.description)}
+        var eprice by remember(x.id){mutableStateOf(x.price_q.toString())}
+        var einventory by remember(x.id){mutableStateOf(x.inventory.toString())}
+        var eactive by remember(x.id){mutableStateOf(x.active)}
+        AlertDialog(
+            onDismissRequest={editListing=null},
+            title={Text("Edit Q Market listing")},
+            text={Column{
+                OutlinedTextField(etitle,{etitle=it},label={Text("Title")},modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(edesc,{edesc=it},label={Text("Description")},modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(eprice,{eprice=it},label={Text("Price in Q")},modifier=Modifier.fillMaxWidth())
+                OutlinedTextField(einventory,{einventory=it},label={Text("Inventory")},modifier=Modifier.fillMaxWidth())
+                Row(verticalAlignment=Alignment.CenterVertically){Checkbox(checked=eactive,onCheckedChange={eactive=it});Text("Listing active")}
+            }},
+            confirmButton={Button(onClick={
+                vm.qUpdateListing(x,etitle,edesc,eprice.toDoubleOrNull()?:0.0,einventory.toIntOrNull()?:1,eactive)
+                editListing=null
+            },enabled=etitle.isNotBlank()&&(eprice.toDoubleOrNull()?:0.0)>0&&(einventory.toIntOrNull()?:0)>0){Text("Save")}},
+            dismissButton={TextButton(onClick={editListing=null}){Text("Cancel")}}
+        )
     }
 }
 
