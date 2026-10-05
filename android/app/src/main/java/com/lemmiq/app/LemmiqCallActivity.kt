@@ -322,7 +322,6 @@ class LemmiqCallActivity:ComponentActivity(){
         room?.disconnect();room=null
         val am=getSystemService(Context.AUDIO_SERVICE) as AudioManager
         if(Build.VERSION.SDK_INT>=31)runCatching{am.clearCommunicationDevice()}
-        @Suppress("DEPRECATION") runCatching{am.abandonAudioFocus(null)}
         am.mode=AudioManager.MODE_NORMAL
         super.onDestroy()
     }
