@@ -31,7 +31,7 @@ jobs:
           from app.main import app
 
           with TestClient(app) as c:
-              assert c.get("/health").json()["version"] == "2.8.0"
+              assert c.get("/health").json()["version"] == "2.8.1"
 
               a = c.post("/register", json={"username":"v28alpha","display_name":"Alpha","password":"password123"}).json()
               b = c.post("/register", json={"username":"v28beta","display_name":"Beta","password":"password123"}).json()
