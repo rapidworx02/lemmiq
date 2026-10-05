@@ -514,6 +514,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     fun openVision(v:VisionMemoryDto){activeVision=v}
 
+    fun clearVision(){activeVision=null}
+
     fun deleteVision(id:Int)=viewModelScope.launch{
         runCatching{api.deleteVision(id);if(activeVision?.id==id)activeVision=null;visionHistory=api.visionList();qHome=api.qHome()}
             .onFailure{error=it.message}
