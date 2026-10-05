@@ -43,6 +43,19 @@ jobs:
               assert abs(wa.json()["balance_q"] - 100.0) < 0.001
               assert wa.json()["cashout_enabled"] is False
 
+              referral_code = wa.json()["referral_code"]
+              g = c.post("/register", json={
+                  "username":"v28gamma","display_name":"Gamma","password":"password123",
+                  "referral_code":referral_code
+              })
+              assert g.status_code == 200, g.text
+              hg = {"Authorization": "Bearer " + g.json()["token"]}
+              wg = c.get("/v28/wallet", headers=hg)
+              assert wg.status_code == 200, wg.text
+              assert abs(wg.json()["balance_q"] - 125.0) < 0.001
+              wa_after_referral = c.get("/v28/wallet", headers=ha)
+              assert wa_after_referral.json()["balance_q"] >= 125.0
+
               claim = c.post("/v28/wallet/claim-daily", headers=ha, json={})
               assert claim.status_code == 200, claim.text
               assert claim.json()["balance_q"] >= 102.0
