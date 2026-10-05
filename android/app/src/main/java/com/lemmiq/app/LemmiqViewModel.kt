@@ -63,6 +63,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var qPaymentOrders by mutableStateOf<List<QPaymentOrderDto>>(emptyList())
     var activeQPaymentOrder by mutableStateOf<QPaymentOrderDto?>(null)
     var qMarketListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
+    var qMyListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
     var qMarketOrders by mutableStateOf<List<QMarketOrderDto>>(emptyList())
     var qEconomyBusy by mutableStateOf(false)
     var visionHistory by mutableStateOf<List<VisionMemoryDto>>(emptyList())
@@ -143,7 +144,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -437,6 +438,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             qReferrals=api.qReferrals()
             qPaymentOrders=api.qPaymentOrders()
             qMarketListings=api.qMarketListings()
+            qMyListings=api.qMyListings()
             qMarketOrders=api.qMarketOrders()
         }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
@@ -474,7 +476,16 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun qCreateListing(title:String,description:String,priceQ:Double,inventory:Int=1)=viewModelScope.launch{
         if(title.isBlank()||priceQ<=0)return@launch
         qEconomyBusy=true;error=null
-        try{api.qCreateListing(title.trim(),description.trim(),priceQ,inventory);qMarketListings=api.qMarketListings()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+        try{api.qCreateListing(title.trim(),description.trim(),priceQ,inventory);qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qUpdateListing(x:QMarketListingDto,title:String,description:String,priceQ:Double,inventory:Int,active:Boolean)=viewModelScope.launch{
+        if(title.isBlank()||priceQ<=0||inventory<1)return@launch
+        qEconomyBusy=true;error=null
+        try{
+            api.qUpdateListing(x,title.trim(),description.trim(),priceQ,inventory,active)
+            qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
     fun qBuyListing(id:Int)=viewModelScope.launch{
