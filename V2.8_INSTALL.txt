@@ -315,3 +315,31 @@ Then show VERIFIED ON-CHAIN before Admin approval.
 Later, after testing:
 on-chain verification -> automatic matching -> automatic package activation.
 
+
+
+ADMIN TEAM / ROLES
+------------------
+Master Admin can add/update other LEMMIQ users as:
+- FINANCE_ADMIN
+- MARKETPLACE_ADMIN
+- SUPPORT_ADMIN
+- RISK_ADMIN
+- READ_ONLY
+- MASTER_ADMIN
+
+Finance Admin can approve/reject manual USDT payment submissions.
+Marketplace/Risk Admin can resolve Q Market disputes.
+Treasury/config/payment-wallet changes remain Master Admin only.
+The signed-in Master Admin cannot accidentally demote/disable itself.
+
+CUSTOM QR
+---------
+A QR is generated automatically from every configured public wallet address.
+Q Admin also supports uploading a custom QR image for a receiving wallet.
+The displayed wallet address remains visible so users can compare the text
+address with the QR before paying.
+
+EDITABLE Q MARKET LISTINGS
+--------------------------
+Sellers can edit title, description, Q price, inventory and active/paused
+status from the web and Android V2.8 Q Market screens.
