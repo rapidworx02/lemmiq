@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.7.1")
+app = FastAPI(title="LEMMIQ Server", version="2.8.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -208,7 +208,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.7.1"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.8.0"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -863,7 +863,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.7.1",
+        "version": "2.8.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -886,6 +886,10 @@ register_v26(app,current_user,get_db,push,user_json)
 # ---------------- LEMMIQ V2.7 Q Vision + refined Q routes ----------------
 from .v27 import register_v27
 register_v27(app,current_user,get_db,push)
+
+# ---------------- LEMMIQ V2.8 Q Economy + Marketplace ----------------
+from .v28 import register_v28
+register_v28(app,current_user,get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
