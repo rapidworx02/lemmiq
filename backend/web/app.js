@@ -124,7 +124,7 @@ function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me","q-economy","q-admin"];
+  const secondary=["trust","business","activity","money","me","q-admin"];
   const navName=secondary.includes(name)?"more":name;
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
@@ -1284,7 +1284,13 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("loginTab").onclick=()=>{$("loginTab").classList.add("active");$("registerTab").classList.remove("active");$("loginForm").classList.remove("hidden");$("registerForm").classList.add("hidden")};
   $("registerTab").onclick=()=>{$("registerTab").classList.add("active");$("loginTab").classList.remove("active");$("registerForm").classList.remove("hidden");$("loginForm").classList.add("hidden")};
   $("loginForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUsername").value,password:$("loginPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
-  $("registerForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/register",{method:"POST",body:JSON.stringify({display_name:$("regName").value,username:$("regUsername").value,password:$("regPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
+  $("registerForm").onsubmit=async e=>{e.preventDefault();try{
+    const referral=($("regReferral")?.value||"").trim();
+    const payload={display_name:$("regName").value,username:$("regUsername").value,password:$("regPassword").value};
+    if(referral)payload.referral_code=referral;
+    const r=await api("/register",{method:"POST",body:JSON.stringify(payload)});
+    saveSession(r);showApp()
+  }catch(err){toast(err.message,true)}};
 
   qsa("#nav button").forEach(b=>b.onclick=()=>{
     const view=b.dataset.view;
@@ -1342,7 +1348,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.0").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.1").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
