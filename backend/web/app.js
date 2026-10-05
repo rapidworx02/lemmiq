@@ -645,7 +645,7 @@ function installAndroidApp(){
   }
   openModal(`<h3>📱 Android download setup</h3>
     <p>The LEMMIQ button is wired to <strong>/download/android</strong>, but no APK/Play destination is configured on the server yet.</p>
-    <p>Publish your V2.7.1 app bundle to Google Play and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
+    <p>Publish your V2.8 app bundle to Google Play and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
     <p class="micro">After Render redeploys, this same button becomes a direct user download link—no website code change is required.</p>`);
 }
 
@@ -1337,7 +1337,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
