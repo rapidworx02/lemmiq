@@ -1520,7 +1520,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
             Text("Optional WhatsApp / SMS incoming notification previews. Not complete conversations; no automatic sending.",fontSize=11.sp,color=Muted)
             Row(verticalAlignment=Alignment.CenterVertically){
                 Text("Capture new external previews",Modifier.weight(1f),fontWeight=FontWeight.Bold,fontSize=12.sp)
-                Switch(checked=vm.externalEnabled,onCheckedChange={vm.setExternalEnabled(it)})
+                Switch(checked=vm.externalEnabled,onCheckedChange={vm.updateExternalEnabled(it)})
             }
             if(vm.externalEnabled){
                 Row(verticalAlignment=Alignment.CenterVertically){
@@ -1531,12 +1531,12 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
                 }
                 Text("Keep encrypted local context for",fontSize=11.sp,color=Muted)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                    listOf(1,7,30).forEach{n->FilterChip(vm.externalDays==n,{vm.setExternalDays(n)},
+                    listOf(1,7,30).forEach{n->FilterChip(vm.externalDays==n,{vm.updateExternalDays(n)},
                         {Text(if(n==1)"24h" else "$n days")})}
                 }
                 Row(verticalAlignment=Alignment.CenterVertically){
                     Text("Allow Q to use selected snippets",Modifier.weight(1f),fontSize=12.sp)
-                    Switch(vm.externalQ,{vm.setExternalQ(it)})
+                    Switch(vm.externalQ,{vm.updateExternalQ(it)})
                 }
                 Text("Q sharing is on demand, when you explicitly ask Q or request a draft. Nothing is automatically sent to contacts.",fontSize=10.sp,color=Muted)
             }
