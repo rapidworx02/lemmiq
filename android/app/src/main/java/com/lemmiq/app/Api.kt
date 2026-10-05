@@ -632,6 +632,19 @@ class Api(private val store:SessionStore){
         return gson.fromJson(t,object:TypeToken<List<QMarketListingDto>>(){}.type)
     }
 
+    suspend fun qMyListings():List<QMarketListingDto>{
+        val t=req(b("$base/v28/market/my-listings").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QMarketListingDto>>(){}.type)
+    }
+
+    suspend fun qUpdateListing(x:QMarketListingDto,title:String,description:String,priceQ:Double,inventory:Int,active:Boolean):QMarketListingDto{
+        val rb=gson.toJson(mapOf(
+            "title" to title,"description" to description,"category" to x.category,"condition" to x.condition,
+            "price_q" to priceQ,"inventory" to inventory,"active" to active
+        )).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/market/listings/${x.id}").put(rb).build()),QMarketListingDto::class.java)
+    }
+
     suspend fun qCreateListing(title:String,description:String,priceQ:Double,inventory:Int=1):QMarketListingDto{
         val rb=gson.toJson(mapOf(
             "title" to title,"description" to description,"category" to "OTHER","condition" to "SERVICE",
