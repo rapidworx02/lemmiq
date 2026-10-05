@@ -69,7 +69,6 @@ android {
 
     buildTypes {
         getByName("debug") {
-            applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
         getByName("release") {
