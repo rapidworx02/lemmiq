@@ -10,9 +10,9 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.8.0">
+  <link rel="stylesheet" href="/web/styles.css?v=2.8.1">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.8.0">
+  <link rel="stylesheet" href="/web/v28.css?v=2.8.1">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -42,6 +42,7 @@
         <label>Display name<input id="regName" autocomplete="name" required></label>
         <label>Username<input id="regUsername" autocomplete="username" required minlength="3"></label>
         <label>Password<input id="regPassword" type="password" autocomplete="new-password" required minlength="6"></label>
+        <label>Referral code <span class="micro">(optional)</span><input id="regReferral" autocomplete="off" maxlength="40" placeholder="e.g. Q123-ABCDEF"></label>
         <button class="primary full" type="submit">Create account</button>
       </form>
       <div class="auth-download">
@@ -61,6 +62,7 @@
         <button data-view="chats" class="active"><span>💬</span>Chats</button>
         <button data-view="updates"><span>⭕</span>Updates</button>
         <button data-view="agent"><span>Q</span>Q</button>
+        <button data-view="q-economy"><span>Q+</span>Q Economy</button>
         <button data-view="calls"><span>📞</span>Calls</button>
         <button data-view="more"><span>☰</span>More</button>
       </nav>
@@ -318,7 +320,6 @@
           <p>Less-used features live here so the main navigation stays clean.</p>
         </article>
         <div class="more-grid">
-          <button data-more-view="q-economy" class="more-card"><span>Q</span><strong>Q Economy</strong><small>Wallet, mining, subscriptions, referrals and Q Market</small></button>
           <button id="qAdminMoreCard" data-more-view="q-admin" class="more-card hidden"><span>⚙</span><strong>Q Admin</strong><small>Treasury, USDT payments and marketplace controls</small></button>
           <button data-more-view="trust" class="more-card"><span>🛡</span><strong>Trust / Fact Check</strong><small>Check claims and reopen saved history</small></button>
           <button data-more-view="business" class="more-card"><span>💼</span><strong>Business Agent</strong><small>Business knowledge and customer replies</small></button>
@@ -458,7 +459,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.8.0" defer></script>
-  <script src="/web/v28.js?v=2.8.0" defer></script>
+  <script src="/web/app.js?v=2.8.1" defer></script>
+  <script src="/web/v28.js?v=2.8.1" defer></script>
 </body>
 </html>
