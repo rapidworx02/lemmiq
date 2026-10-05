@@ -1,0 +1,317 @@
+LEMMIQ V2.8 - Q ECONOMY BETA
+================================
+
+IMPORTANT
+---------
+V2.8 adds a centralised Q utility economy, Q Wallet, Basic Q daily claim,
+Refer & Earn, paid Q subscription lots, manual USDT TRC20/BEP20 payment
+submission and admin activation, Q Marketplace with escrow, Admin Profit
+Wallet, treasury controls, and browser-first Q Admin.
+
+Cash-out is DISABLED in V2.8. Do not market Q as guaranteed cash income or
+a guaranteed investment return. Obtain appropriate Australian legal/financial
+and AML/CTF advice before enabling redemption/cash-out.
+
+CURRENT Q MODEL
+---------------
+Maximum supply:          1,000,000,000 Q
+Initial unlocked:           10,000,000 Q
+Locked reserve:            990,000,000 Q
+Starting reference:              US$0.05/Q
+
+Opening system wallets:
+USAGE_MINING              6,000,000 Q
+MARKET_REWARDS            2,000,000 Q
+REFERRALS                 1,000,000 Q
+PROMOTIONS                1,000,000 Q
+PROFIT                             0 Q
+ESCROW                             0 Q
+LOCKED_RESERVE           990,000,000 Q
+
+Default Basic Q/day: 2 Q
+Default signup bonus: 100 Q
+Default referral reward: 25 Q to referrer + 25 Q to referred user
+Default marketplace fee: 5% to Admin PROFIT wallet
+All of these values can be changed from Q Admin except maximum supply.
+
+PACKAGES
+--------
+Starter     US$10      0.25% daily package value
+Plus        US$50      0.50% daily package value
+Pro         US$100     0.75% daily package value
+Premium     US$500     1.00% daily package value
+Elite       US$1,000   1.25% daily package value
+
+Each paid package:
+- is a separate subscription lot;
+- starts only after Admin approves the submitted USDT transaction;
+- remains valid for up to 365 days;
+- stops package accrual when its 200% package-value ceiling is reached;
+- converts the daily USD-equivalent accrual into Q using the current Q
+  reference price at the time accrual is processed;
+- keeps a separate USD-equivalent accrued/cap ledger for future liability control.
+
+STEP 1 - BACK UP YOUR CURRENT LEMMIQ FOLDER
+-------------------------------------------
+Example:
+C:\Users\pc\LEMMIQ
+
+Make a copy before replacing files.
+
+STEP 2 - EXTRACT THE V2.8 ZIP
+-----------------------------
+Extract LEMMIQ_V2.8_Q_ECONOMY.zip directly into:
+
+C:\Users\pc\LEMMIQ
+
+Choose "Replace files in the destination" when Windows asks.
+
+The ZIP does NOT include:
+- android\upload-keystore.jks
+- android\keystore.properties
+- android\app\google-services.json
+- backend\.env
+
+Keep your existing private files.
+
+STEP 3 - CREATE / PROMOTE YOUR MASTER ADMIN
+--------------------------------------------
+LEMMIQ currently authenticates by username + password.
+
+1. Log into/register the LEMMIQ account you want to use as Master Admin.
+   Example username: rohit
+
+2. In Render -> lemmiq-api -> Environment add:
+
+   LEMMIQ_MASTER_ADMIN_USERNAME=rohit
+
+   Use the exact LEMMIQ username in lowercase.
+
+3. Save and redeploy/restart the service.
+
+On startup V2.8 finds that existing user and creates/promotes:
+role = MASTER_ADMIN
+
+The password remains the normal LEMMIQ account password. It is NOT stored
+in source code or GitHub.
+
+Admin browser entry:
+https://YOUR-LEMMIQ-DOMAIN/admin
+
+This redirects to:
+https://YOUR-LEMMIQ-DOMAIN/web/#admin
+
+You can also open:
+More -> Q Admin
+
+STEP 4 - CONFIGURE USDT RECEIVING WALLETS
+------------------------------------------
+In Q Admin -> USDT receiving wallets:
+
+1. Choose network:
+   - TRC20
+   - BEP20
+
+2. Choose package:
+   - All packages
+   - $10 Starter
+   - $50 Plus
+   - $100 Pro
+   - $500 Premium
+   - $1,000 Elite
+
+3. Enter ONLY the PUBLIC receiving address.
+4. Save.
+
+LEMMIQ automatically creates a QR from the public address.
+Custom QR upload is also supported through the Admin API.
+
+NEVER enter:
+- seed phrase
+- private key
+- exchange password
+- wallet recovery phrase
+
+If a package-specific wallet exists, it is used first.
+Otherwise LEMMIQ falls back to an active generic wallet for that network.
+
+STEP 5 - USER USDT PAYMENT FLOW
+-------------------------------
+User:
+1. Opens More -> Q Economy -> Packages.
+2. Selects package.
+3. Chooses USDT TRC20 or USDT BEP20.
+4. LEMMIQ creates a unique payment Order ID.
+5. User sends the exact USDT amount to the displayed public address.
+6. User submits the blockchain transaction hash.
+7. Payment status becomes PENDING.
+
+Admin:
+1. Opens Q Admin -> Pending USDT payments.
+2. Opens transaction in TronScan/BscScan.
+3. Manually verifies:
+   - token is USDT;
+   - correct network;
+   - destination address;
+   - amount;
+   - transaction hash;
+   - successful/on-chain transaction.
+4. Clicks Approve or Reject.
+
+Approve automatically:
+- marks payment APPROVED;
+- creates a 365-day package lot;
+- attaches the correct daily package rate;
+- attaches the 200% package ceiling;
+- starts package accrual from the following day.
+
+Admin should NEVER manually edit a user's Q balance for package activation.
+
+STEP 6 - DATABASE
+-----------------
+No manual SQL migration should be required for the new V2.8 Q tables.
+
+The backend imports the V2.8 model module before FastAPI startup completes,
+and SQLAlchemy Base.metadata.create_all() creates the new tables.
+
+Existing LEMMIQ data is retained.
+
+IMPORTANT:
+Render free PostgreSQL databases can expire. Use a persistent PostgreSQL plan
+and regular backups before putting financial-value records into production.
+
+STEP 7 - RENDER
+---------------
+Required existing values remain unchanged.
+
+New V2.8 environment variable:
+
+LEMMIQ_MASTER_ADMIN_USERNAME=<your exact LEMMIQ username>
+
+Then redeploy.
+
+Verify:
+GET /health
+
+Expected version:
+2.8.0
+
+Open the web app and hard refresh once if required. The service worker cache
+namespace is changed for V2.8.
+
+STEP 8 - ANDROID
+----------------
+Android V2.8:
+versionCode = 45
+versionName = 2.8.0
+
+It adds:
+More -> Q Economy
+
+Android Q Economy includes:
+- Q wallet/reference value
+- Basic Q daily claim
+- user-to-user Q transfer
+- paid package display
+- USDT payment order creation/submission
+- Q Market browse/buy/sell
+- marketplace order actions
+- Refer & Earn
+
+Master Admin financial controls are browser-first in V2.8.
+
+Build from PowerShell:
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;C:\Gradle\gradle-9.6.0\bin;" + $env:Path
+cd C:\Users\pc\LEMMIQ\android
+.\build-play-bundle.cmd
+
+Expected AAB:
+C:\Users\pc\LEMMIQ\android\app\build\outputs\bundle\release\app-release.aab
+
+Upload version 2.8.0 / version code 45 to Google Play Internal Testing.
+
+STEP 9 - GITHUB CMD COMMANDS
+----------------------------
+Open CMD:
+
+cd /d C:\Users\pc\LEMMIQ
+
+git status
+
+Confirm private files are ignored:
+git check-ignore android/upload-keystore.jks
+git check-ignore android/keystore.properties
+git check-ignore android/app/google-services.json
+
+Then:
+
+git add .
+git status
+git commit -m "LEMMIQ V2.8 - Q Economy Beta"
+git push origin main
+
+IMPORTANT:
+Before git commit, inspect git status and make sure the following are NOT
+staged:
+- upload-keystore.jks
+- keystore.properties
+- google-services.json
+- backend/.env
+- any wallet seed/private key
+
+STEP 10 - FIRST V2.8 TEST
+-------------------------
+Test in this order:
+
+1. Normal login/chat still works.
+2. More -> Q Economy opens.
+3. New user wallet receives signup Q once.
+4. Daily Q can be claimed once per UTC day.
+5. Q transfer works between two LEMMIQ test accounts.
+6. Referral code can be claimed by a new test account only once.
+7. Create TRC20/BEP20 public receiving wallets in Q Admin.
+8. Create a $10 test payment order.
+9. Submit a test transaction hash.
+10. Confirm Admin can see PENDING order.
+11. Reject the test order first.
+12. Re-submit and approve a known valid transaction only when ready.
+13. Confirm package lot appears.
+14. Create Q Market listing.
+15. Buy from another account.
+16. Confirm Q moves to ESCROW.
+17. Seller Accept -> Delivered -> buyer Complete.
+18. Confirm seller receives net Q.
+19. Confirm marketplace fee appears in PROFIT wallet.
+20. Test dispute and Admin resolution.
+21. Build/install Android V2.8 and repeat wallet/package/market tests.
+
+SECURITY / OPERATING RULES
+--------------------------
+- Only public USDT receiving addresses go into LEMMIQ.
+- Transaction hashes are not proof by themselves: Admin verifies on-chain.
+- Never approve a payment merely because a user submitted a screenshot.
+- Package activation is idempotent: one payment order can create one package lot.
+- Duplicate transaction hashes are rejected.
+- User Q transfers and all treasury movements create immutable ledger records.
+- Treasury balances must not be edited directly.
+- Cash-out remains disabled in V2.8.
+- Do not rely on new subscriber funds as the sole source for future withdrawals.
+
+FUTURE V2.9 PAYMENT AUTOMATION
+------------------------------
+The V2.8 schema is automation-ready.
+
+Next phase can verify:
+- network
+- USDT contract/token
+- destination
+- amount
+- tx hash
+- confirmations
+
+Then show VERIFIED ON-CHAIN before Admin approval.
+
+Later, after testing:
+on-chain verification -> automatic matching -> automatic package activation.
+
