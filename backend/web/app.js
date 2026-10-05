@@ -777,10 +777,41 @@ async function voiceAI(id){try{const r=await api(`/v24/voice/${id}/ai`,{method:"
 async function downloadGroupMedia(id,name){try{const r=await fetch(`/v24/group-media/${id}`,{headers:authHeaders()});if(!r.ok)throw new Error("Download failed");const b=await r.blob(),u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=name||"group-file";a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}catch(e){toast(e.message,true)}}
 window.downloadGroupMedia=downloadGroupMedia;window.loadVoice=loadVoice;window.voiceAI=voiceAI;
 
-function startTone(kind){stopRing();try{const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC();state.ringAudio={ctx,timer:null};const beep=()=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=kind==="incoming"?740:440;g.gain.value=.035;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.22)};beep();state.ringAudio.timer=setInterval(beep,kind==="incoming"?900:1600)}catch{}}
-function stopRing(){if(state.ringAudio){clearInterval(state.ringAudio.timer);try{state.ringAudio.ctx.close()}catch{}state.ringAudio=null}}
-function startCallTimer(){clearInterval(state.callTimerHandle);state.callSeconds=0;$("callTimer").textContent="00:00";state.callTimerHandle=setInterval(()=>{$("callTimer").textContent=formatDuration(++state.callSeconds)},1000)}
+function startTone(kind){
+  stopRing();
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC();
+    state.ringAudio={ctx,timer:null};
+    const beep=()=>{const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=kind==="incoming"?740:440;g.gain.value=.035;o.connect(g);g.connect(ctx.destination);o.start();o.stop(ctx.currentTime+.22)};
+    beep();state.ringAudio.timer=setInterval(beep,kind==="incoming"?900:1600);
+  }catch{}
+}
+function stopRing(){
+  if(state.ringAudio){
+    clearInterval(state.ringAudio.timer);
+    try{state.ringAudio.ctx.close()}catch{}
+    state.ringAudio=null;
+  }
+}
+function cleanupRemoteAudio(){
+  const host=$("remoteAudio");if(!host)return;
+  [...host.querySelectorAll("audio,video")].forEach(el=>{
+    try{el.pause()}catch{}
+    try{el.srcObject=null}catch{}
+    try{el.removeAttribute("src")}catch{}
+    el.remove();
+  });
+  host.innerHTML="";
+}
+function startCallTimer(){
+  clearInterval(state.callTimerHandle);state.callSeconds=0;$("callTimer").textContent="00:00";
+  state.callTimerHandle=setInterval(()=>{$("callTimer").textContent=formatDuration(++state.callSeconds)},1000);
+}
 async function beginVoiceCall(chatId,person){
+  if(state.callPhase!=="idle"){
+    toast("You already have a call in progress.",true);return;
+  }
+  state.callPhase="starting";
   try{
     const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:chatId})});
     state.callPhase="ringing";$("callState").textContent="Ringing…";$("callTimer").textContent="";
@@ -790,8 +821,16 @@ async function beginVoiceCall(chatId,person){
     startTone("outgoing");
     await connectCallRoom(join,user.display_name||"LEMMIQ user",false);
     clearTimeout(state.callTimeoutHandle);
-    state.callTimeoutHandle=setTimeout(()=>{if(state.callPhase==="ringing"){toast("No answer");endVoiceCall()}},45000);
-  }catch(e){toast(e.message,true)}
+    state.callTimeoutHandle=setTimeout(()=>{
+      if(state.callPhase==="ringing"){
+        toast("No answer");
+        endVoiceCall(true);
+      }
+    },45000);
+  }catch(e){
+    state.callPhase="idle";state.callId=null;cleanupRemoteAudio();stopRing();
+    toast(e.message||"Could not start call",true);
+  }
 }
 async function startVoiceCall(){
   if(!state.activeChat)return;
@@ -818,40 +857,203 @@ async function loadCalls(){
 
 async function connectCallRoom(join,person,incoming){
   if(!window.LivekitClient)throw new Error("LiveKit client unavailable");
-  const {Room,RoomEvent,Track}=LivekitClient,room=new Room();state.callRoom=room;state.callId=join.call.id;$("callPerson").textContent=person;
+  if(state.callRoom){
+    try{await state.callRoom.localParticipant?.setMicrophoneEnabled(false)}catch{}
+    try{state.callRoom.disconnect()}catch{}
+    cleanupRemoteAudio();
+  }
+  const {Room,RoomEvent,Track}=LivekitClient,room=new Room();
+  state.callRoom=room;state.callId=join.call.id;$("callPerson").textContent=person;
   room.on(RoomEvent.ParticipantConnected,()=>onRemoteAnswered());
-  room.on(RoomEvent.TrackSubscribed,t=>{if(t.kind===Track.Kind.Audio){const el=t.attach();el.autoplay=true;$("remoteAudio").appendChild(el)}});
-  room.on(RoomEvent.Disconnected,()=>{if(state.callPhase==="connected")$("callState").textContent="Call ended"});
-  await room.connect(join.ws_url,join.token);await room.localParticipant.setMicrophoneEnabled(true);
+  room.on(RoomEvent.TrackSubscribed,t=>{
+    if(t.kind===Track.Kind.Audio){
+      const el=t.attach();el.autoplay=true;el.dataset.callId=state.callId||"";
+      $("remoteAudio").appendChild(el);
+    }
+  });
+  if(RoomEvent.TrackUnsubscribed)room.on(RoomEvent.TrackUnsubscribed,t=>{try{t.detach().forEach?.(x=>x.remove())}catch{}});
+  room.on(RoomEvent.Disconnected,()=>{
+    if(state.callRoom!==room)return;
+    if(state.callPhase==="connected"||state.callPhase==="connecting"){
+      $("callState").textContent="Call ended";
+      setTimeout(()=>endVoiceCall(false),300);
+    }
+  });
+  await room.connect(join.ws_url,join.token);
+  if(state.callRoom!==room){try{room.disconnect()}catch{};return}
+  await room.localParticipant.setMicrophoneEnabled(true);
   if(incoming||room.remoteParticipants?.size>0)onRemoteAnswered();
 }
-function onRemoteAnswered(){if(state.callPhase==="connected")return;stopRing();clearTimeout(state.callTimeoutHandle);state.callPhase="connected";$("callState").textContent="Connected";$("callTimer").textContent="00:00";startCallTimer()}
+function onRemoteAnswered(){
+  if(state.callPhase==="connected")return;
+  stopRing();clearTimeout(state.callTimeoutHandle);
+  state.callPhase="connected";$("callState").textContent="Connected";$("callTimer").textContent="00:00";startCallTimer();
+}
 function showIncomingCall(p){
-  openModal(`<h3>📞 Incoming LEMMIQ call</h3><p><strong>${escapeHtml(p.caller_name||"LEMMIQ user")}</strong> is calling.</p><div class="suggestion-actions"><button id="incDecline" class="danger">Decline</button><button id="incAnswer" class="primary">Answer</button></div>`);startTone("incoming");
-  $("incDecline").onclick=async()=>{stopRing();await api(`/v24/calls/${p.call_id}/decline`,{method:"POST"}).catch(()=>{});closeModal()};
-  $("incAnswer").onclick=async()=>{stopRing();const join=await api(`/v24/calls/${p.call_id}/join`,{method:"POST"});closeModal();state.callPhase="connecting";$("callOverlay").classList.remove("hidden");$("callPerson").textContent=p.caller_name||"LEMMIQ user";$("callAvatar").innerHTML=p.caller_avatar_url?`<img src="${escapeHtml(p.caller_avatar_url)}">`:escapeHtml(initials(p.caller_name||"LEMMIQ user"));await connectCallRoom(join,p.caller_name||"LEMMIQ user",true)};
+  if(state.callPhase!=="idle"){
+    api(`/v24/calls/${p.call_id}/decline`,{method:"POST"}).catch(()=>{});
+    toast("Incoming call declined because you are already in a call.");
+    return;
+  }
+  state.callPhase="incoming";state.callId=p.call_id;
+  openModal(`<h3>📞 Incoming LEMMIQ call</h3><p><strong>${escapeHtml(p.caller_name||"LEMMIQ user")}</strong> is calling.</p><div class="suggestion-actions"><button id="incDecline" class="danger">Decline</button><button id="incAnswer" class="primary">Answer</button></div>`);
+  startTone("incoming");
+  $("incDecline").onclick=async()=>{
+    const id=p.call_id;
+    stopRing();state.callPhase="ending";
+    try{await api(`/v24/calls/${id}/decline`,{method:"POST"})}catch(e){toast(e.message,true)}
+    finally{state.callId=null;state.callPhase="idle";closeModal();cleanupRemoteAudio()}
+  };
+  $("incAnswer").onclick=async()=>{
+    stopRing();
+    try{
+      const join=await api(`/v24/calls/${p.call_id}/join`,{method:"POST"});
+      closeModal();state.callPhase="connecting";
+      $("callOverlay").classList.remove("hidden");
+      $("callPerson").textContent=p.caller_name||"LEMMIQ user";
+      $("callAvatar").innerHTML=p.caller_avatar_url?`<img src="${escapeHtml(p.caller_avatar_url)}">`:escapeHtml(initials(p.caller_name||"LEMMIQ user"));
+      await connectCallRoom(join,p.caller_name||"LEMMIQ user",true);
+    }catch(e){
+      state.callId=null;state.callPhase="idle";closeModal();toast(e.message,true);
+    }
+  };
 }
 async function endVoiceCall(notify=true){
-  stopRing();clearInterval(state.callTimerHandle);clearTimeout(state.callTimeoutHandle);try{state.callRoom?.disconnect()}catch{}
-  if(notify&&state.callId)api(`/v24/calls/${state.callId}/end`,{method:"POST"}).catch(()=>{});
-  state.callRoom=null;state.callId=null;state.callPhase="idle";$("remoteAudio").innerHTML="";$("callOverlay").classList.add("hidden");if(state.activeChat)openChat(state.activeChat.id,false).catch(()=>{});
+  if(state.callPhase==="idle")return;
+  const id=state.callId,room=state.callRoom;
+  state.callPhase="ending";
+  stopRing();clearInterval(state.callTimerHandle);clearTimeout(state.callTimeoutHandle);
+  state.callTimerHandle=null;state.callTimeoutHandle=null;
+  try{await room?.localParticipant?.setMicrophoneEnabled(false)}catch{}
+  try{room?.removeAllListeners?.()}catch{}
+  try{room?.disconnect()}catch{}
+  cleanupRemoteAudio();
+  state.callRoom=null;
+  if(notify&&id)try{await api(`/v24/calls/${id}/end`,{method:"POST"})}catch{}
+  state.callId=null;state.callPhase="idle";state.callSeconds=0;
+  $("callOverlay").classList.add("hidden");
+  if(state.activeChat)openChat(state.activeChat.id,false).catch(()=>{});
 }
-async function toggleCallMute(){if(!state.callRoom)return;const enabled=state.callRoom.localParticipant.isMicrophoneEnabled;await state.callRoom.localParticipant.setMicrophoneEnabled(!enabled);$("muteCallBtn").textContent=enabled?"🔇":"🎙"}
+async function toggleCallMute(){
+  if(!state.callRoom)return;
+  const enabled=state.callRoom.localParticipant.isMicrophoneEnabled;
+  await state.callRoom.localParticipant.setMicrophoneEnabled(!enabled);
+  $("muteCallBtn").textContent=enabled?"🔇":"🎙";
+}
 
-async function loadStatuses(){state.statuses=await api("/v24/status");renderStatuses()}
-function renderStatuses(){
-  const mine=state.statuses.filter(s=>s.user.id===state.user.id),other=state.statuses.filter(s=>s.user.id!==state.user.id);
-  $("myStatusList").innerHTML=mine.length?mine.map(s=>`<div class="status-card" onclick="openStatus(${s.id})"><strong>${escapeHtml(s.text||s.kind)}</strong><p class="micro">${timeOnly(s.created_at)} · ${s.view_count||0} views</p></div>`).join(""):`<p class="micro">No active status.</p>`;
-  $("statusList").innerHTML=other.length?other.map(s=>`<div class="status-card" onclick="openStatus(${s.id})"><div class="status-ring ${s.viewed?"viewed":""}">${avatarHtml(s.user)}</div><strong>${escapeHtml(s.user.display_name)}</strong><p>${escapeHtml(s.text||s.kind)}</p><span class="micro">${timeOnly(s.created_at)}</span></div>`).join(""):`<p class="micro">No recent updates.</p>`;
+async function loadStatuses(){
+  state.statuses=await api("/v24/status");
+  renderStatuses();
 }
-async function addTextStatus(){openModal(`<h3>⭕ Text status</h3><textarea id="stText" maxlength="1500" placeholder="What’s happening?"></textarea><button id="stPost" class="primary full">Post for 24 hours</button>`);$("stPost").onclick=async()=>{const text=$("stText").value.trim();if(!text)return;await api("/v24/status/text",{method:"POST",body:JSON.stringify({text})});closeModal();await loadStatuses()}}
-async function uploadStatusMedia(file){if(!file)return;const fd=new FormData();fd.append("file",file);fd.append("caption","");try{toast("Posting status…");await api("/v24/status/media",{method:"POST",body:fd});await loadStatuses();toast("Status posted")}catch(e){toast(e.message,true)}}
+function latestByUser(rows){
+  const m=new Map();
+  [...rows].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).forEach(s=>{if(!m.has(s.user.id))m.set(s.user.id,s)});
+  return [...m.values()];
+}
+function statusStoryTile(s,mine=false){
+  const ring=s.viewed&&!mine?" viewed":"";
+  return `<button class="status-story" data-status-id="${s.id}">
+    <span class="status-story-ring${ring}">${avatarHtml(s.user)}</span>
+    <span class="status-story-name">${escapeHtml(mine?"My status":s.user.display_name)}</span>
+  </button>`;
+}
+function renderStatuses(){
+  const mine=state.statuses.filter(s=>s.user.id===state.user.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const other=latestByUser(state.statuses.filter(s=>s.user.id!==state.user.id));
+  state.statusStoryIds=[...(mine[0]?[mine[0].id]:[]),...other.map(s=>s.id)];
+
+  $("statusStories").innerHTML=`<button class="status-story add-story" id="addStatusStory">
+      <span class="status-story-ring add">${avatarHtml(state.user)}<b>＋</b></span>
+      <span class="status-story-name">Add status</span>
+    </button>`+
+    (mine[0]?statusStoryTile(mine[0],true):"")+
+    other.map(s=>statusStoryTile(s,false)).join("");
+
+  $("myStatusList").innerHTML=mine.length?mine.map(s=>`<button class="status-list-row" data-status-id="${s.id}">
+      <span class="status-list-avatar">${avatarHtml(s.user)}</span>
+      <span class="body"><strong>${escapeHtml(s.text||s.kind)}</strong><small>${timeOnly(s.created_at)} · ${s.view_count||0} views</small></span>
+      <span>›</span>
+    </button>`).join(""):`<p class="micro">No active status.</p>`;
+
+  $("statusList").innerHTML=other.length?other.map(s=>`<button class="status-list-row" data-status-id="${s.id}">
+      <span class="status-story-ring mini${s.viewed?" viewed":""}">${avatarHtml(s.user)}</span>
+      <span class="body"><strong>${escapeHtml(s.user.display_name)}</strong><small>${s.viewed?"Viewed":"New"} · ${timeOnly(s.created_at)}</small></span>
+      <span>›</span>
+    </button>`).join(""):`<p class="micro">No recent updates.</p>`;
+
+  $("addStatusStory").onclick=showStatusCreator;
+  qsa("[data-status-id]").forEach(el=>el.onclick=()=>openStatus(Number(el.dataset.statusId)));
+}
+function showStatusCreator(){
+  openModal(`<h3>Add status</h3><textarea id="stText" maxlength="1500" placeholder="Type a status…"></textarea>
+    <p class="micro">Status disappears automatically after 24 hours.</p>
+    <div class="suggestion-actions"><button id="stCancel" class="ghost">Cancel</button><button id="stPost" class="primary">Post text</button></div>`);
+  $("stCancel").onclick=closeModal;
+  $("stPost").onclick=async()=>{
+    const text=$("stText").value.trim();if(!text)return;
+    await api("/v24/status/text",{method:"POST",body:JSON.stringify({text})});
+    closeModal();await loadStatuses();
+  };
+}
+async function addTextStatus(){showStatusCreator()}
+async function uploadStatusMedia(file){
+  if(!file)return;
+  const fd=new FormData();fd.append("file",file);fd.append("caption","");
+  try{toast("Posting status…");await api("/v24/status/media",{method:"POST",body:fd});await loadStatuses();toast("Status posted")}
+  catch(e){toast(e.message,true)}
+}
+function closeStatusViewer(){
+  if(state.statusBlobUrl){URL.revokeObjectURL(state.statusBlobUrl);state.statusBlobUrl=null}
+  $("statusViewer").classList.add("hidden");$("statusViewer").setAttribute("aria-hidden","true");
+  $("statusViewerBody").innerHTML="";state.statusIndex=-1;
+}
+async function showStatusAt(index){
+  if(!state.statusStoryIds.length)return;
+  const i=Math.max(0,Math.min(index,state.statusStoryIds.length-1));
+  const id=state.statusStoryIds[i];
+  let s=state.statuses.find(x=>x.id===id);if(!s)return;
+  state.statusIndex=i;
+  try{s=await api(`/v24/status/${id}/view`,{method:"POST"});state.statuses=state.statuses.map(x=>x.id===id?s:x)}
+  catch(e){toast(e.message,true);return}
+  renderStatuses();
+
+  if(state.statusBlobUrl){URL.revokeObjectURL(state.statusBlobUrl);state.statusBlobUrl=null}
+  $("statusViewer").classList.remove("hidden");$("statusViewer").setAttribute("aria-hidden","false");
+  $("statusViewerAvatar").innerHTML=s.user.avatar_url?`<img src="${escapeHtml(s.user.avatar_url)}" alt="">`:escapeHtml(initials(s.user.display_name));
+  $("statusViewerName").textContent=s.user.display_name;
+  $("statusViewerTime").textContent=timeOnly(s.created_at);
+  $("statusDeleteBtn").classList.toggle("hidden",s.user.id!==state.user.id);
+  $("statusReplyBtn").classList.toggle("hidden",s.user.id===state.user.id);
+  $("statusPrevBtn").disabled=i===0;$("statusNextBtn").disabled=i===state.statusStoryIds.length-1;
+  $("statusProgressBar").style.width="100%";
+
+  let body="";
+  if(s.media_url){
+    try{
+      const r=await fetch(s.media_url,{headers:authHeaders()});
+      if(!r.ok)throw new Error("Could not load status media");
+      const blob=await r.blob();state.statusBlobUrl=URL.createObjectURL(blob);
+      body=s.kind==="VIDEO"
+        ?`<video class="status-full-media" src="${state.statusBlobUrl}" controls autoplay playsinline></video>`
+        :`<img class="status-full-media" src="${state.statusBlobUrl}" alt="Status">`;
+    }catch(e){body=`<p class="status-error">${escapeHtml(e.message)}</p>`}
+  }else{
+    body=`<div class="status-text-story">${escapeHtml(s.text||"Status")}</div>`;
+  }
+  if(s.media_url&&s.text)body+=`<div class="status-caption">${escapeHtml(s.text)}</div>`;
+  $("statusViewerBody").innerHTML=body;
+
+  $("statusDeleteBtn").onclick=async()=>{await api(`/v24/status/${s.id}`,{method:"DELETE"});closeStatusViewer();await loadStatuses()};
+  $("statusReplyBtn").onclick=async()=>{
+    const c=await api("/chats/direct",{method:"POST",body:JSON.stringify({user_id:s.user.id})});
+    closeStatusViewer();setView("chats");await loadChats();await openChat(c.id);
+    $("messageInput").value=`Replied to your status: ${s.text||s.kind}`;await saveDraft($("messageInput").value);
+  };
+}
 async function openStatus(id){
-  let s=state.statuses.find(x=>x.id===id);if(!s)return;s=await api(`/v24/status/${id}/view`,{method:"POST"});let media="";
-  if(s.media_url){try{const r=await fetch(s.media_url,{headers:authHeaders()});const b=await r.blob(),url=URL.createObjectURL(b);media=s.kind==="VIDEO"?`<video class="status-media" src="${url}" controls autoplay></video>`:`<img class="status-media" src="${url}">`}catch{}}
-  openModal(`<h3>${escapeHtml(s.user.display_name)} · Status</h3>${media}<p>${escapeHtml(s.text||"")}</p><p class="micro">${new Date(s.created_at).toLocaleString()}${s.view_count!=null?` · ${s.view_count} views`:""}</p>${s.user.id!==state.user.id?`<button id="statusReply" class="primary">Reply in chat</button>`:`<button id="statusDelete" class="danger">Delete status</button>`}`);
-  if($("statusReply"))$("statusReply").onclick=async()=>{const c=await api("/chats/direct",{method:"POST",body:JSON.stringify({user_id:s.user.id})});closeModal();setView("chats");await loadChats();await openChat(c.id);$("messageInput").value=`Replied to your status: ${s.text||s.kind}`;await saveDraft($("messageInput").value)};
-  if($("statusDelete"))$("statusDelete").onclick=async()=>{await api(`/v24/status/${s.id}`,{method:"DELETE"});closeModal();await loadStatuses()};
+  let index=state.statusStoryIds.indexOf(id);
+  if(index<0){state.statusStoryIds=[id,...state.statusStoryIds.filter(x=>x!==id)];index=0}
+  await showStatusAt(index);
 }
 window.openStatus=openStatus;
 
