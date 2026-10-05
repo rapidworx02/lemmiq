@@ -1,0 +1,55 @@
+name: LEMMIQ V28 Package
+
+on:
+  push:
+    branches: [ "v2.8" ]
+  workflow_dispatch:
+
+jobs:
+  source_bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build V2.8 overlay ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf package LEMMIQ_V2.8_Q_ECONOMY.zip
+          mkdir -p package
+          files=(
+            "backend/app/v28.py"
+            "backend/app/main.py"
+            "backend/requirements.txt"
+            "backend/.env.example"
+            "backend/web/index.html"
+            "backend/web/app.js"
+            "backend/web/sw.js"
+            "backend/web/v28.js"
+            "backend/web/v28.css"
+            "render.yaml"
+            "android/app/build.gradle.kts"
+            "android/app/src/main/java/com/lemmiq/app/Models.kt"
+            "android/app/src/main/java/com/lemmiq/app/Api.kt"
+            "android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt"
+            "android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt"
+            "android/app/src/main/java/com/lemmiq/app/V28Q.kt"
+            ".github/workflows/v28-ci.yml"
+            ".github/workflows/v28-package.yml"
+            "V2.8_INSTALL.txt"
+            "V2.8_CHANGED_FILES.txt"
+            "LEMMIQ_V2.8_Q_ECONOMY.md"
+          )
+          for f in "${files[@]}"; do
+            test -f "$f"
+            mkdir -p "package/$(dirname "$f")"
+            cp "$f" "package/$f"
+          done
+          (cd package && zip -r ../LEMMIQ_V2.8_Q_ECONOMY.zip .)
+          unzip -l LEMMIQ_V2.8_Q_ECONOMY.zip
+      - name: Upload V2.8 overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: LEMMIQ-V2.8-Q-ECONOMY
+          path: LEMMIQ_V2.8_Q_ECONOMY.zip
+          if-no-files-found: error
+          retention-days: 90
