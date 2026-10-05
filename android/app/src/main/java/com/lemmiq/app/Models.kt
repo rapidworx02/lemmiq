@@ -163,3 +163,32 @@ data class ChatPrefDto(
 )
 data class PrivacyDto(val profile_photo:String="EVERYONE",val last_seen:String="EVERYONE",val status_visibility:String="EVERYONE")
 data class MediaItemDto(val message_id:Int=0,val kind:String="",val name:String?=null,val mime_type:String?=null,val size_bytes:Long?=null)
+
+
+// LEMMIQ V2.6 Q Agent
+data class QAgentActionDto(
+    val type:String="",val label:String="",val approval_required:Boolean=false,
+    val permission:String="SAFE",val available:Boolean=true,val note:String?=null
+)
+data class QDoResponseDto(
+    val mode:String="DO",val answer:String="",val references:List<AgentReference> = emptyList(),
+    val actions:List<QAgentActionDto> = emptyList()
+)
+data class QCoordinationDto(
+    val id:Int=0,val request_key:String="",val kind:String="PLAN",val prompt:String="",
+    val options:List<String> = emptyList(),val response:Map<String,String> = emptyMap(),
+    val status:String="PENDING",val created_at:String="",val updated_at:String="",val expires_at:String="",
+    val initiator:UserDto?=null,val target:UserDto?=null,val mine:Boolean=false
+)
+data class QCoordinationListDto(
+    val inbox:List<QCoordinationDto> = emptyList(),val outbox:List<QCoordinationDto> = emptyList()
+)
+data class QCoordinationCreateDto(
+    val request_key:String="",val count:Int=0,val requests:List<QCoordinationDto> = emptyList(),val note:String=""
+)
+data class QDailyBriefDto(
+    val summary:String="",val unread_total:Int=0,val needs_reply_count:Int=0,
+    val needs_reply:List<NeedReplyItem> = emptyList(),val commitments:List<SocialMemoryDto> = emptyList(),
+    val promises:List<SocialMemoryDto> = emptyList(),val follow_ups:List<SocialMemoryDto> = emptyList(),
+    val generated_at:String=""
+)
