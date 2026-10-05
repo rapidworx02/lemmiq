@@ -126,7 +126,7 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
                         Text(x.kind.replace("_"," "),fontWeight=FontWeight.Bold)
                         Text(x.note.ifBlank{x.created_at.take(16).replace("T"," ")},color=Q28Muted,fontSize=10.sp)
                     }
-                    Text("${if(x.direction=="IN")+"+" else "−"}${q28Q(x.amount_q)} Q",fontWeight=FontWeight.Black,color=if(x.direction=="IN")Q28Mint else Color(0xFFD94B63))
+                    Text("${if(x.direction=="IN") "+" else "−"}${q28Q(x.amount_q)} Q",fontWeight=FontWeight.Black,color=if(x.direction=="IN")Q28Mint else Color(0xFFD94B63))
                 }
             }
         }
