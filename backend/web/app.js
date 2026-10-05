@@ -108,7 +108,10 @@ function chatsHome(pushHistory=false){
   if($("activeChat"))$("activeChat").classList.add("hidden");
   if($("activeGroup"))$("activeGroup").classList.add("hidden");
   if($("emptyChat"))$("emptyChat").classList.remove("hidden");
+  if($("conversationList"))$("conversationList").scrollTop=0;
+  window.scrollTo({top:0,behavior:"instant"});
   renderChats();
+  loadChats().catch(()=>{});
   if(pushHistory)history.pushState({view:"chats"},"","#chats");
 }
 
@@ -1305,7 +1308,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("statusNextBtn").onclick=()=>{if(state.statusIndex<state.statusStoryIds.length-1)showStatusAt(state.statusIndex+1)};
   $("statusViewer").addEventListener("click",e=>{if(e.target===$("statusViewer"))closeStatusViewer()});
 
-  $("askAgentBtn").onclick=askAgent;$("scanSocialBtn").onclick=scanSocial;
+  $("askAgentBtn").onclick=askAgent;
+  $("scanSocialBtn").onclick=scanSocial;
+  $("qVisionInput").onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""};
+  $("qVisionCameraInput").onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""};
+  qsa(".q27-vision-inline").forEach(x=>x.onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""});
+  $("qVisionHistoryBtn").onclick=showVisionHistory;
+  $("qVisionHistoryBtn2").onclick=showVisionHistory;
+  $("qToQStartBtn").onclick=startQToQ;
   $("trustBtn").onclick=()=>{const t=$("trustText").value.trim();if(t)runTrust(t)};
   $("trustHistorySearch").oninput=()=>{clearTimeout(window.__trustSearch);window.__trustSearch=setTimeout(loadTrustHistory,250)};
   $("clearTrustHistoryBtn").onclick=async()=>{if(confirm("Clear all saved Trust checks?")){await api("/trust/history",{method:"DELETE"});await loadTrustHistory()}};
@@ -1318,7 +1328,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
