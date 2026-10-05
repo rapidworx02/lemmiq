@@ -210,8 +210,9 @@
     $("q28AdminWallets").innerHTML=v28.adminWallets.length?v28.adminWallets.map(w=>qRow(
       `${w.network} · ${escapeHtml(w.package_code||"ALL PACKAGES")}`,
       `${escapeHtml(w.label||"Wallet")}<br>${escapeHtml(w.address)}`,
-      w.active?"Active":"Disabled",`<a target="_blank" class="ghost" href="${escapeHtml(w.qr_url)}">QR</a>`
+      w.active?"Active":"Disabled",`<a target="_blank" class="ghost" href="${escapeHtml(w.qr_url)}">QR</a><button class="ghost" data-q28-upload-qr="${w.id}">Upload QR</button>`
     )).join(""):`<div class="empty-state"><p>No receiving wallets configured.</p></div>`;
+    qsa("[data-q28-upload-qr]").forEach(b=>b.onclick=()=>uploadWalletQr(Number(b.dataset.q28UploadQr)));
 
     const pending=v28.adminPayments.filter(x=>x.status==="PENDING");
     $("q28AdminPayments").innerHTML=pending.length?pending.map(o=>qRow(
@@ -261,6 +262,17 @@
     }catch(e){toast(e.message,true);setView("more")}
   }
   window.loadQAdmin=loadQAdmin;
+
+  async function uploadWalletQr(id){
+    const input=document.createElement("input");input.type="file";input.accept="image/*";
+    input.onchange=async()=>{
+      const file=input.files?.[0];if(!file)return;
+      if(file.size>600000){toast("QR image must be under 600 KB",true);return}
+      const form=new FormData();form.append("file",file);
+      try{await qApi(`/admin/payment-wallets/${id}/qr`,{method:"POST",body:form});toast("Custom QR uploaded");await loadQAdmin()}catch(e){toast(e.message,true)}
+    };
+    input.click();
+  }
 
   async function adminPaymentAction(id,action){
     try{
