@@ -45,7 +45,7 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
   }
   .brand-row,.sidebar-foot{display:none}
   .sidebar nav{
-    grid-template-columns:repeat(5,minmax(0,1fr));
+    grid-template-columns:repeat(6,minmax(0,1fr));
     gap:2px;
     width:100%;
   }
@@ -199,4 +199,9 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
   .q27-quick{grid-template-columns:1fr 1fr}
   .q27-input-actions .primary{margin-left:0;flex:1}
   #qToQPlansCard,#qVisionRecentCard{margin:0 0 12px}
+}
+
+/* V2.8.1 main Q Economy navigation */
+@media(max-width:900px){
+  .sidebar nav button[data-view="q-economy"] span{font-size:15px;letter-spacing:-1px}
 }
