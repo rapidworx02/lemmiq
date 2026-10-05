@@ -623,10 +623,15 @@ async function loadAppConfig(){
     const configured=!!state.appConfig.android_download_configured;
     $("androidBtnTop")?.classList.remove("hidden");
     if($("androidInstallHint")){
-      $("androidInstallHint").textContent=configured
-        ? "Android download is active. Tap the button to install the native LEMMIQ app."
-        : "Android download button is ready. Configure Play/APK URL on Render or deploy backend/web/downloads/LEMMIQ.apk.";
+      $("androidInstallHint").textContent=state.appConfig.android_play_url
+        ? "Google Play internal testing is active. Tap the button to open the tester install page."
+        : configured
+          ? "Android download is active. Tap the button to install the native LEMMIQ app."
+          : "Android install is not configured yet. Add the Play internal-testing URL on Render.";
     }
+    const playLabel=state.appConfig.android_play_url?"📱 Get LEMMIQ on Google Play":"📱 Get LEMMIQ for Android";
+    if($("androidDownloadPublicBtn"))$("androidDownloadPublicBtn").textContent=playLabel;
+    if($("androidBtnTop"))$("androidBtnTop").textContent=playLabel;
   }catch(e){console.warn("App config unavailable",e)}
 }
 function installAndroidApp(){
@@ -636,7 +641,7 @@ function installAndroidApp(){
   }
   openModal(`<h3>📱 Android download setup</h3>
     <p>The LEMMIQ button is wired to <strong>/download/android</strong>, but no APK/Play destination is configured on the server yet.</p>
-    <p>Publish your V2.4.1 APK to Play/GitHub and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
+    <p>Publish your V2.7.1 app bundle to Google Play and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
     <p class="micro">After Render redeploys, this same button becomes a direct user download link—no website code change is required.</p>`);
 }
 
@@ -1328,7 +1333,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.0").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.1").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

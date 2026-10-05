@@ -1,0 +1,55 @@
+name: LEMMIQ V271 Package
+
+on:
+  push:
+    branches: [v2.7.1]
+
+jobs:
+  source_bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build V2.7.1 setup bundle
+        run: |
+          mkdir -p dist
+          python - <<'PY'
+          import zipfile
+          files = [
+            ".gitignore",
+            "PLAY_INTERNAL_TESTING.md",
+            "android/app/build.gradle.kts",
+            "android/keystore.properties.example",
+            "android/create-upload-key.cmd",
+            "android/build-play-bundle.cmd",
+            "backend/app/main.py",
+            "backend/web/index.html",
+            "backend/web/app.js",
+            "backend/web/sw.js",
+            ".github/workflows/v271-ci.yml",
+            ".github/workflows/v271-play.yml",
+            ".github/workflows/v271-package.yml",
+          ]
+          notes = [
+            "LEMMIQ V2.7.1 PLAY / INTERNAL TESTING SETUP",
+            "",
+            "Extract this ZIP directly over the root of your existing LEMMIQ repository.",
+            "Then read PLAY_INTERNAL_TESTING.md.",
+            "",
+            "Git commands:",
+            "git status",
+            "git diff --stat",
+            "git add .",
+            "git commit -m \"LEMMIQ V2.7.1 - Play internal testing setup\"",
+            "git push origin main",
+          ]
+          with zipfile.ZipFile("dist/LEMMIQ_V2.7.1_PLAY_SETUP.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for path in files:
+                  z.write(path,path)
+              z.writestr("V2.7.1_INSTALL.txt","\n".join(notes)+"\n")
+          PY
+      - name: Upload setup bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: LEMMIQ-V2.7.1-PLAY-SETUP
+          path: dist/LEMMIQ_V2.7.1_PLAY_SETUP.zip
+          if-no-files-found: error

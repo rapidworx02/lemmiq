@@ -1,0 +1,11 @@
+LEMMIQ V2.7.1 PLAY / INTERNAL TESTING SETUP
+
+Extract this ZIP directly over the root of your existing LEMMIQ repository.
+Then read PLAY_INTERNAL_TESTING.md.
+
+Git commands:
+git status
+git diff --stat
+git add .
+git commit -m "LEMMIQ V2.7.1 - Play internal testing setup"
+git push origin main
