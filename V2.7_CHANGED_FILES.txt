@@ -1,0 +1,16 @@
+backend/app/models.py
+backend/app/main.py
+backend/app/chat_agent.py
+backend/app/v27.py
+backend/web/index.html
+backend/web/app.js
+backend/web/styles.css
+backend/web/sw.js
+android/app/build.gradle.kts
+android/app/src/main/java/com/lemmiq/app/Models.kt
+android/app/src/main/java/com/lemmiq/app/Api.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqCallActivity.kt
+android/app/src/main/java/com/lemmiq/app/V24Ui.kt
+.github/workflows/v27-ci.yml

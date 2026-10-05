@@ -1,0 +1,17 @@
+LEMMIQ V2.7 PATCH
+
+Extract this ZIP directly over the root of your existing LEMMIQ repository.
+
+Highlights: simplified Q home; Q Vision + reusable Vision memory; Q Smart Memory;
+refined Q-to-Q; story-style Android Updates; automatic push UX; web cache/Chats fix;
+and AUTO one-reply-per-human-trigger protection.
+
+Q Vision requires the existing ANTHROPIC_API_KEY and media storage configuration.
+New database tables are created automatically by Base.metadata.create_all.
+
+Then run:
+git status
+git diff --stat
+git add .
+git commit -m "LEMMIQ V2.7 - Q Vision, smart memory and UX upgrades"
+git push origin main

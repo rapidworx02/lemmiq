@@ -56,6 +56,10 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var qDoAnswer by mutableStateOf<QDoResponseDto?>(null)
     var qDailyBrief by mutableStateOf<QDailyBriefDto?>(null)
     var qCoordination by mutableStateOf(QCoordinationListDto())
+    var qHome by mutableStateOf<QHomeDto?>(null)
+    var visionHistory by mutableStateOf<List<VisionMemoryDto>>(emptyList())
+    var activeVision by mutableStateOf<VisionMemoryDto?>(null)
+    var visionBusy by mutableStateOf(false)
     private var autoSocialScanned=false
     var notificationCapture by mutableStateOf(NotificationControl.enabled(appCtx))
     var insightSync by mutableStateOf(NotificationControl.sync(appCtx))
@@ -131,7 +135,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -296,10 +300,10 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         externalQ=ExternalConsent.includeInQ(appCtx)
         externalDays=ExternalConsent.days(appCtx)
     }
-    fun setExternalEnabled(v:Boolean){ExternalConsent.setEnabled(appCtx,v);if(!v)ExternalConsent.setQ(appCtx,false);reloadExternalSettings();refreshExternal()}
+    fun updateExternalEnabled(v:Boolean){ExternalConsent.setEnabled(appCtx,v);if(!v)ExternalConsent.setQ(appCtx,false);reloadExternalSettings();refreshExternal()}
     fun setExternalSource(name:String,v:Boolean){ExternalConsent.setSource(appCtx,name,v);reloadExternalSettings();refreshExternal()}
-    fun setExternalQ(v:Boolean){ExternalConsent.setQ(appCtx,v);reloadExternalSettings()}
-    fun setExternalDays(days:Int){ExternalConsent.setDays(appCtx,days);reloadExternalSettings();refreshExternal()}
+    fun updateExternalQ(v:Boolean){ExternalConsent.setQ(appCtx,v);reloadExternalSettings()}
+    fun updateExternalDays(days:Int){ExternalConsent.setDays(appCtx,days);reloadExternalSettings();refreshExternal()}
     fun refreshExternal(){
         if(store.userId<1)return
         externalMessages=ExternalChatDb(appCtx).use{it.list(store.userId,externalDays)}
@@ -423,7 +427,9 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             agentBrief=api.agentBrief()
             styleProfile=api.agentProfile(30)
             qDailyBrief=runCatching{api.qDailyBrief()}.getOrNull()
-            qCoordination=runCatching{api.qCoordination()}.getOrDefault(QCoordinationListDto())
+            qHome=runCatching{api.qHome()}.getOrNull()
+            qCoordination=runCatching{api.qCoordinationV27()}.getOrDefault(QCoordinationListDto())
+            visionHistory=runCatching{api.visionList()}.getOrDefault(emptyList())
             if(!autoSocialScanned){
                 autoSocialScanned=true
                 runCatching{api.scanSocial()}
@@ -432,8 +438,6 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             }
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
-
-    fun setQMode(mode:String){qMode=if(mode=="DO")"DO" else "ASK";qDoAnswer=null;agentAnswer=null}
 
     fun askAgent(question:String)=viewModelScope.launch{
         if(question.isBlank())return@launch
@@ -455,17 +459,70 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         if(targetIds.isEmpty()||prompt.isBlank())return@launch
         agentBusy=true;error=null
         try{
-            api.createQCoordination(targetIds,kind,prompt.trim(),options.filter{it.isNotBlank()})
-            qCoordination=api.qCoordination()
+            api.createQCoordinationV27(targetIds,kind,prompt.trim(),options.filter{it.isNotBlank()})
+            qCoordination=api.qCoordinationV27()
+            qHome=runCatching{api.qHome()}.getOrNull()
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
     fun respondQCoordination(id:Int,choice:String,note:String="")=viewModelScope.launch{
         agentBusy=true;error=null
         try{
-            api.respondQCoordination(id,choice,note)
-            qCoordination=api.qCoordination()
+            api.respondQCoordinationV27(id,choice,note)
+            qCoordination=api.qCoordinationV27()
+            qHome=runCatching{api.qHome()}.getOrNull()
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
+    }
+
+    fun refreshVision()=viewModelScope.launch{
+        runCatching{visionHistory=api.visionList();qHome=api.qHome()}.onFailure{error=it.message}
+    }
+
+    fun scanVisionUri(uri:Uri,question:String="What is in this image? Give me the useful details.")=viewModelScope.launch{
+        visionBusy=true;error=null
+        try{
+            val data=withContext(Dispatchers.IO){
+                val cr=appCtx.contentResolver;var name="q-vision.jpg"
+                cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{x->if(x.moveToFirst())name=x.getString(0)?:name}
+                val bytes=cr.openInputStream(uri)?.use{it.readBytes()}?:throw IllegalArgumentException("Cannot read selected image")
+                if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
+                Triple(name,cr.getType(uri)?:"image/jpeg",bytes)
+            }
+            activeVision=api.visionScan(data.first,data.second,data.third,question)
+            visionHistory=api.visionList();qHome=api.qHome()
+        }catch(e:Exception){error=e.message}finally{visionBusy=false}
+    }
+
+    fun scanVisionBytes(bytes:ByteArray,question:String="What is in this image? Give me the useful details.")=viewModelScope.launch{
+        visionBusy=true;error=null
+        try{
+            if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
+            activeVision=api.visionScan("camera.jpg","image/jpeg",bytes,question)
+            visionHistory=api.visionList();qHome=api.qHome()
+        }catch(e:Exception){error=e.message}finally{visionBusy=false}
+    }
+
+    fun askVision(question:String)=viewModelScope.launch{
+        val v=activeVision?:return@launch
+        if(question.isBlank())return@launch
+        visionBusy=true;error=null
+        try{activeVision=api.visionAsk(v.id,question.trim());visionHistory=api.visionList()}
+        catch(e:Exception){error=e.message}finally{visionBusy=false}
+    }
+
+    fun openVision(v:VisionMemoryDto){activeVision=v}
+
+    fun clearVision(){activeVision=null}
+
+    fun deleteVision(id:Int)=viewModelScope.launch{
+        runCatching{api.deleteVision(id);if(activeVision?.id==id)activeVision=null;visionHistory=api.visionList();qHome=api.qHome()}
+            .onFailure{error=it.message}
+    }
+
+    fun cancelQCoordination(requestKey:String)=viewModelScope.launch{
+        agentBusy=true;error=null
+        try{api.cancelQCoordination(requestKey);qCoordination=api.qCoordinationV27();qHome=api.qHome()}
+        catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
     fun summarizeActiveChat()=viewModelScope.launch{

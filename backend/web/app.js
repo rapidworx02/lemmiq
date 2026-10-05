@@ -15,6 +15,10 @@ const state = {
   statusBlobUrl: null,
   trustHistory: [],
   socialBrief: null,
+  qHome: null,
+  qCoordination: {inbox:[],outbox:[]},
+  vision: [],
+  visionBlobUrl: null,
   replyTo: null,
   socket: null,
   installPrompt: null,
@@ -104,7 +108,10 @@ function chatsHome(pushHistory=false){
   if($("activeChat"))$("activeChat").classList.add("hidden");
   if($("activeGroup"))$("activeGroup").classList.add("hidden");
   if($("emptyChat"))$("emptyChat").classList.remove("hidden");
+  if($("conversationList"))$("conversationList").scrollTop=0;
+  window.scrollTo({top:0,behavior:"instant"});
   renderChats();
+  loadChats().catch(()=>{});
   if(pushHistory)history.pushState({view:"chats"},"","#chats");
 }
 
@@ -1086,15 +1093,174 @@ function askQFromChatSearch(){
   runQStarter(q);
 }
 
-async function loadAgentV24(){await loadAgent();try{state.socialBrief=await api("/v24/social-iq/brief");renderSocialIq()}catch{}}
-function renderSocialIq(){
-  const b=state.socialBrief||{count:0,promises:0,follow_ups:0,items:[]};
-  $("socialIqStats").innerHTML=`<div class="stat"><strong>${b.count}</strong><span>remembered</span></div><div class="stat"><strong>${b.promises}</strong><span>promises</span></div><div class="stat"><strong>${b.follow_ups}</strong><span>follow-ups</span></div>`;
-  $("socialMemoryList").innerHTML=(b.items||[]).map(m=>`<div class="social-memory"><strong>${escapeHtml(m.memory_type)} · ${escapeHtml(m.title)}</strong><p>${escapeHtml(m.detail||"")}</p><span class="micro">${escapeHtml(m.contact||"")} · ${new Date(m.created_at).toLocaleDateString()}</span><button class="mini" onclick="deleteSocialMemory(${m.id})">Delete</button></div>`).join("")||`<p class="micro">No Social IQ memories yet. Scan recent chats when you want Q to extract explicit follow-ups and commitments.</p>`;
+async function loadAgentV24(){
+  try{
+    const [home,vision,coord,social]=await Promise.all([
+      api("/v27/q/home"),
+      api("/v27/vision"),
+      api("/v27/q/coordination"),
+      api("/v24/social-iq/brief").catch(()=>({count:0,promises:0,follow_ups:0,items:[]}))
+    ]);
+    state.qHome=home;
+    state.vision=vision;
+    state.qCoordination=coord;
+    state.socialBrief=social;
+    renderQHome();
+  }catch(e){toast(e.message,true)}
 }
-async function scanSocial(){try{toast("Q is scanning recent chats…");const r=await api("/v24/social-iq/scan",{method:"POST"});state.socialBrief=await api("/v24/social-iq/brief");renderSocialIq();toast(`${r.added||0} new memory items added`)}catch(e){toast(e.message,true)}}
-async function deleteSocialMemory(id){await api(`/v24/social-iq/memories/${id}`,{method:"DELETE"});state.socialBrief=await api("/v24/social-iq/brief");renderSocialIq()}
-window.deleteSocialMemory=deleteSocialMemory;
+function renderQHome(){
+  const h=state.qHome||{today:{},memory:{},q_to_q:{}};
+  const t=h.today||{},m=h.memory||{},qq=h.q_to_q||{};
+  if($("qTodayTitle")){
+    const bits=[];
+    if(t.needs_reply_count)bits.push(`${t.needs_reply_count} need reply`);
+    if(t.follow_ups)bits.push(`${t.follow_ups} follow-up${t.follow_ups===1?"":"s"}`);
+    if(t.promises)bits.push(`${t.promises} promise${t.promises===1?"":"s"}`);
+    $("qTodayTitle").textContent=bits.length?bits.join(" · "):"You're caught up ✓";
+    $("qTodayMeta").textContent=t.summary||"";
+  }
+  if($("qToQSummary"))$("qToQSummary").textContent=(qq.pending_count||0)?`${qq.pending_count} active plan${qq.pending_count===1?"":"s"}`:"No active plans";
+  if($("qMemorySummary"))$("qMemorySummary").textContent=`${m.count||0} conversation memories`;
+  const vc=m.vision_count||state.vision.length||0;
+  if($("qVisionSummary"))$("qVisionSummary").textContent=`${vc} saved scan${vc===1?"":"s"}`;
+  renderQPlans();
+  renderVisionRecent();
+}
+function renderQPlans(){
+  const card=$("qToQPlansCard"),host=$("qToQPlans");
+  if(!card||!host)return;
+  const groups=new Map();
+  for(const r of (state.qCoordination?.outbox||[])){
+    if(!["PENDING","RESPONDED"].includes(r.status))continue;
+    if(!groups.has(r.request_key))groups.set(r.request_key,[]);
+    groups.get(r.request_key).push(r);
+  }
+  const rows=[...groups.values()];
+  card.classList.toggle("hidden",!rows.length);
+  host.innerHTML=rows.map(g=>{
+    const first=g[0];
+    const names=[...new Set(g.map(x=>x.target?.display_name).filter(Boolean))].join(", ");
+    const replied=g.filter(x=>x.status==="RESPONDED").length;
+    return `<div class="q27-plan"><div><strong>${escapeHtml(first.prompt)}</strong><small>${escapeHtml(names||"LEMMIQ contacts")} · ${replied}/${g.length} responses</small></div><button class="mini" onclick="cancelQPlan('${escapeHtml(first.request_key)}')">Cancel</button></div>`;
+  }).join("");
+}
+async function cancelQPlan(key){
+  try{
+    await api(`/v27/q/coordination/${encodeURIComponent(key)}`,{method:"DELETE"});
+    await loadAgentV24();
+    toast("Q-to-Q plan cancelled");
+  }catch(e){toast(e.message,true)}
+}
+window.cancelQPlan=cancelQPlan;
+
+function renderVisionRecent(){
+  const card=$("qVisionRecentCard"),host=$("qVisionRecent");
+  if(!card||!host)return;
+  const rows=(state.vision||[]).slice(0,6);
+  card.classList.toggle("hidden",!rows.length);
+  host.innerHTML=rows.map(v=>`<button class="vision-row" onclick="openVisionMemory(${v.id})"><span>${escapeHtml(v.category||"PHOTO")}</span><strong>${escapeHtml(v.title||"Vision scan")}</strong><small>${escapeHtml(v.summary||"")}</small></button>`).join("");
+}
+async function uploadQVision(file){
+  if(!file)return;
+  const fd=new FormData();
+  fd.append("file",file);
+  fd.append("question",($("agentQuestion")?.value||"").trim()||"What is in this image? Give me the useful details.");
+  fd.append("save","true");
+  try{
+    toast("Q Vision is analysing…");
+    const v=await api("/v27/vision",{method:"POST",body:fd});
+    await loadAgentV24();
+    await openVisionMemory(v.id);
+  }catch(e){toast(e.message,true)}
+}
+async function openVisionMemory(id){
+  const v=(state.vision||[]).find(x=>x.id===Number(id))||await api(`/v27/vision/${id}`);
+  if(state.visionBlobUrl){URL.revokeObjectURL(state.visionBlobUrl);state.visionBlobUrl=null}
+  let imageHtml="";
+  try{
+    const r=await fetch(`/v27/vision/${v.id}/media`,{headers:authHeaders()});
+    if(r.ok){
+      const blob=await r.blob();
+      state.visionBlobUrl=URL.createObjectURL(blob);
+      imageHtml=`<img class="vision-preview" src="${state.visionBlobUrl}" alt="Q Vision image">`;
+    }
+  }catch{}
+  const history=(v.history||[]).slice(-6).map(h=>`<p class="micro"><strong>${h.role==="q"?"Q":"You"}:</strong> ${escapeHtml(h.text)}</p>`).join("");
+  openModal(`<h3>📷 ${escapeHtml(v.title||"Q Vision")}</h3>${imageHtml}<span class="tag">${escapeHtml(v.category||"OTHER")}</span><p>${escapeHtml(v.summary||"")}</p>${v.extracted_text?`<h4>Extracted text</h4><p class="vision-extracted">${escapeHtml(v.extracted_text)}</p>`:""}${history?`<h4>Conversation</h4>${history}`:""}<textarea id="visionFollow" placeholder="Ask another question about this image…"></textarea><div class="suggestion-actions"><button id="visionDelete" class="danger">Delete</button><button id="visionAsk" class="primary">Ask Q Vision</button></div>`);
+  $("visionAsk").onclick=async()=>{
+    const q=$("visionFollow").value.trim();
+    if(!q)return;
+    try{
+      $("visionAsk").disabled=true;
+      $("visionAsk").textContent="Analysing…";
+      const updated=await api(`/v27/vision/${v.id}/ask`,{method:"POST",body:JSON.stringify({question:q})});
+      state.vision=state.vision.map(x=>x.id===updated.id?updated:x);
+      closeModal();
+      await openVisionMemory(updated.id);
+    }catch(e){toast(e.message,true)}
+  };
+  $("visionDelete").onclick=async()=>{
+    if(confirm("Delete this Vision memory?")){
+      await api(`/v27/vision/${v.id}`,{method:"DELETE"});
+      closeModal();
+      await loadAgentV24();
+    }
+  };
+}
+window.openVisionMemory=openVisionMemory;
+
+function showVisionHistory(){
+  const rows=state.vision||[];
+  openModal(`<h3>Q Vision memory</h3><p class="micro">Saved scans can be reopened and questioned again without rescanning.</p><div class="vision-list">${rows.length?rows.map(v=>`<button class="vision-row" onclick="closeModal();openVisionMemory(${v.id})"><span>${escapeHtml(v.category||"PHOTO")}</span><strong>${escapeHtml(v.title||"Vision scan")}</strong><small>${escapeHtml(v.summary||"")}</small></button>`).join(""):"<p>No saved scans yet.</p>"}</div>`);
+}
+
+async function startQToQ(){
+  const selected=new Set();
+  openModal("<h3>Q-to-Q coordination</h3><p class='micro'>Only use this for shared plans, availability or polls. Private Q memory is not shared.</p><input id='qtqSearch' placeholder='Search LEMMIQ contacts'><div id='qtqUsers' class='modal-results'></div><textarea id='qtqPrompt' placeholder='What should Q coordinate?'></textarea><textarea id='qtqOptions' placeholder='Options / times — one per line'></textarea><button id='qtqSend' class='primary full'>Send Q request</button>");
+  $("qtqSearch").oninput=async()=>{
+    const q=$("qtqSearch").value.trim();
+    if(q.length<2){$("qtqUsers").innerHTML="";return}
+    try{
+      const users=await api(`/users/search?q=${encodeURIComponent(q)}`);
+      $("qtqUsers").innerHTML=users.map(u=>`<label class="user-result"><span>${escapeHtml(u.display_name)} @${escapeHtml(u.username)}</span><input type="checkbox" data-uid="${u.id}"></label>`).join("");
+      qsa("#qtqUsers input[data-uid]").forEach(x=>x.onchange=()=>{
+        const id=Number(x.dataset.uid);
+        x.checked?selected.add(id):selected.delete(id);
+      });
+    }catch(e){toast(e.message,true)}
+  };
+  $("qtqSend").onclick=async()=>{
+    const prompt=$("qtqPrompt").value.trim();
+    const options=$("qtqOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);
+    if(!selected.size||!prompt)return toast("Choose a contact and enter a shared plan.",true);
+    try{
+      await api("/v27/q/coordination",{method:"POST",body:JSON.stringify({target_user_ids:[...selected],kind:options.length?"AVAILABILITY":"PLAN",prompt,options})});
+      closeModal();
+      await loadAgentV24();
+      toast("Q-to-Q request sent");
+    }catch(e){toast(e.message,true)}
+  };
+}
+
+async function askAgent(){
+  const q=$("agentQuestion").value.trim();
+  if(!q)return;
+  $("agentAnswer").innerHTML="<div class='answer-box'>Q is thinking…</div>";
+  try{
+    const r=await api("/agent/ask",{method:"POST",body:JSON.stringify({question:q,days:30,external_context:[]})});
+    $("agentAnswer").innerHTML=`<div class="answer-box"><strong>Q</strong><p>${escapeHtml(r.answer||"")}</p>${(r.references||[]).slice(0,3).map(x=>`<p class="micro">• ${escapeHtml(x.contact||"")}: ${escapeHtml(x.text||"")}</p>`).join("")}</div>`;
+  }catch(e){
+    $("agentAnswer").innerHTML=`<div class="answer-box">${escapeHtml(e.message)}</div>`;
+  }
+}
+async function scanSocial(){
+  try{
+    toast("Refreshing Q memory…");
+    await api("/v24/social-iq/scan",{method:"POST"});
+    await loadAgentV24();
+    toast("Q memory refreshed");
+  }catch(e){toast(e.message,true)}
+}
 
 async function uploadProfilePhoto(file){if(!file)return;const fd=new FormData();fd.append("file",file);try{const u=await api("/v24/profile/avatar",{method:"POST",body:fd});state.user={...state.user,...u};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));renderMeAvatar();await loadChats();toast("Profile photo updated")}catch(e){toast(e.message,true)}}
 async function removeProfilePhoto(){try{const u=await api("/v24/profile/avatar",{method:"DELETE"});state.user={...state.user,...u};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));renderMeAvatar();await loadChats();toast("Profile photo removed")}catch(e){toast(e.message,true)}}
@@ -1142,7 +1308,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("statusNextBtn").onclick=()=>{if(state.statusIndex<state.statusStoryIds.length-1)showStatusAt(state.statusIndex+1)};
   $("statusViewer").addEventListener("click",e=>{if(e.target===$("statusViewer"))closeStatusViewer()});
 
-  $("askAgentBtn").onclick=askAgent;$("scanSocialBtn").onclick=scanSocial;
+  $("askAgentBtn").onclick=askAgent;
+  $("scanSocialBtn").onclick=scanSocial;
+  $("qVisionInput").onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""};
+  $("qVisionCameraInput").onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""};
+  qsa(".q27-vision-inline").forEach(x=>x.onchange=e=>{uploadQVision(e.target.files[0]);e.target.value=""});
+  $("qVisionHistoryBtn").onclick=showVisionHistory;
+  $("qVisionHistoryBtn2").onclick=showVisionHistory;
+  $("qToQStartBtn").onclick=startQToQ;
   $("trustBtn").onclick=()=>{const t=$("trustText").value.trim();if(t)runTrust(t)};
   $("trustHistorySearch").oninput=()=>{clearTimeout(window.__trustSearch);window.__trustSearch=setTimeout(loadTrustHistory,250)};
   $("clearTrustHistoryBtn").onclick=async()=>{if(confirm("Clear all saved Trust checks?")){await api("/trust/history",{method:"DELETE"});await loadTrustHistory()}};
@@ -1155,7 +1328,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

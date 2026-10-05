@@ -168,3 +168,35 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 .status-nav{position:absolute;z-index:2;top:48%;width:44px;height:58px;border:0;border-radius:12px;background:rgba(0,0,0,.28);color:#fff;font-size:34px;cursor:pointer}.status-nav:disabled{opacity:.15}.status-prev{left:8px}.status-next{right:8px}
 .status-viewer-reply{padding:12px 16px max(14px,env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.55))}.status-viewer-reply button{width:100%;min-height:44px}
 @media(max-width:680px){.updates-card{border:0;border-radius:0;padding:14px 10px;background:transparent}.status-viewer-shell{width:100%}.status-nav{width:34px;background:transparent}.status-text-story{padding:30px}}
+
+
+/* LEMMIQ V2.7 — compact Q home + Q Vision */
+.q27-compose{max-width:920px;margin:0 auto 14px;border-radius:26px}
+.q27-compose h2{font-size:34px;margin:2px 0}
+.q27-compose textarea{min-height:105px;margin-top:14px}
+.q27-input-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.q27-input-actions .primary{margin-left:auto}
+.q27-quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.q27-quick button,.q27-vision-shortcut{border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.055);color:inherit;padding:10px 11px;text-align:center;font-size:11px;cursor:pointer}
+.q27-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:920px;margin:0 auto 14px}
+.q27-grid .card{margin:0;min-height:150px}
+.q27-today{background:linear-gradient(145deg,#15182d,#222342)!important}
+.q27-today h3{font-size:20px}
+.q27-plan{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--line)}
+.q27-plan:last-child{border-bottom:0}.q27-plan>div{min-width:0;flex:1}
+.q27-plan strong,.q27-plan small{display:block}.q27-plan strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.q27-plan small{color:var(--muted);font-size:10px;margin-top:4px}
+.vision-list{display:grid;gap:7px}
+.vision-row{display:grid;grid-template-columns:auto 1fr;column-gap:9px;row-gap:2px;width:100%;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.045);color:inherit;text-align:left;padding:11px;cursor:pointer}
+.vision-row span{grid-row:1/3;align-self:start;border-radius:999px;padding:4px 7px;background:rgba(122,92,255,.16);font-size:9px;color:#c8bdff}
+.vision-row strong{font-size:12px}.vision-row small{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vision-preview{width:100%;max-height:340px;object-fit:contain;border-radius:15px;background:#060711;margin:8px 0 12px}
+.vision-extracted{white-space:pre-wrap;max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:10px;background:rgba(255,255,255,.035)}
+#qToQPlansCard,#qVisionRecentCard{max-width:920px;margin:0 auto 14px}
+
+@media(max-width:700px){
+  .q27-compose{margin:0 0 12px}
+  .q27-grid{grid-template-columns:1fr;margin:0 0 12px}
+  .q27-quick{grid-template-columns:1fr 1fr}
+  .q27-input-actions .primary{margin-left:0;flex:1}
+  #qToQPlansCard,#qVisionRecentCard{margin:0 0 12px}
+}

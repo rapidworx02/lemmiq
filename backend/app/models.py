@@ -281,6 +281,40 @@ class QCoordinationRequest(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
 
 
+# ---------------- LEMMIQ V2.7 Q Vision + Smart Memory ----------------
+
+class VisionMemory(Base):
+    __tablename__ = "vision_memories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    object_key: Mapped[str] = mapped_column(String(190))
+    original_name: Mapped[str] = mapped_column(String(200), default="image")
+    mime_type: Mapped[str] = mapped_column(String(100), default="image/jpeg")
+    category: Mapped[str] = mapped_column(String(32), default="OTHER", index=True)
+    title: Mapped[str] = mapped_column(String(160), default="Vision scan")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    extracted_text: Mapped[str] = mapped_column(Text, default="")
+    analysis_json: Mapped[str] = mapped_column(Text, default="{}")
+    history_json: Mapped[str] = mapped_column(Text, default="[]")
+    saved: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class ChatMemorySummary(Base):
+    __tablename__ = "chat_memory_summaries"
+    chat_id: Mapped[int] = mapped_column(ForeignKey("chats.id"), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    through_message_id: Mapped[int] = mapped_column(Integer, default=0)
+    summary: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+class AutoReplyReceipt(Base):
+    __tablename__ = "auto_reply_receipts"
+    trigger_message_id: Mapped[int] = mapped_column(ForeignKey("messages.id"), primary_key=True)
+    responder_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    reply_message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
 # ---------------- LEMMIQ V2.4 messenger polish ----------------
 
 class MessageMeta(Base):

@@ -10,7 +10,7 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css">
+  <link rel="stylesheet" href="/web/styles.css?v=2.7.0">
   <title>LEMMIQ — Messaging with social IQ</title>
 </head>
 <body>
@@ -141,42 +141,61 @@
       </section>
 
       <section id="view-agent" class="view">
-        <article class="q-home hero-card purple glass">
-          <span class="eyebrow">LEMMIQ Q</span>
-          <h3>What can I help with?</h3>
-          <p>Q can work across your LEMMIQ chats, groups, voice-note transcripts and Social IQ memory. It never sends messages without you.</p>
-          <div class="q-starters">
-            <button data-q-prompt="Catch me up on my important conversations and anything I may have missed.">🧠 Catch me up</button>
-            <button data-q-prompt="What did I promise people recently?">🤝 What did I promise?</button>
-            <button data-q-prompt="Which chats need a reply and why?">💬 Which chats need a reply?</button>
-            <button data-q-prompt="Find any addresses, phone numbers or important details someone sent me recently.">📍 Find details</button>
-            <button data-q-prompt="Help me draft a reply. Ask me which chat if needed.">✍️ Draft a reply</button>
-            <button data-q-prompt="Summarise the important things from my conversations this week.">📅 Summarise this week</button>
-            <button data-q-prompt="I want to fact-check something.">🛡 Fact-check something</button>
-            <button data-q-prompt="Help me plan something using relevant context from my chats.">✨ Plan something</button>
-            <button data-q-prompt="Ask me which group I want to analyse, then help me with that group.">👥 Ask about a group</button>
+        <article class="card glass q27-compose">
+          <div class="section-head">
+            <div><span class="eyebrow">LEMMIQ Q</span><h2>Q</h2><p class="micro">Your personal LEMMIQ agent</p></div>
+            <button id="qVisionHistoryBtn" class="ghost">📷 Vision history</button>
           </div>
-        </article>
-        <div class="grid two">
-          <article class="hero-card purple glass">
-            <span class="eyebrow">Q CHAT AGENT</span>
-            <h3>Your communication copilot</h3>
-            <p id="briefText">Loading your brief…</p>
-            <div id="briefStats" class="stats"></div>
-          </article>
-          <article class="card glass">
-            <h3>Personal style</h3>
-            <p id="styleSummary">Building your profile from your sent messages.</p>
-            <div id="styleSignals" class="chips"></div>
-          </article>
-        </div>
-        <article class="card glass ask-card">
-          <h3>Ask LEMMIQ</h3>
-          <textarea id="agentQuestion" placeholder="Who is waiting for a reply? What did someone say about Saturday?"></textarea>
-          <button id="askAgentBtn" class="primary">Ask Q</button>
+          <textarea id="agentQuestion" placeholder="Ask Q anything…"></textarea>
+          <div class="q27-input-actions">
+            <label class="ghost upload">＋ Image<input id="qVisionInput" type="file" accept="image/*" hidden></label>
+            <label class="ghost upload">📷 Camera<input id="qVisionCameraInput" type="file" accept="image/*" capture="environment" hidden></label>
+            <button id="askAgentBtn" class="primary">Ask Q</button>
+          </div>
+          <div class="q27-quick">
+            <button data-q-prompt="Catch me up on my important conversations and anything I may have missed.">Catch me up</button>
+            <button data-q-prompt="Which chats need a reply and why?">Needs reply</button>
+            <button data-q-prompt="What did I promise people recently?">My promises</button>
+            <label class="q27-vision-shortcut">📷 Q Vision<input class="q27-vision-inline" type="file" accept="image/*" capture="environment" hidden></label>
+          </div>
           <div id="agentAnswer" class="answer"></div>
         </article>
-        <article class="card glass"><div class="section-head"><div><span class="eyebrow">SOCIAL IQ MEMORY</span><h3>What Q should help you remember</h3></div><button id="scanSocialBtn" class="ghost">✨ Scan recent chats</button></div><div id="socialIqStats" class="stats"></div><div id="socialMemoryList"></div><p class="micro">Q extracts only explicit commitments, follow-ups, plans, addresses and deadlines. You can delete any memory.</p></article>
+
+        <div class="q27-grid">
+          <article class="card glass q27-today">
+            <span class="eyebrow">TODAY</span>
+            <h3 id="qTodayTitle">Checking your conversations…</h3>
+            <p id="qTodayMeta" class="micro"></p>
+          </article>
+          <article class="card glass">
+            <span class="eyebrow">Q-TO-Q</span>
+            <h3 id="qToQSummary">No active plans</h3>
+            <p class="micro">Use Q-to-Q only for shared plans, availability and polls.</p>
+            <button id="qToQStartBtn" class="ghost">Start coordination</button>
+          </article>
+          <article class="card glass">
+            <span class="eyebrow">Q MEMORY</span>
+            <h3 id="qMemorySummary">Loading memory…</h3>
+            <p class="micro">Smart recent context + relevant older messages + rolling summaries.</p>
+            <button id="scanSocialBtn" class="ghost">Refresh memory</button>
+          </article>
+          <article class="card glass">
+            <span class="eyebrow">Q VISION</span>
+            <h3 id="qVisionSummary">No saved scans yet</h3>
+            <p class="micro">Reopen a previous scan and ask more without rescanning.</p>
+            <button id="qVisionHistoryBtn2" class="ghost">Open Vision memory</button>
+          </article>
+        </div>
+
+        <article id="qToQPlansCard" class="card glass hidden">
+          <div class="section-head"><div><span class="eyebrow">ACTIVE Q-TO-Q</span><h3>Plans</h3></div></div>
+          <div id="qToQPlans"></div>
+        </article>
+
+        <article id="qVisionRecentCard" class="card glass hidden">
+          <div class="section-head"><div><span class="eyebrow">RECENT VISION</span><h3>Saved scans</h3></div></div>
+          <div id="qVisionRecent" class="vision-list"></div>
+        </article>
       </section>
 
       <section id="view-trust" class="view">
@@ -359,6 +378,6 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js" defer></script>
+  <script src="/web/app.js?v=2.7.0" defer></script>
 </body>
 </html>

@@ -161,6 +161,63 @@ class Api(private val store:SessionStore){
     }
 
 
+    // ---------- LEMMIQ V2.7 ----------
+    suspend fun qHome():QHomeDto =
+        gson.fromJson(req(b("$base/v27/q/home").get().build()),QHomeDto::class.java)
+
+    suspend fun visionList(q:String=""):List<VisionMemoryDto>{
+        val url="$base/v27/vision"+if(q.isBlank())"" else "?q=${URLEncoder.encode(q,"UTF-8")}"
+        val t=req(b(url).get().build())
+        return gson.fromJson(t,object:TypeToken<List<VisionMemoryDto>>(){}.type)
+    }
+
+    suspend fun visionScan(name:String,mime:String,bytes:ByteArray,question:String):VisionMemoryDto{
+        val body=MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("question",question)
+            .addFormDataPart("save","true")
+            .addFormDataPart("file",name,bytes.toRequestBody(mime.toMediaType()))
+            .build()
+        val text=withContext(Dispatchers.IO){
+            mediaClient.newCall(b("$base/v27/vision").post(body).build()).execute().use{res->
+                val response=res.body?.string().orEmpty()
+                if(!res.isSuccessful)throw IOException("Q Vision HTTP ${res.code}: ${response.take(240)}")
+                response
+            }
+        }
+        return gson.fromJson(text,VisionMemoryDto::class.java)
+    }
+
+    suspend fun visionAsk(id:Int,question:String):VisionMemoryDto{
+        val rb=gson.toJson(mapOf("question" to question)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v27/vision/$id/ask").post(rb).build()),VisionMemoryDto::class.java)
+    }
+
+    suspend fun deleteVision(id:Int){req(b("$base/v27/vision/$id").delete().build())}
+
+    suspend fun visionMediaBytes(id:Int):ByteArray=withContext(Dispatchers.IO){
+        mediaClient.newCall(b("$base/v27/vision/$id/media").get().build()).execute().use{res->
+            if(!res.isSuccessful)throw IOException("Vision media HTTP ${res.code}")
+            res.body?.bytes()?:throw IOException("Empty Vision media")
+        }
+    }
+
+    suspend fun qCoordinationV27():QCoordinationListDto =
+        gson.fromJson(req(b("$base/v27/q/coordination").get().build()),QCoordinationListDto::class.java)
+
+    suspend fun createQCoordinationV27(targetIds:List<Int>,kind:String,prompt:String,options:List<String>):QCoordinationCreateDto {
+        val rb=gson.toJson(mapOf("target_user_ids" to targetIds,"kind" to kind,"prompt" to prompt,"options" to options)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v27/q/coordination").post(rb).build()),QCoordinationCreateDto::class.java)
+    }
+
+    suspend fun respondQCoordinationV27(id:Int,choice:String,note:String):QCoordinationDto {
+        val rb=gson.toJson(mapOf("choice" to choice,"note" to note)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v27/q/coordination/$id/respond").post(rb).build()),QCoordinationDto::class.java)
+    }
+
+    suspend fun cancelQCoordination(requestKey:String){
+        req(b("$base/v27/q/coordination/${URLEncoder.encode(requestKey,"UTF-8")}").delete().build())
+    }
+
     suspend fun pushInsight(e:PhoneEvent){
         val payload=mapOf(
             "client_event_id" to e.client_event_id, "category" to e.category,
