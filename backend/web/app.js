@@ -1134,7 +1134,13 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   $("muteCallBtn").onclick=toggleCallMute;$("endCallBtn").onclick=()=>endVoiceCall(true);$("speakerCallBtn").onclick=()=>toast("Browser speaker routing follows your device/browser audio output.");
 
-  $("addTextStatusBtn").onclick=addTextStatus;$("statusMediaInput").onchange=e=>{uploadStatusMedia(e.target.files[0]);e.target.value=""};
+  $("addTextStatusBtn").onclick=addTextStatus;
+  $("statusMediaInput").onchange=e=>{uploadStatusMedia(e.target.files[0]);e.target.value=""};
+  $("statusRefreshBtn").onclick=loadStatuses;
+  $("statusCloseBtn").onclick=closeStatusViewer;
+  $("statusPrevBtn").onclick=()=>{if(state.statusIndex>0)showStatusAt(state.statusIndex-1)};
+  $("statusNextBtn").onclick=()=>{if(state.statusIndex<state.statusStoryIds.length-1)showStatusAt(state.statusIndex+1)};
+  $("statusViewer").addEventListener("click",e=>{if(e.target===$("statusViewer"))closeStatusViewer()});
 
   $("askAgentBtn").onclick=askAgent;$("scanSocialBtn").onclick=scanSocial;
   $("trustBtn").onclick=()=>{const t=$("trustText").value.trim();if(t)runTrust(t)};
