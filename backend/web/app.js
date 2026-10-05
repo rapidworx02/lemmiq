@@ -100,7 +100,7 @@ function showApp(){
   $("meName").textContent=state.user?.display_name||"LEMMIQ User";
   $("meUsername").textContent="@"+(state.user?.username||"");
   renderMeAvatar();
-  connectSocket(); refreshCurrent();
+  connectSocket(); refreshCurrent(); if(window.refreshV28Access) window.refreshV28Access();
 }
 function chatsHome(pushHistory=false){
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
@@ -119,7 +119,7 @@ function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me"];
+  const secondary=["trust","business","activity","money","me","q-economy","q-admin"];
   const navName=secondary.includes(name)?"more":name;
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
@@ -132,7 +132,9 @@ function setView(name){
     business:["Business Agent","Teach LEMMIQ how your business operates."],
     activity:["Activity","Detected phone activity synced by your Android companion."],
     money:["Money","Review and correct notification-derived payment insights."],
-    me:["Me","Your profile photo, account and LEMMIQ access."]
+    me:["Me","Your profile photo, account and LEMMIQ access."],
+    "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
+    "q-admin":["Q Admin","Treasury, USDT payments, marketplace and economy controls."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -148,6 +150,8 @@ async function refreshView(name){
     if(name==="activity") await loadActivity();
     if(name==="money") await loadMoney();
     if(name==="me") renderMeAvatar();
+    if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
+    if(name==="q-admin" && window.loadQAdmin) await window.loadQAdmin();
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
