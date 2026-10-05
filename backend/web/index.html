@@ -118,7 +118,26 @@
       </section>
 
       <section id="view-updates" class="view">
-        <div class="grid two"><article class="hero-card purple glass"><span class="eyebrow">LEMMIQ STATUS</span><h3>Share what’s happening.</h3><p>Text, photo or video status automatically expires after 24 hours.</p><button id="addTextStatusBtn" class="primary">＋ Text status</button><label class="upload ghost">📷 Photo / video<input id="statusMediaInput" type="file" accept="image/*,video/*" hidden></label></article><article class="card glass"><h3>My status</h3><div id="myStatusList"></div></article></div><article class="card glass"><h3>Recent updates</h3><div id="statusList" class="status-grid"></div></article>
+        <article class="updates-card glass">
+          <div class="section-head">
+            <div><h2>Updates</h2><p class="micro">Status · disappears after 24 hours</p></div>
+            <button id="statusRefreshBtn" class="ghost" title="Refresh statuses">↻</button>
+          </div>
+          <h3 class="status-heading">Status</h3>
+          <div id="statusStories" class="status-stories"></div>
+          <div class="status-create-actions">
+            <button id="addTextStatusBtn" class="ghost">✎ Text</button>
+            <label class="upload ghost">📷 Photo / video<input id="statusMediaInput" type="file" accept="image/*,video/*" hidden></label>
+          </div>
+          <div class="status-list-section">
+            <h3>Recent updates</h3>
+            <div id="statusList" class="status-list"></div>
+          </div>
+          <div class="status-list-section">
+            <h3>My status</h3>
+            <div id="myStatusList" class="status-list"></div>
+          </div>
+        </article>
       </section>
 
       <section id="view-agent" class="view">
@@ -312,6 +331,24 @@
       </section>
     </section>
   </main>
+
+  <div id="statusViewer" class="status-viewer hidden" aria-hidden="true">
+    <div class="status-viewer-shell">
+      <div class="status-progress"><span id="statusProgressBar"></span></div>
+      <div class="status-viewer-head">
+        <button id="statusCloseBtn" class="status-close" aria-label="Close status">‹</button>
+        <div id="statusViewerAvatar" class="avatar"></div>
+        <div class="status-viewer-person"><strong id="statusViewerName">Status</strong><small id="statusViewerTime"></small></div>
+        <button id="statusDeleteBtn" class="ghost hidden">Delete</button>
+      </div>
+      <button id="statusPrevBtn" class="status-nav status-prev" aria-label="Previous status">‹</button>
+      <div id="statusViewerBody" class="status-viewer-body"></div>
+      <button id="statusNextBtn" class="status-nav status-next" aria-label="Next status">›</button>
+      <div id="statusViewerReply" class="status-viewer-reply">
+        <button id="statusReplyBtn" class="primary">Reply in chat</button>
+      </div>
+    </div>
+  </div>
 
   <div id="callOverlay" class="call-overlay hidden"><div class="call-card glass"><div id="callAvatar" class="avatar call-avatar">Q</div><span class="eyebrow">LEMMIQ VOICE</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><p class="micro">Voice-call beta · LiveKit/WebRTC</p></div></div>
   <dialog id="modal">
