@@ -585,6 +585,79 @@ class Api(private val store:SessionStore){
         req(b("$base/v24/users/$uid/report").post(rb).build())
     }
 
+
+    // ---------- LEMMIQ V2.8 Q Economy ----------
+    suspend fun qWallet():QWalletDto =
+        gson.fromJson(req(b("$base/v28/wallet").get().build()),QWalletDto::class.java)
+
+    suspend fun qLedger():List<QLedgerDto>{
+        val t=req(b("$base/v28/wallet/ledger").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QLedgerDto>>(){}.type)
+    }
+
+    suspend fun qClaimDaily():QWalletDto =
+        gson.fromJson(req(b("$base/v28/wallet/claim-daily").post("{}".toRequestBody(json)).build()),QWalletDto::class.java)
+
+    suspend fun qTransfer(username:String,amount:Double,note:String="LEMMIQ Q transfer"){
+        val rb=gson.toJson(mapOf("username" to username,"amount_q" to amount,"note" to note)).toRequestBody(json)
+        req(b("$base/v28/wallet/transfer").post(rb).build())
+    }
+
+    suspend fun qReferrals():QReferralSummaryDto =
+        gson.fromJson(req(b("$base/v28/referrals").get().build()),QReferralSummaryDto::class.java)
+
+    suspend fun qClaimReferral(code:String){
+        val rb=gson.toJson(mapOf("code" to code)).toRequestBody(json)
+        req(b("$base/v28/referrals/claim").post(rb).build())
+    }
+
+    suspend fun qPaymentOrders():List<QPaymentOrderDto>{
+        val t=req(b("$base/v28/payments/orders").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QPaymentOrderDto>>(){}.type)
+    }
+
+    suspend fun qCreatePaymentOrder(packageCode:String,network:String):QPaymentOrderDto{
+        val rb=gson.toJson(mapOf("package_code" to packageCode,"network" to network)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/payments/orders").post(rb).build()),QPaymentOrderDto::class.java)
+    }
+
+    suspend fun qSubmitPayment(orderId:Int,txHash:String,note:String=""):QPaymentOrderDto{
+        val rb=gson.toJson(mapOf("tx_hash" to txHash,"note" to note)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/payments/orders/$orderId/submit").post(rb).build()),QPaymentOrderDto::class.java)
+    }
+
+    suspend fun qMarketListings(q:String=""):List<QMarketListingDto>{
+        val url="$base/v28/market/listings"+if(q.isBlank())"" else "?q=${URLEncoder.encode(q,"UTF-8")}"
+        val t=req(b(url).get().build())
+        return gson.fromJson(t,object:TypeToken<List<QMarketListingDto>>(){}.type)
+    }
+
+    suspend fun qCreateListing(title:String,description:String,priceQ:Double,inventory:Int=1):QMarketListingDto{
+        val rb=gson.toJson(mapOf(
+            "title" to title,"description" to description,"category" to "OTHER","condition" to "SERVICE",
+            "price_q" to priceQ,"inventory" to inventory
+        )).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/market/listings").post(rb).build()),QMarketListingDto::class.java)
+    }
+
+    suspend fun qBuyListing(id:Int):QMarketOrderDto{
+        val rb=gson.toJson(mapOf("quantity" to 1)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/market/listings/$id/buy").post(rb).build()),QMarketOrderDto::class.java)
+    }
+
+    suspend fun qMarketOrders():List<QMarketOrderDto>{
+        val t=req(b("$base/v28/market/orders").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QMarketOrderDto>>(){}.type)
+    }
+
+    suspend fun qMarketAction(id:Int,action:String):QMarketOrderDto =
+        gson.fromJson(req(b("$base/v28/market/orders/$id/$action").post("{}".toRequestBody(json)).build()),QMarketOrderDto::class.java)
+
+    suspend fun qMarketDispute(id:Int,note:String):QMarketOrderDto{
+        val rb=gson.toJson(mapOf("note" to note)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v28/market/orders/$id/dispute").post(rb).build()),QMarketOrderDto::class.java)
+    }
+
     fun socket(listener:WebSocketListener):WebSocket{
         val u="$base/ws?token=${store.token.orEmpty()}".replace("http://","ws://").replace("https://","wss://")
         return client.newWebSocket(Request.Builder().url(u).build(),listener)
