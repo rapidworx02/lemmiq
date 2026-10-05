@@ -107,6 +107,7 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
         vm.active!=null->Chat(vm)
         else->Home(vm)
     }
+    if(vm.authenticated)V27VisionDialog(vm)
 }
 
 @Composable
@@ -731,6 +732,14 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                 modifier=Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(12.dp)),
                                 contentScale=ContentScale.Fit)
                         }?:Text(if(mediaError==null)"🖼 Loading photo…" else "🖼 Photo unavailable",color=if(mine)Color.White else Ink)
+                        if(mediaId!=null)TextButton(onClick={
+                            scope.launch{
+                                try{
+                                    val bytes=vm.mediaBytes(mediaId)
+                                    vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.")
+                                }catch(e:Exception){mediaError=e.message}
+                            }
+                        }){Text("📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
                     }
                     if(a.kind=="CONTACT"){
                         Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
@@ -1085,30 +1094,44 @@ private fun ChatAgent(vm:LemmiqViewModel){
         )
     }
 
-    vm.activeVision?.let{v->
-        AlertDialog(
-            onDismissRequest={vm.clearVision()},
-            title={Text("📷 ${v.title}")},
-            text={
-                Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState())){
-                    Text(v.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Bold)
-                    Text(v.summary,modifier=Modifier.padding(top=8.dp))
-                    if(v.extracted_text.isNotBlank()){
-                        Text("Extracted text",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
-                        Text(v.extracted_text,fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
-                    }
-                    if(v.history.size>2){
-                        Text("Conversation",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
-                        v.history.takeLast(6).forEach{h->Text("${if(h.role=="q")"Q" else "You"}: ${h.text}",fontSize=10.sp,color=if(h.role=="q")Ink else Muted,modifier=Modifier.padding(top=4.dp))}
-                    }
-                    OutlinedTextField(value=visionFollowUp,onValueChange={visionFollowUp=it},label={Text("Ask another question about this image")},modifier=Modifier.fillMaxWidth().padding(top=12.dp),minLines=2,maxLines=4)
-                    Button(onClick={vm.askVision(visionFollowUp);visionFollowUp=""},enabled=visionFollowUp.isNotBlank()&&!vm.visionBusy,modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text(if(vm.visionBusy)"Analysing…" else "Ask Q Vision")}
+}
+
+@Composable
+private fun V27VisionDialog(vm:LemmiqViewModel){
+    val v=vm.activeVision?:return
+    var followUp by remember(v.id){mutableStateOf("")}
+    AlertDialog(
+        onDismissRequest={vm.clearVision()},
+        title={Text("📷 ${v.title}")},
+        text={
+            Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState())){
+                Text(v.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Bold)
+                Text(v.summary,modifier=Modifier.padding(top=8.dp))
+                if(v.extracted_text.isNotBlank()){
+                    Text("Extracted text",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+                    Text(v.extracted_text,fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
                 }
-            },
-            confirmButton={TextButton({vm.clearVision()}){Text("Done")}},
-            dismissButton={TextButton({vm.deleteVision(v.id)}){Text("Delete")}}
-        )
-    }
+                if(v.history.size>2){
+                    Text("Conversation",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+                    v.history.takeLast(6).forEach{h->
+                        Text("${if(h.role=="q")"Q" else "You"}: ${h.text}",fontSize=10.sp,color=if(h.role=="q")Ink else Muted,modifier=Modifier.padding(top=4.dp))
+                    }
+                }
+                OutlinedTextField(
+                    value=followUp,onValueChange={followUp=it},
+                    label={Text("Ask another question about this image")},
+                    modifier=Modifier.fillMaxWidth().padding(top=12.dp),minLines=2,maxLines=4
+                )
+                Button(
+                    onClick={vm.askVision(followUp);followUp=""},
+                    enabled=followUp.isNotBlank()&&!vm.visionBusy,
+                    modifier=Modifier.fillMaxWidth().padding(top=8.dp)
+                ){Text(if(vm.visionBusy)"Analysing…" else "Ask Q Vision")}
+            }
+        },
+        confirmButton={TextButton({vm.clearVision()}){Text("Done")}},
+        dismissButton={TextButton({vm.deleteVision(v.id)}){Text("Delete")}}
+    )
 }
 
 @Composable
