@@ -683,7 +683,7 @@ def register_v28(app, current_user, get_db):
 
     @app.get("/admin", include_in_schema=False)
     def v28_admin_redirect():
-        return RedirectResponse("/web/#admin")
+        return RedirectResponse("/web/#q-admin")
 
     @router.get("/config")
     def config(db: Session = Depends(get_db)):
