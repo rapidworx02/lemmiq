@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <cache-path name="share" path="share/" />
+    <!-- V2.6: media can be cached by several features (chat, status, status reply).
+         FileProvider still exposes only app-private cache through content:// URIs. -->
+    <cache-path name="cache_files" path="." />
 </paths>
