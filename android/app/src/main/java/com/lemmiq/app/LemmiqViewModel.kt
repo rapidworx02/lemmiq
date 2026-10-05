@@ -91,6 +91,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var callHistory by mutableStateOf<List<CallDto>>(emptyList())
     var activeCalls by mutableStateOf<List<CallDto>>(emptyList())
     var callStatus by mutableStateOf(CallStatusDto())
+    var callStarting by mutableStateOf(false)
     var replyTo by mutableStateOf<MessageDto?>(null)
     var insideSearchResults by mutableStateOf<List<MessageDto>>(emptyList())
     var chatFilterMode by mutableStateOf("ALL")
@@ -616,7 +617,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     // ---------------- Calls ----------------
     fun refreshCalls()=viewModelScope.launch{runCatching{callStatus=api.callStatus();callHistory=api.callHistory()}.onFailure{error=it.message}}
     fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
-        busy=true;try{onReady(api.startCall(cid))}catch(e:Exception){error=e.message}finally{busy=false}
+        if(callStarting){error="A call is already starting";return@launch}
+        callStarting=true;busy=true;error=null
+        try{onReady(api.startCall(cid))}
+        catch(e:Exception){error=e.message}
+        finally{busy=false;callStarting=false}
     }
 
     fun refreshBusiness()=viewModelScope.launch{
