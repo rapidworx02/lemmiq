@@ -12,6 +12,7 @@
   <link rel="icon" href="/web/icon-192.png">
   <link rel="stylesheet" href="/web/styles.css?v=2.7.1">
   <title>LEMMIQ — Messaging with social IQ</title>
+  <link rel="stylesheet" href="/web/v28.css?v=2.8.0">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -317,6 +318,8 @@
           <p>Less-used features live here so the main navigation stays clean.</p>
         </article>
         <div class="more-grid">
+          <button data-more-view="q-economy" class="more-card"><span>Q</span><strong>Q Economy</strong><small>Wallet, mining, subscriptions, referrals and Q Market</small></button>
+          <button id="qAdminMoreCard" data-more-view="q-admin" class="more-card hidden"><span>⚙</span><strong>Q Admin</strong><small>Treasury, USDT payments and marketplace controls</small></button>
           <button data-more-view="trust" class="more-card"><span>🛡</span><strong>Trust / Fact Check</strong><small>Check claims and reopen saved history</small></button>
           <button data-more-view="business" class="more-card"><span>💼</span><strong>Business Agent</strong><small>Business knowledge and customer replies</small></button>
           <button data-more-view="activity" class="more-card"><span>◈</span><strong>Activity</strong><small>Detected notification intelligence</small></button>
@@ -324,6 +327,71 @@
           <button data-more-view="me" class="more-card"><span>🙂</span><strong>Me / Profile</strong><small>Photo, account, privacy and sign out</small></button>
           <button id="moreAndroidDownloadBtn" class="more-card"><span>📱</span><strong>Download Android app</strong><small>Install the native LEMMIQ companion</small></button>
         </div>
+      </section>
+
+      <section id="view-q-economy" class="view">
+        <div class="q28-hero glass">
+          <div><span class="eyebrow">LEMMIQ Q</span><h2>Q Economy</h2><p>Earn, transfer, subscribe and spend Q inside LEMMIQ.</p></div>
+          <div class="q28-balance"><small>Q Wallet</small><strong id="q28Balance">— Q</strong><span id="q28Usd">Reference —</span></div>
+        </div>
+        <div class="q28-tabs">
+          <button class="active" data-q28-tab="wallet">Wallet</button>
+          <button data-q28-tab="packages">Packages</button>
+          <button data-q28-tab="market">Q Market</button>
+          <button data-q28-tab="refer">Refer & Earn</button>
+        </div>
+
+        <div id="q28Tab-wallet" class="q28-tab active">
+          <div class="grid two">
+            <article class="card glass"><div class="section-head"><div><span class="eyebrow">DAILY Q</span><h3>Basic mining</h3></div><button id="q28ClaimDaily" class="primary">Claim daily Q</button></div><p id="q28DailyInfo" class="micro"></p></article>
+            <article class="card glass"><span class="eyebrow">SEND Q</span><h3>Transfer to a LEMMIQ user</h3><div class="q28-inline"><input id="q28SendUser" placeholder="@username"><input id="q28SendAmount" type="number" min="0.000001" step="0.01" placeholder="Q amount"><button id="q28SendBtn" class="primary">Send</button></div></article>
+          </div>
+          <article class="card glass"><div class="section-head"><div><h3>Recent Q activity</h3><p class="micro">Every transfer and reward is recorded in the Q ledger.</p></div><button id="q28RefreshLedger" class="ghost">↻</button></div><div id="q28Ledger" class="q28-list"></div></article>
+        </div>
+
+        <div id="q28Tab-packages" class="q28-tab">
+          <article class="card glass"><span class="eyebrow">Q SUBSCRIPTIONS</span><h3>Choose a package</h3><p class="micro">Manual USDT payment verification in V2.8. Cash-out is not enabled at launch.</p><div id="q28Plans" class="q28-plan-grid"></div></article>
+          <article class="card glass"><h3>My active & previous packages</h3><div id="q28Subscriptions" class="q28-list"></div></article>
+          <article class="card glass"><h3>USDT payment orders</h3><div id="q28PaymentOrders" class="q28-list"></div></article>
+        </div>
+
+        <div id="q28Tab-market" class="q28-tab">
+          <div class="grid two">
+            <article class="card glass"><span class="eyebrow">SELL FOR Q</span><h3>Create listing</h3><input id="q28ListingTitle" placeholder="Product or service"><textarea id="q28ListingDescription" placeholder="Description"></textarea><div class="q28-inline"><input id="q28ListingPrice" type="number" min="0.01" step="0.01" placeholder="Price in Q"><input id="q28ListingInventory" type="number" min="1" value="1"><button id="q28CreateListing" class="primary">List</button></div></article>
+            <article class="card glass"><span class="eyebrow">Q MARKET</span><h3>Explore</h3><div class="q28-inline"><input id="q28MarketSearch" placeholder="Search Q Market"><button id="q28MarketSearchBtn" class="ghost">Search</button></div><p class="micro">Marketplace purchases settle in Q and use escrow.</p></article>
+          </div>
+          <div id="q28MarketListings" class="q28-market-grid"></div>
+          <article class="card glass"><h3>My marketplace orders</h3><div id="q28MarketOrders" class="q28-list"></div></article>
+        </div>
+
+        <div id="q28Tab-refer" class="q28-tab">
+          <div class="grid two">
+            <article class="card glass"><span class="eyebrow">REFER & EARN</span><h3>Your referral code</h3><div class="q28-ref-code" id="q28ReferralCode">—</div><p id="q28ReferralInfo" class="micro"></p><button id="q28CopyReferral" class="primary">Copy code</button></article>
+            <article class="card glass"><span class="eyebrow">NEW USER</span><h3>Have a referral code?</h3><div class="q28-inline"><input id="q28ClaimReferralCode" placeholder="Q123-ABCDEF"><button id="q28ClaimReferralBtn" class="primary">Claim</button></div><p class="micro">Referral claims are limited to new accounts and one referral per account.</p></article>
+          </div>
+          <article class="card glass"><h3>Your referrals</h3><div id="q28ReferralList" class="q28-list"></div></article>
+        </div>
+      </section>
+
+      <section id="view-q-admin" class="view">
+        <article class="q28-hero glass">
+          <div><span class="eyebrow">MASTER ADMIN</span><h2>Q Economy Admin</h2><p>Treasury, package payments, Q Market and economy controls.</p></div>
+          <div class="q28-balance"><small>Role</small><strong id="q28AdminRole">—</strong><span>All actions are auditable</span></div>
+        </article>
+        <div id="q28AdminOverview" class="q28-admin-stats"></div>
+        <div class="grid two">
+          <article class="card glass"><div class="section-head"><div><h3>USDT receiving wallets</h3><p class="micro">Public receiving addresses only. Never enter private keys or seed phrases.</p></div></div>
+            <div class="q28-wallet-form"><select id="q28AdminNetwork"><option>TRC20</option><option>BEP20</option></select><select id="q28AdminPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><input id="q28AdminWalletLabel" placeholder="Label"><input id="q28AdminWalletAddress" placeholder="Public USDT address"><button id="q28AdminAddWallet" class="primary">Add wallet</button></div>
+            <div id="q28AdminWallets" class="q28-list"></div>
+          </article>
+          <article class="card glass"><h3>Q settings</h3><div class="q28-settings-grid"><label>Q reference USD<input id="q28AdminPrice" type="number" step="0.0001"></label><label>Marketplace fee %<input id="q28AdminFee" type="number" step="0.01"></label><label>Basic Q / day<input id="q28AdminBasic" type="number" step="0.01"></label><label>Signup bonus Q<input id="q28AdminSignup" type="number" step="0.01"></label><label>Referrer reward Q<input id="q28AdminReferrer" type="number" step="0.01"></label><label>Referred user reward Q<input id="q28AdminReferred" type="number" step="0.01"></label></div><button id="q28AdminSaveConfig" class="primary">Save Q settings</button></article>
+        </div>
+        <article class="card glass"><div class="section-head"><div><h3>Pending USDT payments</h3><p class="micro">Open the blockchain transaction, verify amount/network/address, then approve or reject.</p></div><button id="q28AdminRefreshPayments" class="ghost">↻</button></div><div id="q28AdminPayments" class="q28-list"></div></article>
+        <div class="grid two">
+          <article class="card glass"><h3>Q Treasury</h3><div id="q28AdminTreasury" class="q28-list"></div><div class="q28-wallet-form"><select id="q28TreasuryFrom"></select><select id="q28TreasuryTo"></select><input id="q28TreasuryAmount" type="number" step="0.01" placeholder="Q amount"><input id="q28TreasuryReason" placeholder="Reason"><button id="q28TreasuryTransfer" class="primary">Transfer</button></div></article>
+          <article class="card glass"><h3>Marketplace disputes</h3><div id="q28AdminMarketOrders" class="q28-list"></div></article>
+        </div>
+        <article class="card glass"><h3>Recent Q ledger</h3><div id="q28AdminLedger" class="q28-list"></div></article>
       </section>
 
       <section id="view-me" class="view">
@@ -378,6 +446,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.7.1" defer></script>
+  <script src="/web/app.js?v=2.8.0" defer></script>
+  <script src="/web/v28.js?v=2.8.0" defer></script>
 </body>
 </html>
