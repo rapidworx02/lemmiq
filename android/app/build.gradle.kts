@@ -15,7 +15,6 @@ val lemmiqApiBaseUrl = lemmiqLocalProperties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 // Add your Firebase google-services.json to android/app/ to enable push registration.
