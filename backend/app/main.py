@@ -14,7 +14,7 @@ from .database import Base, engine, SessionLocal
 from .migrations import apply_compat_migrations
 from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
     BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote, TrustHistory,
-    MessageMeta, MessageReaction, MessageHidden, ChatPreference, UserPrivacy, UserBlock)
+    MessageMeta, MessageReaction, MessageHidden, ChatPreference, UserPrivacy, UserBlock, AutoReplyReceipt)
 from . import media_store, push_service
 from .chat_agent import daily_brief, needs_reply, communication_profile, search_memory, summarize_chat, ask_agent
 from .insights import CATEGORIES, DIRECTIONS, event_json, list_events, brief as insight_brief
@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.6.0")
+app = FastAPI(title="LEMMIQ Server", version="2.7.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -208,7 +208,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.6.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.7.0"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -290,9 +290,13 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
         try:
             br = business_reply(db, oid, cid, body.text)
             if br.get("reply") and int(br.get("confidence", 0)) >= int(bp.auto_threshold or 90) and not br.get("requires_review", True):
+                if db.get(AutoReplyReceipt, m.id):
+                    return data
                 auto = Message(chat_id=cid, sender_id=oid, text=br["reply"], ai_generated=True)
                 c.updated_at = datetime.now(timezone.utc)
-                db.add(auto); db.commit(); db.refresh(auto)
+                db.add(auto); db.flush()
+                db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
+                db.commit(); db.refresh(auto)
                 ad = msg_json(auto, db)
                 await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
                 background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -307,10 +311,14 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
             sender = db.get(User, x.sender_id)
             lines.append(f"{sender.display_name}: {x.text}")
         try:
+            if db.get(AutoReplyReceipt, m.id):
+                return data
             reply = ai_reply(s.category, s.tone, "\n".join(lines), body.text)
             auto = Message(chat_id=cid, sender_id=oid, text=reply, ai_generated=True)
             c.updated_at = datetime.now(timezone.utc)
-            db.add(auto); db.commit(); db.refresh(auto)
+            db.add(auto); db.flush()
+            db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
+            db.commit(); db.refresh(auto)
             ad = msg_json(auto, db)
             await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
             background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -874,6 +882,10 @@ register_v24(app,current_user,get_db,push,push_tokens,user_json,msg_json)
 # ---------------- LEMMIQ V2.6 Q Agent + Q-to-Q routes ----------------
 from .v26 import register_v26
 register_v26(app,current_user,get_db,push,user_json)
+
+# ---------------- LEMMIQ V2.7 Q Vision + refined Q routes ----------------
+from .v27 import register_v27
+register_v27(app,current_user,get_db,push)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
