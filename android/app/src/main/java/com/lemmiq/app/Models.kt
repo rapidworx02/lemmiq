@@ -192,3 +192,28 @@ data class QDailyBriefDto(
     val promises:List<SocialMemoryDto> = emptyList(),val follow_ups:List<SocialMemoryDto> = emptyList(),
     val generated_at:String=""
 )
+
+
+// LEMMIQ V2.7 Q Vision + simplified Q home
+data class QTodayDto(
+    val summary:String="",val unread_total:Int=0,val needs_reply_count:Int=0,
+    val needs_reply:List<NeedReplyItem> = emptyList(),val follow_ups:Int=0,val promises:Int=0
+)
+data class QMemoryCountDto(val count:Int=0,val vision_count:Int=0)
+data class QToQCountDto(val pending_count:Int=0,val incoming_count:Int=0,val outgoing_count:Int=0)
+data class QHomeDto(
+    val today:QTodayDto=QTodayDto(),val memory:QMemoryCountDto=QMemoryCountDto(),
+    val q_to_q:QToQCountDto=QToQCountDto()
+)
+data class VisionAnalysisDto(
+    val title:String="",val category:String="OTHER",val summary:String="",val extracted_text:String="",
+    val details:List<String> = emptyList(),val suggested_actions:List<String> = emptyList()
+)
+data class VisionHistoryItemDto(val role:String="",val text:String="")
+data class VisionMemoryDto(
+    val id:Int=0,val title:String="",val category:String="OTHER",val summary:String="",
+    val extracted_text:String="",val analysis:VisionAnalysisDto=VisionAnalysisDto(),
+    val history:List<VisionHistoryItemDto> = emptyList(),val saved:Boolean=true,
+    val mime_type:String="",val original_name:String="",val media_url:String="",
+    val created_at:String="",val updated_at:String=""
+)
