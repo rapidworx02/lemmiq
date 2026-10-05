@@ -383,6 +383,8 @@ class Api(private val store:SessionStore){
 
     suspend fun callStatus():CallStatusDto =
         gson.fromJson(req(b("$base/v24/calls/status").get().build()),CallStatusDto::class.java)
+    suspend fun callDetail(id:String):CallDto =
+        gson.fromJson(req(b("$base/v24/calls/$id").get().build()),CallDto::class.java)
     suspend fun startCall(cid:Int):CallJoinDto{
         val rb=gson.toJson(mapOf("chat_id" to cid)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v24/calls/start").post(rb).build()),CallJoinDto::class.java)
