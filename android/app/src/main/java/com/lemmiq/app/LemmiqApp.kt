@@ -175,8 +175,8 @@ private fun Home(vm:LemmiqViewModel){
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
                         selected=tab==i,onClick={tab=i;if(i!=5)morePage=null},
-                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=18.sp)},
-                        label={Text(x.second,fontSize=10.sp)},
+                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=17.sp)},
+                        label={Text(x.second,fontSize=9.sp,maxLines=1)},
                         alwaysShowLabel=true
                     )
                 }
