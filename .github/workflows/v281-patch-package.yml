@@ -1,0 +1,45 @@
+name: LEMMIQ V281 Patch Package
+
+on:
+  push:
+    branches: [ "v2.8" ]
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build V2.8.1 patch ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf package LEMMIQ_V2.8.1_Q_NAV_REFERRAL_PATCH.zip
+          mkdir -p package
+          files=(
+            "backend/app/main.py"
+            "backend/app/v28.py"
+            "backend/web/index.html"
+            "backend/web/app.js"
+            "backend/web/styles.css"
+            "backend/web/sw.js"
+            "android/app/build.gradle.kts"
+            "android/app/src/main/java/com/lemmiq/app/Api.kt"
+            "android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt"
+            "android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt"
+            ".github/workflows/v28-ci.yml"
+            "V2.8.1_PATCH_INSTALL.txt"
+          )
+          for f in "${files[@]}"; do
+            test -f "$f"
+            mkdir -p "package/$(dirname "$f")"
+            cp "$f" "package/$f"
+          done
+          (cd package && zip -r ../LEMMIQ_V2.8.1_Q_NAV_REFERRAL_PATCH.zip .)
+          unzip -l LEMMIQ_V2.8.1_Q_NAV_REFERRAL_PATCH.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LEMMIQ-V2.8.1-Q-NAV-REFERRAL-PATCH
+          path: LEMMIQ_V2.8.1_Q_NAV_REFERRAL_PATCH.zip
+          if-no-files-found: error
+          retention-days: 90
