@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.8.0")
+app = FastAPI(title="LEMMIQ Server", version="2.8.1")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -190,6 +190,7 @@ class Login(BaseModel):
     password: str = Field(min_length=6, max_length=128)
 class Register(Login):
     display_name: str = Field(min_length=1, max_length=50)
+    referral_code: str | None = Field(default=None, max_length=40)
 class Direct(BaseModel):
     user_id: int
 class Msg(BaseModel):
@@ -208,7 +209,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.8.0"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.8.1"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -221,9 +222,23 @@ def register(body: Register, db: Session = Depends(get_db)):
         raise HTTPException(400, "Username can only use letters, numbers and underscore")
     if db.scalar(select(User).where(func.lower(User.username) == username)):
         raise HTTPException(409, "Username already taken")
+
+    referral_code = (body.referral_code or "").strip().upper()
+    if referral_code:
+        from .v28 import validate_signup_referral
+        validate_signup_referral(db, referral_code)
+
     ph, salt = hp(body.password)
     u = User(username=username, display_name=body.display_name.strip(), password_hash=ph, salt=salt)
-    db.add(u); db.commit(); db.refresh(u)
+    db.add(u)
+    db.flush()
+
+    if referral_code:
+        from .v28 import apply_signup_referral
+        apply_signup_referral(db, u, referral_code)
+
+    db.commit()
+    db.refresh(u)
     return {"token": make_token(u.id), "user": user_json(u)}
 
 @app.post("/login")
@@ -863,7 +878,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.8.0",
+        "version": "2.8.1",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
