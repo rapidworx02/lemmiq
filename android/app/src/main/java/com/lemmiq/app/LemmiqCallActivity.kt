@@ -49,6 +49,8 @@ class LemmiqCallActivity:ComponentActivity(){
     private var ringback:ToneGenerator?=null
     private var timerJob:Job?=null
     private var timeoutJob:Job?=null
+    private var stateJob:Job?=null
+    @Volatile private var closing=false
     private val status=mutableStateOf("Preparing call…")
     private val seconds=mutableIntStateOf(0)
     private val muted=mutableStateOf(false)
@@ -70,6 +72,7 @@ class LemmiqCallActivity:ComponentActivity(){
 
         configureDefaultAudioRoute()
         if(incoming && token.isBlank())startIncomingRingtone() else startOutgoingRingback()
+        if(callId.isNotBlank())startCallStateWatch()
 
         setContent{
             MaterialTheme{
@@ -111,7 +114,7 @@ class LemmiqCallActivity:ComponentActivity(){
                             }
                         }
                         Spacer(Modifier.height(22.dp))
-                        Text("LEMMIQ V2.4 · LiveKit/WebRTC",color=Color(0xFF8E89A5),fontSize=11.sp)
+                        Text("LEMMIQ V2.6 · LiveKit/WebRTC",color=Color(0xFF8E89A5),fontSize=11.sp)
                     }
                 }
             }
@@ -121,20 +124,29 @@ class LemmiqCallActivity:ComponentActivity(){
     }
 
     private fun answer(){
-        stopTones()
+        if(closing)return
+        stopTones();cancelCallNotification()
         lifecycleScope.launch{
             try{
                 val join=Api(SessionStore(this@LemmiqCallActivity)).joinCall(callId)
                 wsUrl=join.ws_url;token=join.token;incoming=false;status.value="Connecting…";ensureMic()
-            }catch(e:Exception){status.value=e.message?:"Call failed"}
+            }catch(e:Exception){
+                status.value=e.message?:"Call failed"
+                if((e.message?:"").contains("declined",true)||(e.message?:"").contains("ended",true)){
+                    closing=true;delay(500);finish()
+                }
+            }
         }
     }
 
     private fun decline():()->Unit = {
-        stopTones()
-        lifecycleScope.launch{
-            runCatching{Api(SessionStore(this@LemmiqCallActivity)).declineCall(callId)}
-            finish()
+        if(!closing){
+            closing=true;stopTones();cancelCallNotification()
+            lifecycleScope.launch{
+                runCatching{Api(SessionStore(this@LemmiqCallActivity)).declineCall(callId)}
+                disconnectLocalRoom()
+                finish()
+            }
         }
     }
 
@@ -144,6 +156,7 @@ class LemmiqCallActivity:ComponentActivity(){
     }
 
     private fun connectRoom(){
+        if(closing)return
         if(wsUrl.isBlank()||token.isBlank()){status.value="Call credentials unavailable";return}
         lifecycleScope.launch{
             try{
@@ -159,7 +172,10 @@ class LemmiqCallActivity:ComponentActivity(){
                     r.events.collect{event->
                         when(event){
                             is RoomEvent.ParticipantConnected -> onAnswered()
-                            is RoomEvent.ParticipantDisconnected -> if(status.value=="Connected")status.value="Call ended"
+                            is RoomEvent.ParticipantDisconnected -> if(status.value=="Connected"){
+                                status.value="Call ended"
+                                finishAfterRemoteEnd("Call ended")
+                            }
                             else -> Unit
                         }
                     }
@@ -171,10 +187,11 @@ class LemmiqCallActivity:ComponentActivity(){
                     status.value="Ringing…";startOutgoingRingback()
                     timeoutJob?.cancel();timeoutJob=lifecycleScope.launch{
                         delay(45000)
-                        if(status.value=="Ringing…"){
-                            status.value="No answer";stopTones()
+                        if(status.value=="Ringing…"&&!closing){
+                            closing=true;status.value="No answer";stopTones()
                             runCatching{Api(SessionStore(this@LemmiqCallActivity)).endCall(callId)}
-                            delay(1200);finish()
+                            disconnectLocalRoom()
+                            delay(700);finish()
                         }
                     }
                 }
@@ -249,17 +266,63 @@ class LemmiqCallActivity:ComponentActivity(){
         runCatching{ringback?.stopTone()};runCatching{ringback?.release()};ringback=null
     }
 
+    private fun startCallStateWatch(){
+        stateJob?.cancel()
+        stateJob=lifecycleScope.launch{
+            val api=Api(SessionStore(this@LemmiqCallActivity))
+            while(!closing&&callId.isNotBlank()){
+                delay(900)
+                val current=runCatching{api.callDetail(callId)}.getOrNull()?:continue
+                when(current.status.uppercase()){
+                    "CONNECTED" -> if(!incoming && status.value!="Connected")onAnswered()
+                    "DECLINED" -> {finishAfterRemoteEnd("Declined");break}
+                    "MISSED" -> {finishAfterRemoteEnd("No answer");break}
+                    "ENDED","FAILED" -> {finishAfterRemoteEnd("Call ended");break}
+                }
+            }
+        }
+    }
+
+    private fun finishAfterRemoteEnd(label:String){
+        if(closing)return
+        closing=true;status.value=label;stopTones();timerJob?.cancel();timeoutJob?.cancel();cancelCallNotification()
+        lifecycleScope.launch{
+            disconnectLocalRoom()
+            delay(450)
+            finish()
+        }
+    }
+
+    private suspend fun disconnectLocalRoom(){
+        val r=room
+        runCatching{r?.localParticipant?.setMicrophoneEnabled(false)}
+        runCatching{r?.disconnect()}
+        room=null
+    }
+
+    private fun cancelCallNotification(){
+        if(callId.isNotBlank())runCatching{
+            getSystemService(android.app.NotificationManager::class.java).cancel(callId.hashCode())
+        }
+    }
+
     private fun endCall():()->Unit = {
-        stopTones();timerJob?.cancel();timeoutJob?.cancel()
-        room?.disconnect()
-        lifecycleScope.launch{if(callId.isNotBlank())runCatching{Api(SessionStore(this@LemmiqCallActivity)).endCall(callId)}}
-        finish()
+        if(!closing){
+            closing=true;stopTones();timerJob?.cancel();timeoutJob?.cancel();stateJob?.cancel();cancelCallNotification()
+            lifecycleScope.launch{
+                disconnectLocalRoom()
+                if(callId.isNotBlank())runCatching{Api(SessionStore(this@LemmiqCallActivity)).endCall(callId)}
+                finish()
+            }
+        }
     }
 
     override fun onDestroy(){
-        stopTones();timerJob?.cancel();timeoutJob?.cancel();room?.disconnect()
+        stopTones();timerJob?.cancel();timeoutJob?.cancel();stateJob?.cancel()
+        room?.disconnect();room=null
         val am=getSystemService(Context.AUDIO_SERVICE) as AudioManager
         if(Build.VERSION.SDK_INT>=31)runCatching{am.clearCommunicationDevice()}
+        @Suppress("DEPRECATION") runCatching{am.abandonAudioFocus(null)}
         am.mode=AudioManager.MODE_NORMAL
         super.onDestroy()
     }
