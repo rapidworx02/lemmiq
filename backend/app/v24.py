@@ -472,61 +472,141 @@ def register_routes(current_user):
         r=UserReport(reporter_id=u.id,reported_user_id=uid,reason=body.reason,details=body.details);db.add(r);db.commit();return {"ok":True}
 
     # -------- calls --------
-    def livekit_ready():return bool(os.getenv("LIVEKIT_URL","").strip() and os.getenv("LIVEKIT_API_KEY","").strip() and os.getenv("LIVEKIT_API_SECRET","").strip())
+    ACTIVE_CALL_STATES={"RINGING","CONNECTING","CONNECTED"}
+    TERMINAL_CALL_STATES={"DECLINED","ENDED","MISSED","FAILED"}
+
+    def livekit_ready():
+        return bool(os.getenv("LIVEKIT_URL","").strip() and os.getenv("LIVEKIT_API_KEY","").strip() and os.getenv("LIVEKIT_API_SECRET","").strip())
+
     def token(room,user):
         if not livekit_ready():raise HTTPException(503,"LiveKit is not configured")
         from livekit import api
-        return (api.AccessToken(os.environ["LIVEKIT_API_KEY"],os.environ["LIVEKIT_API_SECRET"]).with_identity(f"u_{user.id}").with_name(user.display_name[:80]).with_grants(api.VideoGrants(room_join=True,room=room,can_publish=True,can_subscribe=True)).with_ttl(timedelta(hours=2))).to_jwt()
+        return (api.AccessToken(os.environ["LIVEKIT_API_KEY"],os.environ["LIVEKIT_API_SECRET"])
+            .with_identity(f"u_{user.id}").with_name(user.display_name[:80])
+            .with_grants(api.VideoGrants(room_join=True,room=room,can_publish=True,can_subscribe=True))
+            .with_ttl(timedelta(hours=2))).to_jwt()
+
     def cj(db,c,uid):
         other=db.get(User,c.callee_id if c.caller_id==uid else c.caller_id)
         dur=int(((utc_dt(c.ended_at) or datetime.now(timezone.utc))-(utc_dt(c.answered_at) or utc_dt(c.started_at))).total_seconds()) if c.answered_at else 0
-        return {"id":c.id,"chat_id":c.chat_id,"caller_id":c.caller_id,"callee_id":c.callee_id,"other_user":_user_json(other),"status":c.status,"duration_seconds":max(0,dur),"started_at":c.started_at.isoformat(),"answered_at":c.answered_at.isoformat() if c.answered_at else None,"ended_at":c.ended_at.isoformat() if c.ended_at else None}
+        return {"id":c.id,"chat_id":c.chat_id,"caller_id":c.caller_id,"callee_id":c.callee_id,
+                "other_user":_user_json(other) if other else None,"status":c.status,
+                "duration_seconds":max(0,dur),"started_at":c.started_at.isoformat(),
+                "answered_at":c.answered_at.isoformat() if c.answered_at else None,
+                "ended_at":c.ended_at.isoformat() if c.ended_at else None}
+
+    def _call_participant_filter(ids):
+        return or_(CallRecord.caller_id.in_(ids),CallRecord.callee_id.in_(ids))
+
+    def _expire_stale_calls(db,ids):
+        now=datetime.now(timezone.utc)
+        # A ringing call should never block either user forever if a client disappeared.
+        rows=db.scalars(select(CallRecord).where(
+            CallRecord.status=="RINGING",
+            _call_participant_filter(ids),
+            CallRecord.started_at < now-timedelta(minutes=2)
+        )).all()
+        for x in rows:
+            x.status="MISSED";x.ended_at=now
+        # Defensive cleanup for abandoned connected sessions.
+        rows=db.scalars(select(CallRecord).where(
+            CallRecord.status.in_({"CONNECTING","CONNECTED"}),
+            _call_participant_filter(ids),
+            CallRecord.started_at < now-timedelta(hours=6)
+        )).all()
+        for x in rows:
+            x.status="ENDED";x.ended_at=now
+        if rows:db.flush()
 
     @router.get("/v24/calls/status")
-    def call_status(u=Depends(current_user)):return {"configured":livekit_ready(),"provider":"LiveKit","voice":True,"video":False}
+    def call_status(u=Depends(current_user)):
+        return {"configured":livekit_ready(),"provider":"LiveKit","voice":True,"video":False,"single_active_call":True}
+
     @router.get("/v24/calls")
     def call_history(u=Depends(current_user),db:Session=Depends(dep_db)):
-        rows=db.scalars(select(CallRecord).where(or_(CallRecord.caller_id==u.id,CallRecord.callee_id==u.id)).order_by(CallRecord.started_at.desc()).limit(100)).all();return [cj(db,x,u.id) for x in rows]
+        rows=db.scalars(select(CallRecord).where(or_(CallRecord.caller_id==u.id,CallRecord.callee_id==u.id)).order_by(CallRecord.started_at.desc()).limit(100)).all()
+        return [cj(db,x,u.id) for x in rows]
+
     @router.get("/v24/chats/{cid}/calls")
     def chat_calls(cid:int,u=Depends(current_user),db:Session=Depends(dep_db)):
         c=db.get(Chat,cid)
         if not c or u.id not in (c.user1_id,c.user2_id):raise HTTPException(404,"Chat not found")
-        rows=db.scalars(select(CallRecord).where(CallRecord.chat_id==cid).order_by(CallRecord.started_at.asc()).limit(200)).all();return [cj(db,x,u.id) for x in rows]
+        rows=db.scalars(select(CallRecord).where(CallRecord.chat_id==cid).order_by(CallRecord.started_at.asc()).limit(200)).all()
+        return [cj(db,x,u.id) for x in rows]
+
+    @router.get("/v24/calls/{call_id}")
+    def call_detail(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):
+        rec=db.get(CallRecord,call_id)
+        if not rec or u.id not in (rec.caller_id,rec.callee_id):raise HTTPException(404,"Call not found")
+        return cj(db,rec,u.id)
 
     @router.post("/v24/calls/start")
     async def call_start(body:CallStartIn,background:BackgroundTasks,u=Depends(current_user),db:Session=Depends(dep_db)):
         if not livekit_ready():raise HTTPException(503,"LiveKit is not configured. Add LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET on Render.")
         c=db.get(Chat,body.chat_id)
         if not c or u.id not in (c.user1_id,c.user2_id):raise HTTPException(404,"Chat not found")
-        callee=c.user2_id if c.user1_id==u.id else c.user1_id;cid=uuid.uuid4().hex;room="call_"+uuid.uuid4().hex;rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING");db.add(rec);db.commit()
+        callee=c.user2_id if c.user1_id==u.id else c.user1_id
+        ids=sorted({u.id,callee})
+
+        # Lock both participants before checking active calls. This closes the rapid-double-tap
+        # race on PostgreSQL and still works safely when running the local SQLite dev database.
+        db.execute(select(User.id).where(User.id.in_(ids)).order_by(User.id).with_for_update()).all()
+        _expire_stale_calls(db,ids)
+        active=db.scalar(select(CallRecord).where(
+            CallRecord.status.in_(ACTIVE_CALL_STATES),
+            _call_participant_filter(ids)
+        ).order_by(CallRecord.started_at.desc()).limit(1))
+        if active:
+            same_pair={active.caller_id,active.callee_id}==set(ids)
+            db.rollback()
+            raise HTTPException(409,"Call already active" if same_pair else "User is already in another call")
+
+        cid=uuid.uuid4().hex;room="call_"+uuid.uuid4().hex
+        rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING")
+        db.add(rec);db.commit();db.refresh(rec)
         caller_avatar=_user_json(u).get("avatar_url")
         event={"type":"incoming_call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,"caller_id":u.id,"caller_avatar_url":caller_avatar}
         await _push(callee,event)
-        background.add_task(push_service.notify_data,_push_tokens(db,callee),{"type":"call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,"caller_id":u.id,"caller_avatar_url":caller_avatar or ""})
+        background.add_task(push_service.notify_data,_push_tokens(db,callee),{
+            "type":"call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,
+            "caller_id":u.id,"caller_avatar_url":caller_avatar or ""
+        })
         return {"call":cj(db,rec,u.id),"ws_url":os.environ.get("LIVEKIT_URL",""),"token":token(room,u),"incoming":False}
 
     @router.post("/v24/calls/{call_id}/join")
     async def call_join(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):
         rec=db.get(CallRecord,call_id)
         if not rec or u.id not in (rec.caller_id,rec.callee_id):raise HTTPException(404,"Call not found")
-        if rec.status in {"DECLINED","ENDED","MISSED"}:raise HTTPException(409,f"Call is {rec.status.lower()}")
-        if u.id==rec.callee_id and rec.status=="RINGING":rec.status="CONNECTED";rec.answered_at=datetime.now(timezone.utc);db.commit();await _push(rec.caller_id,{"type":"call_answered","call_id":rec.id,"answered_at":rec.answered_at.isoformat()})
+        if rec.status in TERMINAL_CALL_STATES:raise HTTPException(409,f"Call is {rec.status.lower()}")
+        if rec.status not in ACTIVE_CALL_STATES:raise HTTPException(409,"Call is no longer active")
+        if u.id==rec.callee_id and rec.status=="RINGING":
+            rec.status="CONNECTED";rec.answered_at=datetime.now(timezone.utc);db.commit()
+            await _push(rec.caller_id,{"type":"call_answered","call_id":rec.id,"answered_at":rec.answered_at.isoformat()})
         return {"call":cj(db,rec,u.id),"ws_url":os.environ.get("LIVEKIT_URL",""),"token":token(rec.room_name,u),"incoming":u.id==rec.callee_id}
 
     @router.post("/v24/calls/{call_id}/decline")
     async def call_decline(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):
         rec=db.get(CallRecord,call_id)
         if not rec or u.id!=rec.callee_id:raise HTTPException(404,"Call not found")
-        rec.status="DECLINED";rec.ended_at=datetime.now(timezone.utc);db.commit();await _push(rec.caller_id,{"type":"call_declined","call_id":rec.id});return {"ok":True}
+        if rec.status in TERMINAL_CALL_STATES:return {"ok":True,"status":rec.status}
+        if rec.status=="CONNECTED":raise HTTPException(409,"Call is already connected")
+        rec.status="DECLINED";rec.ended_at=datetime.now(timezone.utc);db.commit()
+        await _push(rec.caller_id,{"type":"call_declined","call_id":rec.id,"status":"DECLINED"})
+        return {"ok":True,"status":"DECLINED"}
 
     @router.post("/v24/calls/{call_id}/end")
     async def call_end(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):
         rec=db.get(CallRecord,call_id)
         if not rec or u.id not in (rec.caller_id,rec.callee_id):raise HTTPException(404,"Call not found")
+        if rec.status in TERMINAL_CALL_STATES:return {"ok":True,"status":rec.status}
         other=rec.callee_id if u.id==rec.caller_id else rec.caller_id
-        if rec.status=="RINGING":rec.status="MISSED" if u.id==rec.caller_id else "DECLINED"
-        else:rec.status="ENDED"
-        rec.ended_at=datetime.now(timezone.utc);db.commit();await _push(other,{"type":"call_ended","call_id":rec.id,"status":rec.status});return {"ok":True}
+        if rec.status in {"RINGING","CONNECTING"}:
+            rec.status="MISSED" if u.id==rec.caller_id else "DECLINED"
+        else:
+            rec.status="ENDED"
+        rec.ended_at=datetime.now(timezone.utc);db.commit()
+        await _push(other,{"type":"call_ended","call_id":rec.id,"status":rec.status})
+        return {"ok":True,"status":rec.status}
 
     # -------- Status / Updates --------
     def allowed(s,viewer):

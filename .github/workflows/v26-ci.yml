@@ -1,0 +1,82 @@
+name: LEMMIQ V2.6 CI
+
+on:
+  push:
+    branches: [v2.6]
+  pull_request:
+    branches: [main]
+
+jobs:
+  source_bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build V2.6 patch bundle
+        run: |
+          mkdir -p dist
+          python - <<'PY'
+          import os, zipfile
+          files = [
+            "backend/app/main.py",
+            "backend/app/models.py",
+            "backend/app/v24.py",
+            "backend/app/v26.py",
+            "backend/web/index.html",
+            "backend/web/app.js",
+            "backend/web/styles.css",
+            "android/app/build.gradle.kts",
+            "android/app/src/main/res/xml/lemmiq_paths.xml",
+            "android/app/src/main/java/com/lemmiq/app/Api.kt",
+            "android/app/src/main/java/com/lemmiq/app/Models.kt",
+            "android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt",
+            "android/app/src/main/java/com/lemmiq/app/LemmiqCallActivity.kt",
+            "android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt",
+            ".github/workflows/v26-ci.yml",
+          ]
+          readme = """LEMMIQ V2.6 PATCH\n\nCopy these files over the same paths in your existing LEMMIQ project.\nNew files: backend/app/v26.py and .github/workflows/v26-ci.yml.\nThen commit and push to GitHub.\n"""
+          with zipfile.ZipFile("dist/LEMMIQ_V2.6_PATCH.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for path in files:
+                  z.write(path,path)
+              z.writestr("V2.6_README.txt",readme)
+          PY
+
+      - name: Upload V2.6 patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: LEMMIQ-V2.6-PATCH
+          path: dist/LEMMIQ_V2.6_PATCH.zip
+          if-no-files-found: error
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Python syntax
+        run: python -m compileall -q backend/app
+
+      - name: Validate web JavaScript
+        run: node --check backend/web/app.js
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.6.0"
+
+      - name: Compile Android debug APK
+        run: gradle -p android :app:assembleDebug --stacktrace
+
+      - name: Upload debug APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LEMMIQ-V2.6-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

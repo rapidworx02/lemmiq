@@ -1,0 +1,170 @@
+LEMMIQ V2.6 - MANUAL INSTALL / GITHUB PUSH
+===========================================
+
+WHAT THIS ZIP IS
+----------------
+This is a PATCH bundle, not a full fresh project.
+Extract it directly into the ROOT of your existing LEMMIQ project folder.
+Keep the same folder structure and choose REPLACE / OVERWRITE when Windows asks.
+
+The patch includes backend, web/PWA, Android and V2.6 CI files.
+It does NOT include your secrets, local.properties, .env, google-services.json or database.
+
+MAIN V2.6 WORK
+--------------
+1. Voice call lifecycle fixes
+   - prevents rapid duplicate calls / multiple active calls
+   - decline/end state is synchronised more reliably
+   - stale ringing calls are cleaned up
+   - Android caller polls call state as a fallback
+   - stronger microphone/audio cleanup on end/decline
+
+2. Updates / Status redesign
+   - story-style status row
+   - full-screen text/photo viewer
+   - video status playback hand-off
+   - viewed/new state
+   - My Status section and view count
+   - reply-to-status flow
+   - Android FileProvider cache fix for status media
+
+3. Chats navigation fix on web/PWA
+   - tapping Chats returns to chat list
+   - browser back/forward keeps chat/group navigation state
+
+4. Q Agent V2.6 beta
+   - Ask mode and Do mode
+   - daily Q brief
+   - commitments / follow-up integration
+   - approval labels for side-effect actions
+   - Q-to-Q coordination beta with explicit opt-in requests
+   - private chat memory is NOT shared between users in Q-to-Q requests
+
+5. Version / validation
+   - Android versionName 2.6.0 / versionCode 42
+   - backend reports 2.6.0
+   - GitHub Actions syntax + Android validation workflow included
+
+STEP 1 - BACK UP YOUR CURRENT LOCAL PROJECT
+-------------------------------------------
+Open CMD in your current LEMMIQ project folder, for example:
+
+cd /d "C:\Users\pc\LEMMIQ"
+
+git status
+
+If you have uncommitted work you want to keep:
+
+git add .
+git commit -m "Backup before LEMMIQ V2.6"
+
+STEP 2 - MAKE SURE MAIN IS CURRENT
+----------------------------------
+
+git checkout main
+git pull origin main
+
+If Git says your branch is already up to date, continue.
+
+STEP 3 - COPY THE V2.6 FILES
+----------------------------
+Extract LEMMIQ_V2.6_PATCH.zip into the ROOT LEMMIQ folder.
+
+Example root structure after extraction:
+
+LEMMIQ\
+  android\
+  backend\
+  .github\
+  ...your existing files...
+
+IMPORTANT:
+- Do NOT extract it into LEMMIQ\LEMMIQ_V2.6_PATCH\
+- It must merge with the existing android and backend folders.
+- Choose "Replace the files in the destination" for matching files.
+
+STEP 4 - CHECK WHAT CHANGED
+---------------------------
+
+git status
+git diff --stat
+
+You should see V2.6 changes mainly under:
+- backend\app\
+- backend\web\
+- android\app\
+- .github\workflows\
+
+STEP 5 - COMMIT AND PUSH V2.6 TO GITHUB
+---------------------------------------
+
+git add .
+git commit -m "LEMMIQ V2.6 - Q Agent, call and status fixes"
+git push origin main
+
+STEP 6 - RENDER / BACKEND DEPLOYMENT
+------------------------------------
+If Render is connected to the main branch, the push should trigger a new deployment.
+Do NOT remove your existing environment variables.
+
+Keep/check these existing backend variables where applicable:
+- LEMMIQ_JWT_SECRET
+- DATABASE_URL
+- LIVEKIT_URL
+- LIVEKIT_API_KEY
+- LIVEKIT_API_SECRET
+- any AI provider keys already used by your Q/Trust features
+
+After deployment, open:
+https://YOUR-RENDER-SERVICE.onrender.com/health
+
+Expected version:
+2.6.0
+
+Then hard-refresh the web app/PWA so the new app.js / styles are loaded.
+
+STEP 7 - ANDROID STUDIO
+-----------------------
+Open the existing android folder in Android Studio.
+
+Recommended sequence:
+1. File > Sync Project with Gradle Files
+2. Build > Clean Project
+3. Build > Rebuild Project
+4. Run on TWO Android phones/accounts for call testing
+
+V2.6 Android version:
+- versionName: 2.6.0
+- versionCode: 42
+
+If you use a local Android API URL, make sure your existing android/local.properties is still present.
+This patch deliberately does not overwrite local.properties.
+
+STEP 8 - TEST IN THIS ORDER
+---------------------------
+A. Normal direct message
+B. Open chat -> Chats tab -> confirm it returns to conversation list
+C. Post text status
+D. Post image status and open it
+E. Reply to someone else's status
+F. Start one voice call
+G. Decline call from receiver -> caller must stop ringing
+H. Start call again -> confirm only one active call is created
+I. End call -> microphone/audio must release
+J. Q Agent Ask mode
+K. Q Agent Do mode
+L. Q-to-Q request between two LEMMIQ accounts
+M. Confirm Q-to-Q shares only the explicit coordination prompt/options
+
+QUICK ROLLBACK
+--------------
+If you need to return to the previous Git commit after testing:
+
+git log --oneline -10
+
+Then use Git normally to revert the V2.6 commit, for example:
+
+git revert <V2.6-COMMIT-HASH>
+git push origin main
+
+Do not use git reset --hard unless you understand that it can remove local work.

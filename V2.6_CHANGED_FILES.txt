@@ -1,0 +1,18 @@
+LEMMIQ V2.6 PATCH FILES
+=======================
+
+backend/app/main.py
+backend/app/models.py
+backend/app/v24.py
+backend/app/v26.py               NEW
+backend/web/index.html
+backend/web/app.js
+backend/web/styles.css
+android/app/build.gradle.kts
+android/app/src/main/res/xml/lemmiq_paths.xml
+android/app/src/main/java/com/lemmiq/app/Api.kt
+android/app/src/main/java/com/lemmiq/app/Models.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqCallActivity.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+.github/workflows/v26-ci.yml       NEW

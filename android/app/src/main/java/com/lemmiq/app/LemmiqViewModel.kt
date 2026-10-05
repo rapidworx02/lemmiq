@@ -52,6 +52,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var chatSummary by mutableStateOf<ChatSummary?>(null)
     var memoryResults by mutableStateOf<List<MemorySearchItem>>(emptyList())
     var agentBusy by mutableStateOf(false)
+    var qMode by mutableStateOf("ASK")
+    var qDoAnswer by mutableStateOf<QDoResponseDto?>(null)
+    var qDailyBrief by mutableStateOf<QDailyBriefDto?>(null)
+    var qCoordination by mutableStateOf(QCoordinationListDto())
+    private var autoSocialScanned=false
     var notificationCapture by mutableStateOf(NotificationControl.enabled(appCtx))
     var insightSync by mutableStateOf(NotificationControl.sync(appCtx))
     var retentionDays by mutableIntStateOf(NotificationControl.keepDays(appCtx))
@@ -91,6 +96,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var callHistory by mutableStateOf<List<CallDto>>(emptyList())
     var activeCalls by mutableStateOf<List<CallDto>>(emptyList())
     var callStatus by mutableStateOf(CallStatusDto())
+    var callStarting by mutableStateOf(false)
     var replyTo by mutableStateOf<MessageDto?>(null)
     var insideSearchResults by mutableStateOf<List<MessageDto>>(emptyList())
     var chatFilterMode by mutableStateOf("ALL")
@@ -125,7 +131,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -416,16 +422,49 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         try{
             agentBrief=api.agentBrief()
             styleProfile=api.agentProfile(30)
+            qDailyBrief=runCatching{api.qDailyBrief()}.getOrNull()
+            qCoordination=runCatching{api.qCoordination()}.getOrDefault(QCoordinationListDto())
+            if(!autoSocialScanned){
+                autoSocialScanned=true
+                runCatching{api.scanSocial()}
+                socialBrief=runCatching{api.socialBrief()}.getOrNull()
+                qDailyBrief=runCatching{api.qDailyBrief()}.getOrNull()
+            }
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
+
+    fun setQMode(mode:String){qMode=if(mode=="DO")"DO" else "ASK";qDoAnswer=null;agentAnswer=null}
 
     fun askAgent(question:String)=viewModelScope.launch{
         if(question.isBlank())return@launch
         agentBusy=true;error=null
         try{
-            if(externalQ && externalEnabled)refreshExternal()
-            val context=if(externalQ && externalEnabled)externalMessages.take(30).reversed() else emptyList()
-            agentAnswer=api.askAgent(question.trim(),30,context)
+            if(qMode=="DO"){
+                qDoAnswer=api.qDo(question.trim())
+                agentAnswer=null
+            }else{
+                if(externalQ && externalEnabled)refreshExternal()
+                val context=if(externalQ && externalEnabled)externalMessages.take(30).reversed() else emptyList()
+                agentAnswer=api.askAgent(question.trim(),30,context)
+                qDoAnswer=null
+            }
+        }catch(e:Exception){error=e.message}finally{agentBusy=false}
+    }
+
+    fun createQCoordination(targetIds:List<Int>,kind:String,prompt:String,options:List<String>)=viewModelScope.launch{
+        if(targetIds.isEmpty()||prompt.isBlank())return@launch
+        agentBusy=true;error=null
+        try{
+            api.createQCoordination(targetIds,kind,prompt.trim(),options.filter{it.isNotBlank()})
+            qCoordination=api.qCoordination()
+        }catch(e:Exception){error=e.message}finally{agentBusy=false}
+    }
+
+    fun respondQCoordination(id:Int,choice:String,note:String="")=viewModelScope.launch{
+        agentBusy=true;error=null
+        try{
+            api.respondQCoordination(id,choice,note)
+            qCoordination=api.qCoordination()
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
@@ -616,7 +655,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     // ---------------- Calls ----------------
     fun refreshCalls()=viewModelScope.launch{runCatching{callStatus=api.callStatus();callHistory=api.callHistory()}.onFailure{error=it.message}}
     fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
-        busy=true;try{onReady(api.startCall(cid))}catch(e:Exception){error=e.message}finally{busy=false}
+        if(callStarting){error="A call is already starting";return@launch}
+        callStarting=true;busy=true;error=null
+        try{onReady(api.startCall(cid))}
+        catch(e:Exception){error=e.message}
+        finally{busy=false;callStarting=false}
     }
 
     fun refreshBusiness()=viewModelScope.launch{

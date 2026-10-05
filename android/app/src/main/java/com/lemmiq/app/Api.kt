@@ -137,6 +137,29 @@ class Api(private val store:SessionStore){
         return gson.fromJson(t,object:TypeToken<List<MemorySearchItem>>(){}.type)
     }
 
+    suspend fun qDailyBrief():QDailyBriefDto =
+        gson.fromJson(req(b("$base/v26/q/brief").get().build()),QDailyBriefDto::class.java)
+
+    suspend fun qDo(question:String):QDoResponseDto {
+        val rb=gson.toJson(mapOf("question" to question)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v26/q/do").post(rb).build()),QDoResponseDto::class.java)
+    }
+
+    suspend fun qCoordination():QCoordinationListDto =
+        gson.fromJson(req(b("$base/v26/q/coordination").get().build()),QCoordinationListDto::class.java)
+
+    suspend fun createQCoordination(targetIds:List<Int>,kind:String,prompt:String,options:List<String>):QCoordinationCreateDto {
+        val rb=gson.toJson(mapOf(
+            "target_user_ids" to targetIds,"kind" to kind,"prompt" to prompt,"options" to options
+        )).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v26/q/coordination").post(rb).build()),QCoordinationCreateDto::class.java)
+    }
+
+    suspend fun respondQCoordination(id:Int,choice:String,note:String):QCoordinationDto {
+        val rb=gson.toJson(mapOf("choice" to choice,"note" to note)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v26/q/coordination/$id/respond").post(rb).build()),QCoordinationDto::class.java)
+    }
+
 
     suspend fun pushInsight(e:PhoneEvent){
         val payload=mapOf(
@@ -383,6 +406,8 @@ class Api(private val store:SessionStore){
 
     suspend fun callStatus():CallStatusDto =
         gson.fromJson(req(b("$base/v24/calls/status").get().build()),CallStatusDto::class.java)
+    suspend fun callDetail(id:String):CallDto =
+        gson.fromJson(req(b("$base/v24/calls/$id").get().build()),CallDto::class.java)
     suspend fun startCall(cid:Int):CallJoinDto{
         val rb=gson.toJson(mapOf("chat_id" to cid)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v24/calls/start").post(rb).build()),CallJoinDto::class.java)

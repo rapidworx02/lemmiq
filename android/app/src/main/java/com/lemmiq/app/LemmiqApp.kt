@@ -855,6 +855,11 @@ private fun Moments(vm:LemmiqViewModel){
 private fun ChatAgent(vm:LemmiqViewModel){
     var q by remember{mutableStateOf("")}
     var search by remember{mutableStateOf("")}
+    var showCoord by remember{mutableStateOf(false)}
+    var coordSearch by remember{mutableStateOf("")}
+    var coordPrompt by remember{mutableStateOf("")}
+    var coordOptions by remember{mutableStateOf("")}
+    var selectedTargets by remember{mutableStateOf(setOf<Int>())}
     val starters=listOf(
         "🧠 Catch me up" to "Catch me up on my important conversations and anything I may have missed.",
         "🤝 What did I promise?" to "What did I promise people recently?",
@@ -863,19 +868,33 @@ private fun ChatAgent(vm:LemmiqViewModel){
         "✍️ Draft a reply" to "Help me draft a reply. Ask me which chat if needed.",
         "📅 This week" to "Summarise the important things from my conversations this week.",
         "🛡 Fact-check" to "I want to fact-check something.",
-        "👥 Ask about group" to "Ask me which group I want to analyse, then help me with that group."
+        "🤖 Q-to-Q" to "Coordinate a plan or common availability with my LEMMIQ contacts."
     )
     LaunchedEffect(Unit){vm.refreshAgent()}
     LazyColumn(
         Modifier.fillMaxSize().background(Bg),
         contentPadding=PaddingValues(bottom=24.dp)
     ){
-        item{Header("Q","Ask across chats, groups, voice notes and Social IQ")}
+        item{Header("Q Agent","Ask, plan and coordinate from your LEMMIQ context")}
         item{
             Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp),colors=CardDefaults.cardColors(containerColor=Ink)){
                 Column(Modifier.padding(14.dp)){
-                    Text("Good to see you. What can Q help with?",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
-                    Text("Q stays grounded in your LEMMIQ context and never sends messages on its own.",color=Color(0xFFCDCADC),fontSize=10.sp,modifier=Modifier.padding(top=4.dp))
+                    Text("What can Q help you get done?",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
+                    Text(
+                        if(vm.qMode=="ASK")"Ask mode reads and explains. It does not take actions."
+                        else "Do mode builds an action plan. Messages, coordination and other side effects still require your approval.",
+                        color=Color(0xFFCDCADC),fontSize=10.sp,modifier=Modifier.padding(top=4.dp)
+                    )
+                    Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        FilterChip(
+                            selected=vm.qMode=="ASK",onClick={vm.setQMode("ASK")},
+                            label={Text("Ask")},colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Color.White,selectedLabelColor=Ink)
+                        )
+                        FilterChip(
+                            selected=vm.qMode=="DO",onClick={vm.setQMode("DO")},
+                            label={Text("Do")},colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Purple,selectedLabelColor=Color.White)
+                        )
+                    }
                     starters.chunked(2).forEach{row->
                         Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                             row.forEach{item->
@@ -892,19 +911,21 @@ private fun ChatAgent(vm:LemmiqViewModel){
                 }
             }
         }
+
         item{
             Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp)){
                 Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
                     Column(Modifier.weight(1f)){
                         Text("Include WhatsApp/SMS previews in Q",fontWeight=FontWeight.Bold,fontSize=13.sp)
-                        Text("Off by default. Up to 30 selected recent snippets are sent only when you press Ask Q.",
+                        Text("Off by default. Selected recent snippets are included only in Ask mode.",
                             color=Muted,fontSize=10.sp)
                     }
                     Switch(checked=vm.externalQ && vm.externalEnabled,
-                        onCheckedChange={vm.setExternalQ(it)},enabled=vm.externalEnabled)
+                        onCheckedChange={vm.setExternalQ(it)},enabled=vm.externalEnabled && vm.qMode=="ASK")
                 }
             }
         }
+
         item{
             Card(
                 Modifier.fillMaxWidth().padding(horizontal=20.dp),
@@ -912,14 +933,65 @@ private fun ChatAgent(vm:LemmiqViewModel){
                 shape=RoundedCornerShape(22.dp)
             ){
                 Column(Modifier.padding(18.dp)){
-                    Text("Q  Your Chat Brief",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
-                    Text(vm.agentBrief?.summary ?: "Analysing your recent conversations…",color=Color(0xFFDDDBE8),modifier=Modifier.padding(top=8.dp))
+                    Text("Q Daily Brief",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
+                    Text(
+                        vm.qDailyBrief?.summary ?: vm.agentBrief?.summary ?: "Analysing your recent conversations…",
+                        color=Color(0xFFDDDBE8),modifier=Modifier.padding(top=8.dp)
+                    )
+                    vm.qDailyBrief?.let{b->
+                        Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            Surface(color=Color.White.copy(alpha=.08f),shape=RoundedCornerShape(12.dp)){
+                                Text("${b.needs_reply_count} need reply",color=Color.White,fontSize=10.sp,modifier=Modifier.padding(8.dp))
+                            }
+                            Surface(color=Color.White.copy(alpha=.08f),shape=RoundedCornerShape(12.dp)){
+                                Text("${b.commitments.size} commitments",color=Color.White,fontSize=10.sp,modifier=Modifier.padding(8.dp))
+                            }
+                        }
+                    }
                     if(vm.agentBusy)LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=12.dp))
                 }
             }
         }
 
         item{V24SocialIqCard(vm)}
+
+        val incoming=vm.qCoordination.inbox.filter{it.status=="PENDING"}.take(5)
+        if(incoming.isNotEmpty()){
+            item{Text("Q-to-Q requests",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,20.dp,20.dp,8.dp))}
+            items(incoming,key={it.id}){request->
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
+                    Column(Modifier.padding(14.dp)){
+                        Text("🤖 ${request.initiator?.display_name?:"LEMMIQ contact"}",fontWeight=FontWeight.Bold)
+                        Text(request.prompt,fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
+                        Text("Only this request is shared — not private chat memory.",fontSize=9.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                        val choices=if(request.options.isEmpty())listOf("Available","Not available") else request.options.take(4)
+                        Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            choices.take(2).forEach{choice->
+                                FilledTonalButton(
+                                    onClick={vm.respondQCoordination(request.id,choice)},
+                                    modifier=Modifier.weight(1f)
+                                ){Text(choice,fontSize=10.sp,maxLines=1)}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val outgoingGroups=vm.qCoordination.outbox.groupBy{it.request_key}.values.take(4)
+        if(outgoingGroups.isNotEmpty()){
+            item{Text("My Q-to-Q plans",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,18.dp,20.dp,8.dp))}
+            items(outgoingGroups.toList()){group->
+                val first=group.first()
+                val replied=group.count{it.status=="RESPONDED"}
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
+                    Column(Modifier.padding(12.dp)){
+                        Text(first.prompt,fontWeight=FontWeight.Bold,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        Text("${replied}/${group.size} responses",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                    }
+                }
+            }
+        }
 
         vm.agentBrief?.needs_reply?.take(5)?.let{itemsToReply->
             if(itemsToReply.isNotEmpty()){
@@ -937,20 +1009,23 @@ private fun ChatAgent(vm:LemmiqViewModel){
 
         item{
             Column(Modifier.padding(20.dp,18.dp,20.dp,0.dp)){
-                Text("Ask about your messages & synced insights",fontSize=18.sp,fontWeight=FontWeight.Bold)
-                Text(if(vm.insightSync)"Selected structured phone events are available to Q." else
-                    "Phone events stay on-device. Enable optional sync in Activity to include them in Q.",
-                    fontSize=11.sp,color=Muted)
+                Text(if(vm.qMode=="DO")"Tell Q what to do" else "Ask about your messages & synced insights",fontSize=18.sp,fontWeight=FontWeight.Bold)
+                Text(
+                    if(vm.qMode=="DO")"Q can read, search, summarise and draft safely. Sending or coordinating requires your approval."
+                    else if(vm.insightSync)"Selected structured phone events are available to Q."
+                    else "Phone events stay on-device. Enable optional sync in Activity to include them in Q.",
+                    fontSize=11.sp,color=Muted
+                )
                 OutlinedTextField(
                     value=q,onValueChange={q=it},modifier=Modifier.fillMaxWidth().padding(top=8.dp),
-                    placeholder={Text("e.g. Who did I promise to call?")},
+                    placeholder={Text(if(vm.qMode=="DO")"e.g. Coordinate dinner with Sam and Raj" else "e.g. Who did I promise to call?")},
                     minLines=2,maxLines=4,shape=RoundedCornerShape(18.dp)
                 )
                 Button(
                     onClick={vm.askAgent(q)},
                     enabled=q.isNotBlank()&&!vm.agentBusy,
                     modifier=Modifier.fillMaxWidth().padding(top=8.dp)
-                ){Text("Ask Q")}
+                ){Text(if(vm.qMode=="DO")"Plan with Q" else "Ask Q")}
             }
         }
 
@@ -969,6 +1044,46 @@ private fun ChatAgent(vm:LemmiqViewModel){
                     }
                 }
             }
+        }
+
+        vm.qDoAnswer?.let{plan->
+            item{
+                Card(Modifier.fillMaxWidth().padding(20.dp,12.dp),colors=CardDefaults.cardColors(containerColor=Soft)){
+                    Column(Modifier.padding(16.dp)){
+                        Text("Q Agent plan",color=Purple,fontWeight=FontWeight.Black)
+                        Text(plan.answer,modifier=Modifier.padding(top=8.dp))
+                        plan.actions.forEach{action->
+                            Card(Modifier.fillMaxWidth().padding(top=8.dp)){
+                                Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
+                                    Column(Modifier.weight(1f)){
+                                        Text(action.label,fontWeight=FontWeight.Bold,fontSize=12.sp)
+                                        Text(
+                                            if(action.approval_required)"Approval required" else "Safe action",
+                                            fontSize=9.sp,color=if(action.approval_required)Color(0xFFD97706) else Color(0xFF198754)
+                                        )
+                                        action.note?.let{Text(it,fontSize=9.sp,color=Muted)}
+                                    }
+                                    when(action.type){
+                                        "SCAN_COMMITMENTS" -> TextButton({vm.scanSocialIq()}){Text("Run")}
+                                        "Q_TO_Q" -> TextButton({
+                                            coordPrompt=q
+                                            showCoord=true
+                                        }){Text("Set up")}
+                                        else -> Unit
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item{
+            OutlinedButton(
+                onClick={coordPrompt=q.ifBlank{"Find a time that works for us."};showCoord=true},
+                modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)
+            ){Text("🤖 Start Q-to-Q coordination")}
         }
 
         item{
@@ -1001,6 +1116,64 @@ private fun ChatAgent(vm:LemmiqViewModel){
                 }
             }
         }
+    }
+
+    if(showCoord){
+        AlertDialog(
+            onDismissRequest={showCoord=false},
+            title={Text("Q-to-Q coordination")},
+            text={
+                Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    Text("Choose LEMMIQ contacts. Q shares only this request and the options you enter.",fontSize=10.sp,color=Muted)
+                    OutlinedTextField(
+                        value=coordSearch,onValueChange={coordSearch=it;vm.search(it)},
+                        label={Text("Search contacts")},singleLine=true,modifier=Modifier.fillMaxWidth()
+                    )
+                    Column(Modifier.heightIn(max=150.dp).verticalScroll(rememberScrollState())){
+                        vm.users.take(8).forEach{u->
+                            Row(
+                                Modifier.fillMaxWidth().clickable{
+                                    selectedTargets=if(u.id in selectedTargets)selectedTargets-u.id else selectedTargets+u.id
+                                }.padding(vertical=5.dp),
+                                verticalAlignment=Alignment.CenterVertically
+                            ){
+                                Checkbox(
+                                    checked=u.id in selectedTargets,
+                                    onCheckedChange={checked->
+                                        selectedTargets=if(checked)selectedTargets+u.id else selectedTargets-u.id
+                                    }
+                                )
+                                Text("${u.display_name}  @${u.username}",fontSize=11.sp)
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value=coordPrompt,onValueChange={coordPrompt=it},label={Text("What should Q coordinate?")},
+                        modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4
+                    )
+                    OutlinedTextField(
+                        value=coordOptions,onValueChange={coordOptions=it},
+                        label={Text("Options / times (one per line, optional)")},
+                        modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4
+                    )
+                }
+            },
+            confirmButton={
+                Button(
+                    onClick={
+                        vm.createQCoordination(
+                            selectedTargets.toList(),
+                            if(coordOptions.isBlank())"PLAN" else "AVAILABILITY",
+                            coordPrompt,
+                            coordOptions.lines().map{it.trim()}.filter{it.isNotBlank()}
+                        )
+                        showCoord=false;selectedTargets=emptySet();coordSearch="";coordOptions=""
+                    },
+                    enabled=selectedTargets.isNotEmpty()&&coordPrompt.isNotBlank()
+                ){Text("Send Q request")}
+            },
+            dismissButton={TextButton({showCoord=false}){Text("Cancel")}}
+        )
     }
 }
 

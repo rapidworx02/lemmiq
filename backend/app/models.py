@@ -260,6 +260,26 @@ class SocialMemory(Base):
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
 
+class QCoordinationRequest(Base):
+    """Privacy-preserving Q-to-Q coordination request.
+
+    Only the explicit prompt/options chosen by the initiator are shared with the target.
+    LEMMIQ never exposes either user's private chat memory through this table.
+    """
+    __tablename__ = "q_coordination_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    request_key: Mapped[str] = mapped_column(String(40), index=True)
+    initiator_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    target_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="PLAN")
+    prompt: Mapped[str] = mapped_column(Text)
+    options_json: Mapped[str] = mapped_column(Text, default="[]")
+    response_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(20), default="PENDING", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
 
 # ---------------- LEMMIQ V2.4 messenger polish ----------------
 

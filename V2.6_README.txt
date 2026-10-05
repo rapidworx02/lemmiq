@@ -1,0 +1,5 @@
+LEMMIQ V2.6 PATCH
+
+Copy these files over the same paths in your existing LEMMIQ project.
+New files: backend/app/v26.py and .github/workflows/v26-ci.yml.
+Then commit and push to GitHub.
