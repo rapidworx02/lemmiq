@@ -195,6 +195,7 @@ private fun Home(vm:LemmiqViewModel){
                         "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
                         "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
                         "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
+                        "qeconomy"->V241MoreSubPage("Q Economy",{morePage=null}){V28QEconomyScreen(vm)}
                         else->V241MoreMenu{morePage=it}
                     }
                 }
@@ -271,6 +272,7 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
 @Composable
 private fun V241MoreMenu(onOpen:(String)->Unit){
     val menuItems=listOf(
+        Triple("Q","Q Economy","Wallet, mining, subscriptions, referrals and Q Market") to "qeconomy",
         Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",

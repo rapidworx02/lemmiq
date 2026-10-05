@@ -100,7 +100,12 @@ function showApp(){
   $("meName").textContent=state.user?.display_name||"LEMMIQ User";
   $("meUsername").textContent="@"+(state.user?.username||"");
   renderMeAvatar();
-  connectSocket(); refreshCurrent();
+  connectSocket();
+  const requested=(location.hash||"").replace(/^#/,"");
+  if(requested==="admin"||requested==="q-admin") setView("q-admin");
+  else if(requested==="q-economy") setView("q-economy");
+  else refreshCurrent();
+  if(window.refreshV28Access) window.refreshV28Access();
 }
 function chatsHome(pushHistory=false){
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
@@ -119,7 +124,7 @@ function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me"];
+  const secondary=["trust","business","activity","money","me","q-economy","q-admin"];
   const navName=secondary.includes(name)?"more":name;
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
@@ -132,7 +137,9 @@ function setView(name){
     business:["Business Agent","Teach LEMMIQ how your business operates."],
     activity:["Activity","Detected phone activity synced by your Android companion."],
     money:["Money","Review and correct notification-derived payment insights."],
-    me:["Me","Your profile photo, account and LEMMIQ access."]
+    me:["Me","Your profile photo, account and LEMMIQ access."],
+    "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
+    "q-admin":["Q Admin","Treasury, USDT payments, marketplace and economy controls."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -148,6 +155,8 @@ async function refreshView(name){
     if(name==="activity") await loadActivity();
     if(name==="money") await loadMoney();
     if(name==="me") renderMeAvatar();
+    if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
+    if(name==="q-admin" && window.loadQAdmin) await window.loadQAdmin();
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -641,7 +650,7 @@ function installAndroidApp(){
   }
   openModal(`<h3>📱 Android download setup</h3>
     <p>The LEMMIQ button is wired to <strong>/download/android</strong>, but no APK/Play destination is configured on the server yet.</p>
-    <p>Publish your V2.7.1 app bundle to Google Play and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
+    <p>Publish your V2.8 app bundle to Google Play and set <strong>ANDROID_APK_URL</strong>/<strong>ANDROID_PLAY_URL</strong>, or place a built APK at <strong>backend/web/downloads/LEMMIQ.apk</strong> and redeploy.</p>
     <p class="micro">After Render redeploys, this same button becomes a direct user download link—no website code change is required.</p>`);
 }
 
@@ -1333,7 +1342,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.7.1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

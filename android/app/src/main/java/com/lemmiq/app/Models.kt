@@ -217,3 +217,54 @@ data class VisionMemoryDto(
     val mime_type:String="",val original_name:String="",val media_url:String="",
     val created_at:String="",val updated_at:String=""
 )
+
+
+// LEMMIQ V2.8 Q Economy
+data class QPlanDto(
+    val code:String="",val name:String="",val price_usd:Double=0.0,val daily_rate_percent:Double=0.0,
+    val daily_usd_reference:Double=0.0,val daily_q_at_current_reference:Double=0.0,
+    val valid_days:Int=365,val cap_percent:Int=200,val cap_usd:Double=0.0,val cap_q_at_current_reference:Double=0.0
+)
+data class QSubscriptionDto(
+    val id:Int=0,val package_code:String="",val package_name:String="",val purchase_usd:Double=0.0,
+    val daily_rate_percent:Double=0.0,val accrued_usd_reference:Double=0.0,val accrued_q:Double=0.0,
+    val cap_usd:Double=0.0,val remaining_cap_usd:Double=0.0,val status:String="ACTIVE",
+    val started_at:String="",val expires_at:String="",val last_accrual_date:String="",val current_q_reference_usd:Double=0.05
+)
+data class QWalletDto(
+    val balance_q:Double=0.0,val balance_usd_reference:Double=0.0,val q_reference_usd:Double=0.05,
+    val cashout_enabled:Boolean=false,val cashout_note:String="",val basic_daily_q:Double=0.0,
+    val basic_claimed_today:Boolean=false,val signup_bonus_q:Double=0.0,val referral_code:String="",
+    val referral_reward_q:Double=0.0,val admin_role:String?=null,
+    val packages:List<QSubscriptionDto> = emptyList(),val plans:List<QPlanDto> = emptyList()
+)
+data class QLedgerDto(
+    val id:Int=0,val tx_id:String="",val kind:String="",val amount_q:Double=0.0,val direction:String="IN",
+    val other_user_id:Int?=null,val system_wallet:String?=null,val usd_cents:Int?=null,
+    val reference:String="",val note:String="",val created_at:String=""
+)
+data class QReferralItemDto(val user_id:Int=0,val reward_q:Double=0.0,val created_at:String="")
+data class QReferralSummaryDto(
+    val code:String="",val count:Int=0,val earned_q:Double=0.0,val items:List<QReferralItemDto> = emptyList()
+)
+data class QPaymentWalletDto(
+    val id:Int=0,val network:String="",val package_code:String?=null,val label:String="",val address:String="",
+    val active:Boolean=true,val qr_url:String="",val custom_qr:Boolean=false
+)
+data class QPaymentOrderDto(
+    val id:Int=0,val order_code:String="",val user_id:Int=0,val package_code:String="",val package_name:String="",
+    val network:String="",val expected_usdt:Double=0.0,val wallet:QPaymentWalletDto?=null,val tx_hash:String?=null,
+    val explorer_url:String?=null,val status:String="",val user_note:String="",val admin_note:String="",
+    val created_at:String="",val submitted_at:String?=null,val reviewed_at:String?=null
+)
+data class QMarketSellerDto(val id:Int=0,val username:String="",val display_name:String="")
+data class QMarketListingDto(
+    val id:Int=0,val seller:QMarketSellerDto?=null,val title:String="",val description:String="",val category:String="OTHER",
+    val condition:String="SERVICE",val price_q:Double=0.0,val price_usd_reference:Double=0.0,
+    val inventory:Int=0,val active:Boolean=true,val created_at:String="",val updated_at:String=""
+)
+data class QMarketOrderDto(
+    val id:Int=0,val order_code:String="",val listing:QMarketListingDto?=null,val buyer_id:Int=0,val seller_id:Int=0,
+    val quantity:Int=1,val total_q:Double=0.0,val fee_percent:Double=0.0,val status:String="",
+    val dispute_note:String="",val created_at:String="",val updated_at:String=""
+)

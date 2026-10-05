@@ -57,6 +57,15 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var qDailyBrief by mutableStateOf<QDailyBriefDto?>(null)
     var qCoordination by mutableStateOf(QCoordinationListDto())
     var qHome by mutableStateOf<QHomeDto?>(null)
+    var qWallet by mutableStateOf<QWalletDto?>(null)
+    var qLedger by mutableStateOf<List<QLedgerDto>>(emptyList())
+    var qReferrals by mutableStateOf<QReferralSummaryDto?>(null)
+    var qPaymentOrders by mutableStateOf<List<QPaymentOrderDto>>(emptyList())
+    var activeQPaymentOrder by mutableStateOf<QPaymentOrderDto?>(null)
+    var qMarketListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
+    var qMyListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
+    var qMarketOrders by mutableStateOf<List<QMarketOrderDto>>(emptyList())
+    var qEconomyBusy by mutableStateOf(false)
     var visionHistory by mutableStateOf<List<VisionMemoryDto>>(emptyList())
     var activeVision by mutableStateOf<VisionMemoryDto?>(null)
     var visionBusy by mutableStateOf(false)
@@ -135,7 +144,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -419,6 +428,80 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             remoteInsightBrief=runCatching{api.insightBrief()}.getOrNull()
         }catch(ex:Exception){error="Could not update detected event: ${ex.message}"}
         finally{insightWorking=false}
+    }
+
+    fun refreshQEconomy()=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{
+            qWallet=api.qWallet()
+            qLedger=api.qLedger()
+            qReferrals=api.qReferrals()
+            qPaymentOrders=api.qPaymentOrders()
+            qMarketListings=api.qMarketListings()
+            qMyListings=api.qMyListings()
+            qMarketOrders=api.qMarketOrders()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qClaimDaily()=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{qWallet=api.qClaimDaily();qLedger=api.qLedger()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qTransfer(username:String,amount:Double)=viewModelScope.launch{
+        if(username.isBlank()||amount<=0)return@launch
+        qEconomyBusy=true;error=null
+        try{api.qTransfer(username.trim().removePrefix("@"),amount);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qClaimReferral(code:String)=viewModelScope.launch{
+        if(code.isBlank())return@launch
+        qEconomyBusy=true;error=null
+        try{api.qClaimReferral(code.trim());refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qCreatePaymentOrder(packageCode:String,network:String)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{activeQPaymentOrder=api.qCreatePaymentOrder(packageCode,network);qPaymentOrders=api.qPaymentOrders()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qSubmitPayment(orderId:Int,txHash:String,note:String="")=viewModelScope.launch{
+        if(txHash.length<20)return@launch
+        qEconomyBusy=true;error=null
+        try{activeQPaymentOrder=api.qSubmitPayment(orderId,txHash.trim(),note);qPaymentOrders=api.qPaymentOrders()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qDismissPayment(){activeQPaymentOrder=null}
+
+    fun qCreateListing(title:String,description:String,priceQ:Double,inventory:Int=1)=viewModelScope.launch{
+        if(title.isBlank()||priceQ<=0)return@launch
+        qEconomyBusy=true;error=null
+        try{api.qCreateListing(title.trim(),description.trim(),priceQ,inventory);qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qUpdateListing(x:QMarketListingDto,title:String,description:String,priceQ:Double,inventory:Int,active:Boolean)=viewModelScope.launch{
+        if(title.isBlank()||priceQ<=0||inventory<1)return@launch
+        qEconomyBusy=true;error=null
+        try{
+            api.qUpdateListing(x,title.trim(),description.trim(),priceQ,inventory,active)
+            qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qBuyListing(id:Int)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qBuyListing(id);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qMarketAction(id:Int,action:String)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qMarketAction(id,action);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qMarketDispute(id:Int,note:String)=viewModelScope.launch{
+        if(note.isBlank())return@launch
+        qEconomyBusy=true;error=null
+        try{api.qMarketDispute(id,note);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
     fun refreshAgent()=viewModelScope.launch{
