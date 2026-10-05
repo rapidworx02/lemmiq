@@ -10,6 +10,9 @@ const state = {
   chatCalls: [],
   chatFilterMode: "ALL",
   statuses: [],
+  statusStoryIds: [],
+  statusIndex: -1,
+  statusBlobUrl: null,
   trustHistory: [],
   socialBrief: null,
   replyTo: null,
@@ -95,6 +98,16 @@ function showApp(){
   renderMeAvatar();
   connectSocket(); refreshCurrent();
 }
+function chatsHome(pushHistory=false){
+  state.activeChat=null;state.activeGroup=null;state.replyTo=null;
+  const layout=document.querySelector(".chat-layout");if(layout)layout.classList.remove("open-chat");
+  if($("activeChat"))$("activeChat").classList.add("hidden");
+  if($("activeGroup"))$("activeGroup").classList.add("hidden");
+  if($("emptyChat"))$("emptyChat").classList.remove("hidden");
+  renderChats();
+  if(pushHistory)history.pushState({view:"chats"},"","#chats");
+}
+
 function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
   const target=$(`view-${name}`);if(!target)return;
@@ -157,7 +170,7 @@ function connectSocket(){
         await loadChats();
       }else if(p.type==="group_message"){
         await loadChats();
-        if(state.activeGroup&&p.group_id===state.activeGroup.id)await openGroup(state.activeGroup.id);
+        if(state.activeGroup&&p.group_id===state.activeGroup.id)await openGroup(state.activeGroup.id,false);
       }else if(p.type==="incoming_call"){
         showIncomingCall(p);
       }else if(p.type==="call_answered"&&state.callId===p.call_id){
@@ -221,6 +234,7 @@ async function openChat(cid,mark=true){
   clearReplyPreview();
   document.querySelector(".chat-layout").classList.add("open-chat");
   renderMessages();renderChats();
+  if(mark&&location.hash!==`#chat-${cid}`)history.pushState({view:"chats",chatId:cid},"",`#chat-${cid}`);
 }
 function renderMessages(){
   const me=state.user?.id,items=[];
@@ -697,13 +711,15 @@ async function showNewGroup(){
   $("ngSearch").oninput=async e=>{const q=e.target.value.trim();if(q.length<2){$("ngResults").innerHTML="";return}const rows=await api(`/users/search?q=${encodeURIComponent(q)}`);$("ngResults").innerHTML=rows.map(u=>`<div class="user-result"><span>${escapeHtml(u.display_name)} @${escapeHtml(u.username)}</span><button class="mini" data-pick="${u.id}">Add</button></div>`).join("");qsa("[data-pick]").forEach(b=>b.onclick=()=>{const u=rows.find(x=>x.id===Number(b.dataset.pick));if(u){chosen.set(u.id,u);redraw()}})};
   $("ngCreate").onclick=async()=>{const name=$("ngName").value.trim();if(!name||!chosen.size)return toast("Add a group name and at least one member",true);const g=await api("/v24/groups",{method:"POST",body:JSON.stringify({name,member_ids:[...chosen.keys()]})});closeModal();await loadChats();await openGroup(g.id)};
 }
-async function openGroup(gid){
+async function openGroup(gid,pushHistory=true){
   state.activeChat=null;state.replyTo=null;
   const g=await api(`/v24/groups/${gid}`);state.activeGroup=g;state.groupMessages=await api(`/v24/groups/${gid}/messages`);await api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
   $("emptyChat").classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
   $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");renderGroupMessages();renderChats();
+  document.querySelector(".chat-layout").classList.add("open-chat");
+  if(pushHistory&&location.hash!==`#group-${gid}`)history.pushState({view:"chats",groupId:gid},"",`#group-${gid}`);
 }
 function renderGroupMessages(){
   let day="",html="";const me=state.user?.id;
@@ -888,7 +904,11 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("loginForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/login",{method:"POST",body:JSON.stringify({username:$("loginUsername").value,password:$("loginPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
   $("registerForm").onsubmit=async e=>{e.preventDefault();try{const r=await api("/register",{method:"POST",body:JSON.stringify({display_name:$("regName").value,username:$("regUsername").value,password:$("regPassword").value})});saveSession(r);showApp()}catch(err){toast(err.message,true)}};
 
-  qsa("#nav button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
+  qsa("#nav button").forEach(b=>b.onclick=()=>{
+    const view=b.dataset.view;
+    if(view==="chats")chatsHome(true);
+    setView(view);
+  });
   qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
   qsa("[data-q-prompt]").forEach(b=>b.onclick=()=>runQStarter(b.dataset.qPrompt));
   $("moreAndroidDownloadBtn").onclick=installAndroidApp;
@@ -928,6 +948,15 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
   if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js").catch(()=>{});
+
+  window.addEventListener("popstate",async e=>{
+    const s=e.state||{};
+    if(s.chatId){setView("chats");await loadChats();await openChat(Number(s.chatId),false);return}
+    if(s.groupId){setView("chats");await loadChats();await openGroup(Number(s.groupId),false);return}
+    chatsHome(false);
+    setView(s.view||"chats");
+  });
+  if(!history.state)history.replaceState({view:"chats"},"",location.hash||"#chats");
 
   loadAppConfig();
   if(state.token&&state.user)showApp();
