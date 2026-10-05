@@ -1,6 +1,6 @@
 /* LEMMIQ V2.8 Q Economy */
 (()=>{
-  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]}};
+  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]}};
   const fmtQ=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(Number(n||0));
   const fmtUsd=n=>new Intl.NumberFormat(undefined,{style:"currency",currency:"USD",maximumFractionDigits:4}).format(Number(n||0));
   const dt=x=>{try{return new Date(x).toLocaleString()}catch{return x||""}};
@@ -71,6 +71,15 @@
       ${x.seller?.id===state.user?.id?'<button class="ghost" disabled>Your listing</button>':`<button class="primary" data-q28-market-buy="${x.id}">Buy with Q</button>`}
     </article>`).join(""):`<article class="card glass"><p>No active listings found.</p></article>`;
     qsa("[data-q28-market-buy]").forEach(b=>b.onclick=()=>buyMarket(Number(b.dataset.q28MarketBuy)));
+    if($("q28MyListings")){
+      $("q28MyListings").innerHTML=v28.myListings.length?v28.myListings.map(x=>qRow(
+        `${escapeHtml(x.title)} · ${x.active?"Active":"Paused"}`,
+        `${fmtQ(x.price_q)} Q · ${x.inventory} available · ${escapeHtml(x.category)}`,
+        `≈ ${fmtUsd(x.price_usd_reference)}`,
+        `<button class="ghost" data-q28-edit-listing="${x.id}">Edit</button>`
+      )).join(""):`<div class="empty-state"><p>No listings yet.</p></div>`;
+      qsa("[data-q28-edit-listing]").forEach(b=>b.onclick=()=>editListing(Number(b.dataset.q28EditListing)));
+    }
     $("q28MarketOrders").innerHTML=v28.orders.length?v28.orders.map(o=>{
       const mineSeller=o.seller_id===state.user?.id,mineBuyer=o.buyer_id===state.user?.id;
       let acts="";
@@ -86,11 +95,11 @@
 
   async function loadQEconomy(){
     try{
-      const [wallet,ledger,refs,payments,listings,orders]=await Promise.all([
+      const [wallet,ledger,refs,payments,listings,myListings,orders]=await Promise.all([
         qApi("/wallet"),qApi("/wallet/ledger"),qApi("/referrals"),qApi("/payments/orders"),
-        qApi(`/market/listings?q=${encodeURIComponent($("q28MarketSearch")?.value||"")}`),qApi("/market/orders")
+        qApi(`/market/listings?q=${encodeURIComponent($("q28MarketSearch")?.value||"")}`),qApi("/market/my-listings"),qApi("/market/orders")
       ]);
-      Object.assign(v28,{wallet,ledger,referrals:refs,payments,listings,orders});
+      Object.assign(v28,{wallet,ledger,referrals:refs,payments,listings,myListings,orders});
       renderWallet();renderLedger();renderReferrals();renderPayments();renderMarket();
     }catch(e){toast(e.message,true)}
   }
@@ -134,6 +143,24 @@
           $("modal").close();toast("Payment submitted for admin verification");await loadQEconomy();
         }catch(e){toast(e.message,true)}
       };
+    }catch(e){toast(e.message,true)}
+  }
+
+  async function editListing(id){
+    const x=v28.myListings.find(y=>y.id===id);if(!x)return;
+    const title=prompt("Listing title",x.title);if(title===null||!title.trim())return;
+    const description=prompt("Description",x.description||"");if(description===null)return;
+    const priceRaw=prompt("Price in Q",String(x.price_q));if(priceRaw===null)return;
+    const inventoryRaw=prompt("Available quantity",String(x.inventory));if(inventoryRaw===null)return;
+    const price=Number(priceRaw),inventory=Number(inventoryRaw);
+    if(!(price>0)||!(inventory>=1)){toast("Price and inventory must be valid",true);return}
+    const active=confirm("Keep this listing ACTIVE?\nOK = Active\nCancel = Pause");
+    try{
+      await qApi(`/market/listings/${id}`,{method:"PUT",body:JSON.stringify({
+        title:title.trim(),description,category:x.category||"OTHER",condition:x.condition||"SERVICE",
+        price_q:price,inventory:Math.floor(inventory),active
+      })});
+      toast("Listing updated");await loadQEconomy();
     }catch(e){toast(e.message,true)}
   }
 
