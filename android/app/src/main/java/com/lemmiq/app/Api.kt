@@ -53,8 +53,14 @@ class Api(private val store:SessionStore){
             body
         }
     }
-    suspend fun register(u:String,n:String,p:String):AuthResponse{
-        val rb=gson.toJson(mapOf("username" to u,"display_name" to n,"password" to p)).toRequestBody(json)
+    suspend fun register(u:String,n:String,p:String,referralCode:String=""):AuthResponse{
+        val payload=mutableMapOf<String,Any>(
+            "username" to u,
+            "display_name" to n,
+            "password" to p
+        )
+        if(referralCode.isNotBlank())payload["referral_code"]=referralCode.trim().uppercase()
+        val rb=gson.toJson(payload).toRequestBody(json)
         return gson.fromJson(req(Request.Builder().url("$base/register").post(rb).build()),AuthResponse::class.java)
     }
     suspend fun login(u:String,p:String):AuthResponse{
