@@ -49,6 +49,10 @@ PACKAGE_PLANS = {
 }
 
 NETWORKS = {"TRC20", "BEP20"}
+ADMIN_ROLES = {
+    "MASTER_ADMIN", "FINANCE_ADMIN", "MARKETPLACE_ADMIN",
+    "SUPPORT_ADMIN", "RISK_ADMIN", "READ_ONLY",
+}
 
 
 def utcnow():
@@ -235,6 +239,12 @@ class AdminPaymentWalletIn(BaseModel):
     package_code: str | None = None
     label: str = Field(default="", max_length=100)
     address: str = Field(min_length=20, max_length=160)
+    active: bool = True
+
+
+class AdminRoleIn(BaseModel):
+    username: str = Field(min_length=3, max_length=40)
+    role: str = Field(min_length=3, max_length=30)
     active: bool = True
 
 
@@ -523,6 +533,13 @@ def _wallet_summary(db: Session, u: User):
         "packages": [_subscription_json(x, cfg) for x in subs],
         "plans": [_plan_json(code, cfg) for code in PACKAGE_PLANS],
     }
+
+
+def _require_roles(db: Session, u: User, *allowed: str) -> QAdminRole:
+    role = _admin_role(db, u.id)
+    if not role or role.role not in allowed:
+        raise HTTPException(403, "This admin role does not have permission for that action")
+    return role
 
 
 def _admin_role(db: Session, uid: int) -> QAdminRole | None:
@@ -963,6 +980,41 @@ def register_v28(app, current_user, get_db):
         role = _admin_role(db, u.id)
         return {"id": u.id, "username": u.username, "display_name": u.display_name, "role": role.role}
 
+    @router.get("/admin/roles")
+    def admin_roles(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        rows = db.scalars(select(QAdminRole).order_by(QAdminRole.created_at, QAdminRole.user_id)).all()
+        out = []
+        for row in rows:
+            user = db.get(User, row.user_id)
+            if not user:
+                continue
+            out.append({
+                "user_id": row.user_id, "username": user.username, "display_name": user.display_name,
+                "role": row.role, "active": row.active, "created_at": row.created_at.isoformat(),
+            })
+        return {"roles": sorted(ADMIN_ROLES), "items": out}
+
+    @router.post("/admin/roles")
+    def admin_set_role(body: AdminRoleIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        username = body.username.strip().lower()
+        role_name = body.role.strip().upper()
+        if role_name not in ADMIN_ROLES:
+            raise HTTPException(422, "Unknown admin role")
+        target = db.scalar(select(User).where(User.username == username))
+        if not target:
+            raise HTTPException(404, "LEMMIQ user not found")
+        row = db.get(QAdminRole, target.id)
+        if not row:
+            row = QAdminRole(user_id=target.id, role=role_name, active=body.active)
+            db.add(row)
+        else:
+            if target.id == u.id and (role_name != "MASTER_ADMIN" or not body.active):
+                raise HTTPException(409, "Master Admin cannot demote or disable the currently signed-in Master Admin")
+            row.role = role_name
+            row.active = body.active
+        db.commit()
+        return {"ok": True, "user_id": target.id, "username": target.username, "role": row.role, "active": row.active}
+
     @router.get("/admin/economy")
     def admin_economy(u: User = Depends(require_admin), db: Session = Depends(get_db)):
         users = db.scalars(select(User.id)).all()
@@ -1059,6 +1111,7 @@ def register_v28(app, current_user, get_db):
 
     @router.post("/admin/payment-orders/{order_id}/approve")
     def admin_approve_payment(order_id: int, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        _require_roles(db, u, "MASTER_ADMIN", "FINANCE_ADMIN")
         row = db.get(QPaymentOrder, order_id)
         if not row:
             raise HTTPException(404, "Payment order not found")
@@ -1083,6 +1136,7 @@ def register_v28(app, current_user, get_db):
 
     @router.post("/admin/payment-orders/{order_id}/reject")
     def admin_reject_payment(order_id: int, body: DisputeIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        _require_roles(db, u, "MASTER_ADMIN", "FINANCE_ADMIN")
         row = db.get(QPaymentOrder, order_id)
         if not row:
             raise HTTPException(404, "Payment order not found")
@@ -1137,6 +1191,7 @@ def register_v28(app, current_user, get_db):
 
     @router.post("/admin/market/orders/{order_id}/resolve")
     def admin_resolve_market(order_id: int, body: ResolveDisputeIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        _require_roles(db, u, "MASTER_ADMIN", "MARKETPLACE_ADMIN", "RISK_ADMIN")
         row = db.get(QMarketOrder, order_id)
         if not row or row.status != "DISPUTED":
             raise HTTPException(404, "Open dispute not found")
