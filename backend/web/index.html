@@ -379,6 +379,17 @@
           <div class="q28-balance"><small>Role</small><strong id="q28AdminRole">—</strong><span>All actions are auditable</span></div>
         </article>
         <div id="q28AdminOverview" class="q28-admin-stats"></div>
+        <article class="card glass" id="q28AdminTeamCard">
+          <div class="section-head"><div><h3>Admin Team & Roles</h3><p class="micro">Master Admin can grant limited access without sharing the Master Admin login.</p></div></div>
+          <div class="q28-inline">
+            <input id="q28AdminTeamUser" placeholder="@username">
+            <select id="q28AdminTeamRole">
+              <option>FINANCE_ADMIN</option><option>MARKETPLACE_ADMIN</option><option>SUPPORT_ADMIN</option><option>RISK_ADMIN</option><option>READ_ONLY</option><option>MASTER_ADMIN</option>
+            </select>
+            <button id="q28AdminTeamSave" class="primary">Add / update role</button>
+          </div>
+          <div id="q28AdminTeam" class="q28-list"></div>
+        </article>
         <div class="grid two">
           <article class="card glass"><div class="section-head"><div><h3>USDT receiving wallets</h3><p class="micro">Public receiving addresses only. Never enter private keys or seed phrases.</p></div></div>
             <div class="q28-wallet-form"><select id="q28AdminNetwork"><option>TRC20</option><option>BEP20</option></select><select id="q28AdminPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><input id="q28AdminWalletLabel" placeholder="Label"><input id="q28AdminWalletAddress" placeholder="Public USDT address"><button id="q28AdminAddWallet" class="primary">Add wallet</button></div>
