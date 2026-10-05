@@ -100,7 +100,12 @@ function showApp(){
   $("meName").textContent=state.user?.display_name||"LEMMIQ User";
   $("meUsername").textContent="@"+(state.user?.username||"");
   renderMeAvatar();
-  connectSocket(); refreshCurrent(); if(window.refreshV28Access) window.refreshV28Access();
+  connectSocket();
+  const requested=(location.hash||"").replace(/^#/,"");
+  if(requested==="admin"||requested==="q-admin") setView("q-admin");
+  else if(requested==="q-economy") setView("q-economy");
+  else refreshCurrent();
+  if(window.refreshV28Access) window.refreshV28Access();
 }
 function chatsHome(pushHistory=false){
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
