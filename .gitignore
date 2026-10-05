@@ -27,3 +27,8 @@ android/local.properties
 
 google-services.json
 media_local/
+
+# Play upload signing secrets
+android/keystore.properties
+android/upload-keystore.jks
+android/app/google-services.json
