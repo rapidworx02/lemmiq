@@ -1,82 +1,27 @@
-name: LEMMIQ V2.7.1 CI
+name: LEMMIQ V271 CI
 
 on:
   push:
-    branches: [v2.7.1]
-  pull_request:
-    branches: [main]
+    branches:
+      - v2.7.1
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Validate Python syntax
         run: python -m compileall -q backend/app
-
       - name: Validate web JavaScript
         run: node --check backend/web/app.js
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.6.0"
-
       - name: Compile Android debug APK
         run: gradle -p android :app:assembleDebug --stacktrace
-
-  patch_bundle:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Package V2.7.1 setup patch
-        run: |
-          mkdir -p dist
-          python - <<'PY'
-          import zipfile
-          files = [
-              ".gitignore",
-              "PLAY_INTERNAL_TESTING.md",
-              "android/app/build.gradle.kts",
-              "android/keystore.properties.example",
-              "android/create-upload-key.cmd",
-              "android/build-play-bundle.cmd",
-              "backend/app/main.py",
-              "backend/web/index.html",
-              "backend/web/app.js",
-              "backend/web/sw.js",
-              ".github/workflows/v271-ci.yml",
-              ".github/workflows/v271-play.yml",
-          ]
-          with zipfile.ZipFile("dist/LEMMIQ_V2.7.1_PLAY_SETUP.zip","w",zipfile.ZIP_DEFLATED) as z:
-              for path in files:
-                  z.write(path,path)
-              z.writestr("V2.7.1_INSTALL.txt", """LEMMIQ V2.7.1 PLAY / INTERNAL TESTING SETUP
-
-Extract this ZIP directly over the root of your existing LEMMIQ repository.
-
-Then:
-git status
-git diff --stat
-git add .
-git commit -m "LEMMIQ V2.7.1 - Play internal testing setup"
-git push origin main
-
-Read PLAY_INTERNAL_TESTING.md before creating the Play Console release.
-""")
-          PY
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: LEMMIQ-V2.7.1-PLAY-SETUP
-          path: dist/LEMMIQ_V2.7.1_PLAY_SETUP.zip
-          if-no-files-found: error
-          retention-days: 14
