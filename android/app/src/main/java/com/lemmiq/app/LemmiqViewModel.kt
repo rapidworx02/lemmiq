@@ -128,7 +128,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         store.token=a.token;store.userId=a.user.id;store.username=a.user.username;store.displayName=a.user.display_name
         currentUser=a.user;authenticated=true;connect();refreshChats();refreshGroups();refreshStatuses();refreshTrustHistory();refreshSocialIq();refreshInsights();refreshExternal();refreshBusiness();refreshPrivacy();registerPush()
     }
-    fun register(u:String,n:String,p:String)=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p))}}
+    fun register(u:String,n:String,p:String,referralCode:String="")=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p,referralCode.trim()))}}
     fun login(u:String,p:String)=viewModelScope.launch{action{auth(api.login(u.trim().lowercase(),p))}}
     fun logout(){
         // Revoke this device token before clearing credentials, best-effort.
