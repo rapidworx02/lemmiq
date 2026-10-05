@@ -854,265 +854,178 @@ private fun Moments(vm:LemmiqViewModel){
 @Composable
 private fun ChatAgent(vm:LemmiqViewModel){
     var q by remember{mutableStateOf("")}
-    var search by remember{mutableStateOf("")}
     var showCoord by remember{mutableStateOf(false)}
+    var showVisionHistory by remember{mutableStateOf(false)}
     var coordSearch by remember{mutableStateOf("")}
     var coordPrompt by remember{mutableStateOf("")}
     var coordOptions by remember{mutableStateOf("")}
     var selectedTargets by remember{mutableStateOf(setOf<Int>())}
-    val starters=listOf(
-        "🧠 Catch me up" to "Catch me up on my important conversations and anything I may have missed.",
-        "🤝 What did I promise?" to "What did I promise people recently?",
-        "💬 Needs a reply?" to "Which chats need a reply and why?",
-        "📍 Find details" to "Find addresses, phone numbers or important details someone sent me recently.",
-        "✍️ Draft a reply" to "Help me draft a reply. Ask me which chat if needed.",
-        "📅 This week" to "Summarise the important things from my conversations this week.",
-        "🛡 Fact-check" to "I want to fact-check something.",
-        "🤖 Q-to-Q" to "Coordinate a plan or common availability with my LEMMIQ contacts."
-    )
+    var visionQuestion by remember{mutableStateOf("")}
+    var visionFollowUp by remember{mutableStateOf("")}
+
+    val gallery=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
+        if(uri!=null)vm.scanVisionUri(uri,visionQuestion.ifBlank{"What is in this image? Give me the useful details."})
+    }
+    val camera=rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()){bmp->
+        if(bmp!=null){
+            val out=java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG,90,out)
+            vm.scanVisionBytes(out.toByteArray(),visionQuestion.ifBlank{"What is in this photo? Give me the useful details."})
+        }
+    }
+
     LaunchedEffect(Unit){vm.refreshAgent()}
+
     LazyColumn(
         Modifier.fillMaxSize().background(Bg),
-        contentPadding=PaddingValues(bottom=24.dp)
+        contentPadding=PaddingValues(bottom=110.dp),
+        verticalArrangement=Arrangement.spacedBy(12.dp)
     ){
-        item{Header("Q Agent","Ask, plan and coordinate from your LEMMIQ context")}
         item{
-            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp),colors=CardDefaults.cardColors(containerColor=Ink)){
-                Column(Modifier.padding(14.dp)){
-                    Text("What can Q help you get done?",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
-                    Text(
-                        if(vm.qMode=="ASK")"Ask mode reads and explains. It does not take actions."
-                        else "Do mode builds an action plan. Messages, coordination and other side effects still require your approval.",
-                        color=Color(0xFFCDCADC),fontSize=10.sp,modifier=Modifier.padding(top=4.dp)
-                    )
-                    Row(Modifier.fillMaxWidth().padding(top=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                        FilterChip(
-                            selected=vm.qMode=="ASK",onClick={vm.setQMode("ASK")},
-                            label={Text("Ask")},colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Color.White,selectedLabelColor=Ink)
-                        )
-                        FilterChip(
-                            selected=vm.qMode=="DO",onClick={vm.setQMode("DO")},
-                            label={Text("Do")},colors=FilterChipDefaults.filterChipColors(selectedContainerColor=Purple,selectedLabelColor=Color.White)
-                        )
-                    }
-                    starters.chunked(2).forEach{row->
-                        Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                            row.forEach{item->
-                                OutlinedButton(
-                                    onClick={q=item.second;vm.askAgent(item.second)},
-                                    modifier=Modifier.weight(1f),
-                                    colors=ButtonDefaults.outlinedButtonColors(contentColor=Color.White),
-                                    border=BorderStroke(1.dp,Color.White.copy(alpha=.25f))
-                                ){Text(item.first,fontSize=10.sp,maxLines=2)}
-                            }
-                            if(row.size==1)Spacer(Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        }
-
-        item{
-            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp)){
-                Row(Modifier.padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                    Column(Modifier.weight(1f)){
-                        Text("Include WhatsApp/SMS previews in Q",fontWeight=FontWeight.Bold,fontSize=13.sp)
-                        Text("Off by default. Selected recent snippets are included only in Ask mode.",
-                            color=Muted,fontSize=10.sp)
-                    }
-                    Switch(checked=vm.externalQ && vm.externalEnabled,
-                        onCheckedChange={vm.setExternalQ(it)},enabled=vm.externalEnabled && vm.qMode=="ASK")
-                }
+            Column(Modifier.padding(horizontal=20.dp,vertical=14.dp)){
+                Text("Q",fontSize=34.sp,fontWeight=FontWeight.Black,color=Ink)
+                Text("Your personal LEMMIQ agent",fontSize=13.sp,color=Muted)
             }
         }
 
         item{
             Card(
                 Modifier.fillMaxWidth().padding(horizontal=20.dp),
-                colors=CardDefaults.cardColors(containerColor=Ink),
-                shape=RoundedCornerShape(22.dp)
+                shape=RoundedCornerShape(24.dp),
+                colors=CardDefaults.cardColors(containerColor=Color.White)
             ){
-                Column(Modifier.padding(18.dp)){
-                    Text("Q Daily Brief",color=Color.White,fontWeight=FontWeight.Black,fontSize=18.sp)
-                    Text(
-                        vm.qDailyBrief?.summary ?: vm.agentBrief?.summary ?: "Analysing your recent conversations…",
-                        color=Color(0xFFDDDBE8),modifier=Modifier.padding(top=8.dp)
+                Column(Modifier.padding(14.dp)){
+                    OutlinedTextField(
+                        value=q,onValueChange={q=it},
+                        modifier=Modifier.fillMaxWidth(),
+                        placeholder={Text("Ask Q anything…")},
+                        minLines=2,maxLines=5,
+                        shape=RoundedCornerShape(18.dp)
                     )
-                    vm.qDailyBrief?.let{b->
-                        Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                            Surface(color=Color.White.copy(alpha=.08f),shape=RoundedCornerShape(12.dp)){
-                                Text("${b.needs_reply_count} need reply",color=Color.White,fontSize=10.sp,modifier=Modifier.padding(8.dp))
-                            }
-                            Surface(color=Color.White.copy(alpha=.08f),shape=RoundedCornerShape(12.dp)){
-                                Text("${b.commitments.size} commitments",color=Color.White,fontSize=10.sp,modifier=Modifier.padding(8.dp))
-                            }
-                        }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top=8.dp),
+                        verticalAlignment=Alignment.CenterVertically,
+                        horizontalArrangement=Arrangement.spacedBy(8.dp)
+                    ){
+                        FilledTonalButton(onClick={gallery.launch("image/*")}){Text("＋")}
+                        FilledTonalButton(onClick={camera.launch(null)}){Text("📷")}
+                        OutlinedButton(onClick={showVisionHistory=true}){Text("Vision")}
+                        Spacer(Modifier.weight(1f))
+                        Button(onClick={vm.askAgent(q);q=""},enabled=q.isNotBlank()&&!vm.agentBusy){Text("Ask Q")}
                     }
-                    if(vm.agentBusy)LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=12.dp))
+                    if(vm.visionBusy)LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
                 }
             }
         }
 
-        item{V24SocialIqCard(vm)}
-
-        val incoming=vm.qCoordination.inbox.filter{it.status=="PENDING"}.take(5)
-        if(incoming.isNotEmpty()){
-            item{Text("Q-to-Q requests",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,20.dp,20.dp,8.dp))}
-            items(incoming,key={it.id}){request->
-                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
-                    Column(Modifier.padding(14.dp)){
-                        Text("🤖 ${request.initiator?.display_name?:"LEMMIQ contact"}",fontWeight=FontWeight.Bold)
-                        Text(request.prompt,fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
-                        Text("Only this request is shared — not private chat memory.",fontSize=9.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
-                        val choices=if(request.options.isEmpty())listOf("Available","Not available") else request.options.take(4)
-                        Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
-                            choices.take(2).forEach{choice->
-                                FilledTonalButton(
-                                    onClick={vm.respondQCoordination(request.id,choice)},
-                                    modifier=Modifier.weight(1f)
-                                ){Text(choice,fontSize=10.sp,maxLines=1)}
-                            }
-                        }
-                    }
-                }
+        item{
+            Row(Modifier.fillMaxWidth().padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                OutlinedButton(onClick={vm.askAgent("Catch me up on my important conversations and anything I may have missed.")},modifier=Modifier.weight(1f)){Text("Catch me up",fontSize=11.sp)}
+                OutlinedButton(onClick={vm.askAgent("Which chats need a reply and why?")},modifier=Modifier.weight(1f)){Text("Needs reply",fontSize=11.sp)}
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal=20.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                OutlinedButton(onClick={vm.askAgent("What did I promise people recently?")},modifier=Modifier.weight(1f)){Text("My promises",fontSize=11.sp)}
+                OutlinedButton(onClick={camera.launch(null)},modifier=Modifier.weight(1f)){Text("📷 Q Vision",fontSize=11.sp)}
             }
         }
 
-        val outgoingGroups=vm.qCoordination.outbox.groupBy{it.request_key}.values.take(4)
-        if(outgoingGroups.isNotEmpty()){
-            item{Text("My Q-to-Q plans",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,18.dp,20.dp,8.dp))}
-            items(outgoingGroups.toList()){group->
-                val first=group.first()
-                val replied=group.count{it.status=="RESPONDED"}
-                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
-                    Column(Modifier.padding(12.dp)){
-                        Text(first.prompt,fontWeight=FontWeight.Bold,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                        Text("${replied}/${group.size} responses",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
-                    }
-                }
-            }
-        }
-
-        vm.agentBrief?.needs_reply?.take(5)?.let{itemsToReply->
-            if(itemsToReply.isNotEmpty()){
-                item{Text("Needs reply",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,20.dp,20.dp,8.dp))}
-                items(itemsToReply){x->
-                    Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
-                        Column(Modifier.padding(14.dp)){
-                            Text("${catEmoji(x.category)} ${x.contact.display_name}",fontWeight=FontWeight.Bold)
-                            Text(x.message,maxLines=2,overflow=TextOverflow.Ellipsis,color=Muted,fontSize=12.sp,modifier=Modifier.padding(top=4.dp))
-                        }
+        item{
+            val today=vm.qHome?.today
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Ink)){
+                Column(Modifier.padding(18.dp)){
+                    Text("Today",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black)
+                    if(today==null){
+                        Text("Q is checking your conversations…",color=Color.White.copy(alpha=.75f),fontSize=12.sp,modifier=Modifier.padding(top=8.dp))
+                    }else if(today.needs_reply_count==0 && today.follow_ups==0 && today.promises==0){
+                        Text("You're caught up ✓",color=Color.White,fontSize=17.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=8.dp))
+                    }else{
+                        if(today.needs_reply_count>0)Text("${today.needs_reply_count} conversation${if(today.needs_reply_count==1)"" else "s"} may need a reply",color=Color.White,modifier=Modifier.padding(top=8.dp))
+                        if(today.follow_ups>0)Text("${today.follow_ups} follow-up${if(today.follow_ups==1)"" else "s"} due",color=Color.White.copy(alpha=.82f),fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
+                        if(today.promises>0)Text("${today.promises} promise${if(today.promises==1)"" else "s"} remembered",color=Color.White.copy(alpha=.82f),fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
                     }
                 }
             }
         }
 
         item{
-            Column(Modifier.padding(20.dp,18.dp,20.dp,0.dp)){
-                Text(if(vm.qMode=="DO")"Tell Q what to do" else "Ask about your messages & synced insights",fontSize=18.sp,fontWeight=FontWeight.Bold)
-                Text(
-                    if(vm.qMode=="DO")"Q can read, search, summarise and draft safely. Sending or coordinating requires your approval."
-                    else if(vm.insightSync)"Selected structured phone events are available to Q."
-                    else "Phone events stay on-device. Enable optional sync in Activity to include them in Q.",
-                    fontSize=11.sp,color=Muted
-                )
-                OutlinedTextField(
-                    value=q,onValueChange={q=it},modifier=Modifier.fillMaxWidth().padding(top=8.dp),
-                    placeholder={Text(if(vm.qMode=="DO")"e.g. Coordinate dinner with Sam and Raj" else "e.g. Who did I promise to call?")},
-                    minLines=2,maxLines=4,shape=RoundedCornerShape(18.dp)
-                )
-                Button(
-                    onClick={vm.askAgent(q)},
-                    enabled=q.isNotBlank()&&!vm.agentBusy,
-                    modifier=Modifier.fillMaxWidth().padding(top=8.dp)
-                ){Text(if(vm.qMode=="DO")"Plan with Q" else "Ask Q")}
+            val pending=vm.qHome?.q_to_q?.pending_count ?: 0
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(20.dp)){
+                Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text("Q-to-Q",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                        Text(if(pending==0)"Coordinate plans or availability with LEMMIQ contacts." else "$pending active plan${if(pending==1)"" else "s"}",fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=3.dp))
+                    }
+                    TextButton({coordPrompt="Find a time that works for us.";showCoord=true}){Text(if(pending==0)"Start" else "Open")}
+                }
+            }
+        }
+
+        item{
+            val memories=vm.qHome?.memory?.count ?: (vm.socialBrief?.count ?: 0)
+            val scans=vm.qHome?.memory?.vision_count ?: vm.visionHistory.size
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(20.dp)){
+                Column(Modifier.padding(16.dp)){
+                    Text("Q Memory",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                    Text("$memories conversation memories · $scans Vision scans",fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=3.dp))
+                    Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        TextButton({vm.scanSocialIq()}){Text("Refresh memory")}
+                        TextButton({showVisionHistory=true}){Text("Vision history")}
+                    }
+                }
+            }
+        }
+
+        val activePlans=vm.qCoordination.outbox.filter{it.status=="PENDING"||it.status=="RESPONDED"}.groupBy{it.request_key}.values.take(3)
+        if(activePlans.isNotEmpty()){
+            item{Text("Active Q-to-Q",fontSize=16.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=20.dp,vertical=4.dp))}
+            items(activePlans.toList()){group->
+                val first=group.first()
+                val names=group.mapNotNull{it.target?.display_name}.distinct().joinToString(", ")
+                val responses=group.count{it.status=="RESPONDED"}
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp)){
+                    Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
+                        Column(Modifier.weight(1f)){
+                            Text(first.prompt,fontWeight=FontWeight.Bold,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                            Text(if(names.isBlank())"$responses/${group.size} responses" else "$names · $responses/${group.size} responses",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                        }
+                        TextButton({vm.cancelQCoordination(first.request_key)}){Text("Cancel",fontSize=10.sp)}
+                    }
+                }
+            }
+        }
+
+        val incoming=vm.qCoordination.inbox.filter{it.status=="PENDING"}.take(3)
+        if(incoming.isNotEmpty()){
+            item{Text("Waiting for you",fontSize=16.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=20.dp,vertical=4.dp))}
+            items(incoming,key={it.id}){request->
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp)){
+                    Column(Modifier.padding(14.dp)){
+                        Text(request.initiator?.display_name?:"LEMMIQ contact",fontWeight=FontWeight.Bold)
+                        Text(request.prompt,fontSize=12.sp,modifier=Modifier.padding(top=4.dp))
+                        val choices=if(request.options.isEmpty())listOf("Available","Not available") else request.options.take(2)
+                        Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                            choices.forEach{choice->
+                                FilledTonalButton(onClick={vm.respondQCoordination(request.id,choice)},modifier=Modifier.weight(1f)){Text(choice,fontSize=10.sp,maxLines=1)}
+                            }
+                        }
+                    }
+                }
             }
         }
 
         vm.agentAnswer?.let{a->
             item{
-                Card(Modifier.fillMaxWidth().padding(20.dp,12.dp),colors=CardDefaults.cardColors(containerColor=Soft)){
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(20.dp),colors=CardDefaults.cardColors(containerColor=Soft)){
                     Column(Modifier.padding(16.dp)){
-                        Text("Q Answer",color=Purple,fontWeight=FontWeight.Black)
-                        Text(a.answer,modifier=Modifier.padding(top=8.dp))
+                        Text("Q",color=Purple,fontWeight=FontWeight.Black)
+                        Text(a.answer,modifier=Modifier.padding(top=7.dp))
                         if(a.references.isNotEmpty()){
-                            Text("Based on",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
-                            a.references.take(5).forEach{r->
-                                Text("• ${r.contact}: ${r.text}",fontSize=11.sp,color=Muted,maxLines=3,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(top=4.dp))
+                            Text("Based on your LEMMIQ history",fontWeight=FontWeight.Bold,fontSize=10.sp,modifier=Modifier.padding(top=10.dp))
+                            a.references.take(3).forEach{r->
+                                Text("• ${r.contact}: ${r.text}",fontSize=10.sp,color=Muted,maxLines=2,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(top=3.dp))
                             }
                         }
                     }
-                }
-            }
-        }
-
-        vm.qDoAnswer?.let{plan->
-            item{
-                Card(Modifier.fillMaxWidth().padding(20.dp,12.dp),colors=CardDefaults.cardColors(containerColor=Soft)){
-                    Column(Modifier.padding(16.dp)){
-                        Text("Q Agent plan",color=Purple,fontWeight=FontWeight.Black)
-                        Text(plan.answer,modifier=Modifier.padding(top=8.dp))
-                        plan.actions.forEach{action->
-                            Card(Modifier.fillMaxWidth().padding(top=8.dp)){
-                                Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
-                                    Column(Modifier.weight(1f)){
-                                        Text(action.label,fontWeight=FontWeight.Bold,fontSize=12.sp)
-                                        Text(
-                                            if(action.approval_required)"Approval required" else "Safe action",
-                                            fontSize=9.sp,color=if(action.approval_required)Color(0xFFD97706) else Color(0xFF198754)
-                                        )
-                                        action.note?.let{Text(it,fontSize=9.sp,color=Muted)}
-                                    }
-                                    when(action.type){
-                                        "SCAN_COMMITMENTS" -> TextButton({vm.scanSocialIq()}){Text("Run")}
-                                        "Q_TO_Q" -> TextButton({
-                                            coordPrompt=q
-                                            showCoord=true
-                                        }){Text("Set up")}
-                                        else -> Unit
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        item{
-            OutlinedButton(
-                onClick={coordPrompt=q.ifBlank{"Find a time that works for us."};showCoord=true},
-                modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)
-            ){Text("🤖 Start Q-to-Q coordination")}
-        }
-
-        item{
-            Column(Modifier.padding(20.dp,10.dp,20.dp,0.dp)){
-                Text("Search chat memory",fontSize=18.sp,fontWeight=FontWeight.Bold)
-                OutlinedTextField(
-                    search,{search=it;vm.searchMemory(it)},Modifier.fillMaxWidth().padding(top=8.dp),
-                    placeholder={Text("Invoice, Saturday, address…")},singleLine=true
-                )
-            }
-        }
-        items(vm.memoryResults.take(15)){m->
-            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=4.dp)){
-                Column(Modifier.padding(12.dp)){
-                    Text("${m.contact} · ${m.sender}",fontWeight=FontWeight.Bold,fontSize=12.sp)
-                    Text(m.text,fontSize=12.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
-                }
-            }
-        }
-
-        item{
-            Text("Personal communication profile",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,20.dp,20.dp,8.dp))
-        }
-        item{
-            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp)){
-                Column(Modifier.padding(16.dp)){
-                    Text(vm.styleProfile?.summary ?: "Building your style profile from your recent sent messages.",fontSize=13.sp)
-                    vm.styleProfile?.signals?.forEach{s->Text("• $s",fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=5.dp))}
-                    Text("The profile focuses on writing style only, not sensitive personal traits.",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=10.dp))
                 }
             }
         }
@@ -1124,55 +1037,76 @@ private fun ChatAgent(vm:LemmiqViewModel){
             title={Text("Q-to-Q coordination")},
             text={
                 Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text("Choose LEMMIQ contacts. Q shares only this request and the options you enter.",fontSize=10.sp,color=Muted)
-                    OutlinedTextField(
-                        value=coordSearch,onValueChange={coordSearch=it;vm.search(it)},
-                        label={Text("Search contacts")},singleLine=true,modifier=Modifier.fillMaxWidth()
-                    )
+                    Text("Use Q-to-Q only for shared plans, availability or polls. Private Q memory is never shared.",fontSize=10.sp,color=Muted)
+                    OutlinedTextField(value=coordSearch,onValueChange={coordSearch=it;vm.search(it)},label={Text("Search contacts")},singleLine=true,modifier=Modifier.fillMaxWidth())
                     Column(Modifier.heightIn(max=150.dp).verticalScroll(rememberScrollState())){
-                        vm.users.take(8).forEach{u->
-                            Row(
-                                Modifier.fillMaxWidth().clickable{
-                                    selectedTargets=if(u.id in selectedTargets)selectedTargets-u.id else selectedTargets+u.id
-                                }.padding(vertical=5.dp),
-                                verticalAlignment=Alignment.CenterVertically
-                            ){
-                                Checkbox(
-                                    checked=u.id in selectedTargets,
-                                    onCheckedChange={checked->
-                                        selectedTargets=if(checked)selectedTargets+u.id else selectedTargets-u.id
-                                    }
-                                )
+                        vm.users.take(10).forEach{u->
+                            Row(Modifier.fillMaxWidth().clickable{selectedTargets=if(u.id in selectedTargets)selectedTargets-u.id else selectedTargets+u.id}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+                                Checkbox(checked=u.id in selectedTargets,onCheckedChange={checked->selectedTargets=if(checked)selectedTargets+u.id else selectedTargets-u.id})
                                 Text("${u.display_name}  @${u.username}",fontSize=11.sp)
                             }
                         }
                     }
-                    OutlinedTextField(
-                        value=coordPrompt,onValueChange={coordPrompt=it},label={Text("What should Q coordinate?")},
-                        modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4
-                    )
-                    OutlinedTextField(
-                        value=coordOptions,onValueChange={coordOptions=it},
-                        label={Text("Options / times (one per line, optional)")},
-                        modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4
-                    )
+                    OutlinedTextField(value=coordPrompt,onValueChange={coordPrompt=it},label={Text("What should Q coordinate?")},modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4)
+                    OutlinedTextField(value=coordOptions,onValueChange={coordOptions=it},label={Text("Options / times — one per line")},modifier=Modifier.fillMaxWidth(),minLines=2,maxLines=4)
                 }
             },
             confirmButton={
-                Button(
-                    onClick={
-                        vm.createQCoordination(
-                            selectedTargets.toList(),
-                            if(coordOptions.isBlank())"PLAN" else "AVAILABILITY",
-                            coordPrompt,
-                            coordOptions.lines().map{it.trim()}.filter{it.isNotBlank()}
-                        )
-                        showCoord=false;selectedTargets=emptySet();coordSearch="";coordOptions=""
-                    },
-                    enabled=selectedTargets.isNotEmpty()&&coordPrompt.isNotBlank()
-                ){Text("Send Q request")}
+                Button(onClick={
+                    vm.createQCoordination(selectedTargets.toList(),if(coordOptions.isBlank())"PLAN" else "AVAILABILITY",coordPrompt,coordOptions.lines().map{it.trim()}.filter{it.isNotBlank()})
+                    showCoord=false;selectedTargets=emptySet();coordSearch="";coordOptions=""
+                },enabled=selectedTargets.isNotEmpty()&&coordPrompt.isNotBlank()){Text("Send request")}
             },
             dismissButton={TextButton({showCoord=false}){Text("Cancel")}}
+        )
+    }
+
+    if(showVisionHistory){
+        AlertDialog(
+            onDismissRequest={showVisionHistory=false},
+            title={Text("Q Vision memory")},
+            text={
+                Column{
+                    Text("Saved scans can be reopened later without scanning the image again.",fontSize=10.sp,color=Muted)
+                    if(vm.visionHistory.isEmpty())Text("No Vision scans yet.",modifier=Modifier.padding(top=14.dp))
+                    else LazyColumn(Modifier.heightIn(max=420.dp).padding(top=8.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+                        items(vm.visionHistory,key={it.id}){v->
+                            Card(Modifier.fillMaxWidth().clickable{vm.openVision(v);showVisionHistory=false}){
+                                Column(Modifier.padding(11.dp)){
+                                    Text("${when(v.category){"DOCUMENT"->"📄";"SCREENSHOT"->"🖥";"PRODUCT"->"🛍";"VEHICLE"->"🚗";"RECEIPT"->"🧾";else->"📷"}} ${v.title}",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                                    Text(v.summary,fontSize=10.sp,color=Muted,maxLines=2,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(top=3.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton={TextButton({showVisionHistory=false}){Text("Close")}}
+        )
+    }
+
+    vm.activeVision?.let{v->
+        AlertDialog(
+            onDismissRequest={vm.clearVision()},
+            title={Text("📷 ${v.title}")},
+            text={
+                Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState())){
+                    Text(v.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Bold)
+                    Text(v.summary,modifier=Modifier.padding(top=8.dp))
+                    if(v.extracted_text.isNotBlank()){
+                        Text("Extracted text",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+                        Text(v.extracted_text,fontSize=11.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                    }
+                    if(v.history.size>2){
+                        Text("Conversation",fontWeight=FontWeight.Bold,fontSize=12.sp,modifier=Modifier.padding(top=12.dp))
+                        v.history.takeLast(6).forEach{h->Text("${if(h.role=="q")"Q" else "You"}: ${h.text}",fontSize=10.sp,color=if(h.role=="q")Ink else Muted,modifier=Modifier.padding(top=4.dp))}
+                    }
+                    OutlinedTextField(value=visionFollowUp,onValueChange={visionFollowUp=it},label={Text("Ask another question about this image")},modifier=Modifier.fillMaxWidth().padding(top=12.dp),minLines=2,maxLines=4)
+                    Button(onClick={vm.askVision(visionFollowUp);visionFollowUp=""},enabled=visionFollowUp.isNotBlank()&&!vm.visionBusy,modifier=Modifier.fillMaxWidth().padding(top=8.dp)){Text(if(vm.visionBusy)"Analysing…" else "Ask Q Vision")}
+                }
+            },
+            confirmButton={TextButton({vm.clearVision()}){Text("Done")}},
+            dismissButton={TextButton({vm.deleteVision(v.id)}){Text("Delete")}}
         )
     }
 }
