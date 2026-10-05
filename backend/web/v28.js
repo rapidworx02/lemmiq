@@ -1,6 +1,6 @@
 /* LEMMIQ V2.8 Q Economy */
 (()=>{
-  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[]};
+  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]}};
   const fmtQ=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(Number(n||0));
   const fmtUsd=n=>new Intl.NumberFormat(undefined,{style:"currency",currency:"USD",maximumFractionDigits:4}).format(Number(n||0));
   const dt=x=>{try{return new Date(x).toLocaleString()}catch{return x||""}};
@@ -172,6 +172,14 @@
     const a=v28.admin;if(!a)return;
     $("q28AdminOverview").innerHTML=adminStats(a.economy);
     $("q28AdminRole").textContent=a.me.role;
+    if($("q28AdminTeamCard"))$("q28AdminTeamCard").classList.toggle("hidden",a.me.role!=="MASTER_ADMIN");
+    if($("q28AdminTeam")){
+      $("q28AdminTeam").innerHTML=(v28.adminRoles.items||[]).map(r=>qRow(
+        `@${escapeHtml(r.username)} · ${escapeHtml(r.display_name)}`,
+        `${escapeHtml(r.role)} · ${r.active?"Active":"Disabled"}`,
+        r.user_id===a.me.id?"Current admin":""
+      )).join("")||`<div class="empty-state"><p>No admin roles configured.</p></div>`;
+    }
     $("q28AdminWallets").innerHTML=v28.adminWallets.length?v28.adminWallets.map(w=>qRow(
       `${w.network} · ${escapeHtml(w.package_code||"ALL PACKAGES")}`,
       `${escapeHtml(w.label||"Wallet")}<br>${escapeHtml(w.address)}`,
@@ -217,11 +225,11 @@
 
   async function loadQAdmin(){
     try{
-      const [me,economy,wallets,payments,ledger,market,config,wallet]=await Promise.all([
+      const [me,economy,wallets,payments,ledger,market,config,wallet,roles]=await Promise.all([
         qApi("/admin/me"),qApi("/admin/economy"),qApi("/admin/payment-wallets"),qApi("/admin/payment-orders"),
-        qApi("/admin/ledger"),qApi("/admin/market/orders"),qApi("/config"),qApi("/wallet")
+        qApi("/admin/ledger"),qApi("/admin/market/orders"),qApi("/config"),qApi("/wallet"),qApi("/admin/roles")
       ]);
-      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;
+      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;
       renderAdmin();
     }catch(e){toast(e.message,true);setView("more")}
   }
@@ -267,6 +275,14 @@
     $("q28CopyReferral")?.addEventListener("click",async()=>{const code=v28.wallet?.referral_code||"";if(!code)return;await navigator.clipboard?.writeText(code);toast("Referral code copied")});
     $("q28ClaimReferralBtn")?.addEventListener("click",async()=>{const code=$("q28ClaimReferralCode").value.trim();if(!code)return;try{await qApi("/referrals/claim",{method:"POST",body:JSON.stringify({code})});toast("Referral reward claimed");await loadQEconomy()}catch(e){toast(e.message,true)}});
 
+    $("q28AdminTeamSave")?.addEventListener("click",async()=>{
+      const username=$("q28AdminTeamUser").value.trim().replace(/^@/,""),role=$("q28AdminTeamRole").value;
+      if(!username){toast("Enter a LEMMIQ username",true);return}
+      try{
+        await qApi("/admin/roles",{method:"POST",body:JSON.stringify({username,role,active:true})});
+        $("q28AdminTeamUser").value="";toast("Admin role updated");await loadQAdmin();
+      }catch(e){toast(e.message,true)}
+    });
     $("q28AdminAddWallet")?.addEventListener("click",async()=>{
       const body={network:$("q28AdminNetwork").value,package_code:$("q28AdminPackage").value||null,label:$("q28AdminWalletLabel").value,address:$("q28AdminWalletAddress").value.trim(),active:true};
       if(!body.address){toast("Enter a public USDT receiving address",true);return}
