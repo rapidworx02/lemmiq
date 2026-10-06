@@ -1,0 +1,189 @@
+LEMMIQ V2.8.1 PATCH
+Q ECONOMY BOTTOM TAB + OPTIONAL REFERRAL CODE AT SIGNUP
+======================================================
+
+WHAT CHANGED
+------------
+1. Q Economy is now a MAIN bottom/home navigation tab.
+2. Q Economy is removed from the More menu to avoid duplication.
+3. Main navigation is now:
+   Chats | Updates | Q | Q Economy | Calls | More
+4. Create Account now includes:
+   Referral code (optional)
+5. Referral code is NOT mandatory.
+6. If a valid referral code is entered during signup:
+   - the new account is created normally;
+   - the standard signup Q bonus is applied;
+   - the referred-user Q reward is applied;
+   - the referrer Q reward is applied;
+   - the referral is recorded immediately.
+7. If referral is left blank:
+   - signup works exactly as normal;
+   - the user can still use the existing Refer & Earn screen later.
+8. Invalid referral code entered during signup returns a clear error and the
+   account is not created.
+9. Android version:
+   versionName 2.8.1
+   versionCode 46
+10. Web/PWA cache is bumped so mobile browsers refresh the navigation.
+
+FILES IN THIS PATCH
+-------------------
+backend/app/main.py
+backend/app/v28.py
+backend/web/index.html
+backend/web/app.js
+backend/web/styles.css
+backend/web/sw.js
+
+android/app/build.gradle.kts
+android/app/src/main/java/com/lemmiq/app/Api.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+
+.github/workflows/v28-ci.yml
+
+V2.8.1_PATCH_INSTALL.txt
+
+STEP 1 - BACK UP CURRENT WORKING V2.8
+-------------------------------------
+Copy:
+C:\Users\pc\LEMMIQ
+
+to something like:
+C:\Users\pc\LEMMIQ_BACKUP_V2.8
+
+STEP 2 - EXTRACT PATCH
+----------------------
+Extract:
+LEMMIQ_V2.8.1_Q_NAV_REFERRAL_PATCH.zip
+
+directly into:
+C:\Users\pc\LEMMIQ
+
+Choose:
+Replace files in destination
+
+This patch contains ONLY the files changed for V2.8.1.
+
+STEP 3 - CHECK LOCALLY
+----------------------
+Open CMD:
+
+cd /d C:\Users\pc\LEMMIQ
+git status
+
+You should see the V2.8.1 source files as modified/new.
+
+STEP 4 - GITHUB
+---------------
+Check sensitive files remain ignored:
+
+git check-ignore android/upload-keystore.jks
+git check-ignore android/keystore.properties
+git check-ignore android/app/google-services.json
+
+Then:
+
+git add .
+git status
+git diff --cached --name-only
+
+Make sure NO private files are staged:
+- android/upload-keystore.jks
+- android/keystore.properties
+- android/app/google-services.json
+- backend/.env
+- seed phrases/private keys
+
+Commit and push:
+
+git commit -m "LEMMIQ V2.8.1 - Q Economy tab and signup referral"
+git push origin main
+
+STEP 5 - RENDER
+---------------
+Render should redeploy from main.
+
+After deploy check:
+https://lemmiq-api.onrender.com/health
+
+Expected:
+"version": "2.8.1"
+
+Then open:
+https://lemmiq-api.onrender.com/web/
+
+On Android Chrome, perform a hard refresh/reopen the page if the old navigation
+is cached. V2.8.1 changes the service-worker cache namespace.
+
+STEP 6 - TEST WEB
+-----------------
+Test:
+1. Login existing account.
+2. Confirm bottom navigation:
+   Chats | Updates | Q | Q Economy | Calls | More
+3. Open Q Economy directly from bottom tab.
+4. Confirm Q Economy no longer appears as a duplicate More card.
+5. Log out.
+6. Create a test account WITHOUT referral code.
+   Expected: account creates normally.
+7. Create another test account WITH a valid referral code.
+   Expected:
+   - signup succeeds;
+   - referral is recorded;
+   - referred user receives configured welcome referral Q;
+   - referrer receives configured referral Q.
+8. Try an invalid referral code.
+   Expected: account is NOT created and user sees "Referral code is invalid".
+
+STEP 7 - ANDROID BUILD
+----------------------
+PowerShell:
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;C:\Gradle\gradle-9.6.0\bin;" + $env:Path
+
+cd C:\Users\pc\LEMMIQ\android
+.\build-play-bundle.cmd
+
+Expected AAB:
+C:\Users\pc\LEMMIQ\android\app\build\outputs\bundle\release\app-release.aab
+
+Version:
+2.8.1
+Version code:
+46
+
+STEP 8 - ANDROID TEST
+---------------------
+1. Install/update V2.8.1.
+2. Confirm bottom tabs:
+   Chats | Updates | Q | Q Economy | Calls | More
+3. Open Q Economy directly from bottom tab.
+4. Log out or use a fresh test device/account.
+5. Tap Create account.
+6. Confirm "Referral code (optional)" appears.
+7. Test signup with blank referral.
+8. Test signup with valid referral.
+9. Confirm Q balances/rewards on both accounts.
+
+REFERRAL BEHAVIOUR
+------------------
+Referral input format example:
+Q123-ABCDEF
+
+It is optional.
+
+Blank:
+signup continues normally.
+
+Valid:
+referrer + referred-user rewards are issued according to Q Admin settings.
+
+Invalid:
+signup is stopped before account creation so the user can correct/remove the
+code.
+
+No second-level/downline reward is created. Existing one-level Refer & Earn
+rules remain unchanged.

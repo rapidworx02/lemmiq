@@ -439,6 +439,51 @@ def _referrer_from_code(db: Session, code: str) -> User:
     return u
 
 
+def validate_signup_referral(db: Session, code: str | None) -> User | None:
+    """Validate an optional referral code before account creation."""
+    clean = (code or "").strip().upper()
+    if not clean:
+        return None
+    try:
+        return _referrer_from_code(db, clean)
+    except HTTPException:
+        raise HTTPException(400, "Referral code is invalid")
+
+
+def apply_signup_referral(db: Session, new_user: User, code: str | None) -> None:
+    """Apply a valid referral during signup.
+
+    Rewards are issued once, from the REFERRALS treasury, and the new user's
+    normal signup bonus is also created through the standard Q wallet path.
+    """
+    clean = (code or "").strip().upper()
+    if not clean:
+        return
+    if db.scalar(select(func.count()).select_from(QReferral).where(QReferral.referred_user_id == new_user.id)):
+        return
+    referrer = _referrer_from_code(db, clean)
+    if referrer.id == new_user.id:
+        raise HTTPException(422, "You cannot refer yourself")
+    cfg = _config(db)
+    _ensure_user_wallet(db, referrer.id)
+    _ensure_user_wallet(db, new_user.id)
+    _system_to_user(
+        db, "REFERRALS", referrer.id, cfg.referral_referrer_micros,
+        "REFERRAL_REWARD", reference=f"referred:{new_user.id}", note="Referral used during signup"
+    )
+    _system_to_user(
+        db, "REFERRALS", new_user.id, cfg.referral_referred_micros,
+        "REFERRAL_WELCOME", reference=f"referrer:{referrer.id}", note="Referral welcome reward"
+    )
+    db.add(QReferral(
+        referrer_user_id=referrer.id,
+        referred_user_id=new_user.id,
+        code=clean,
+        referrer_reward_micros=cfg.referral_referrer_micros,
+        referred_reward_micros=cfg.referral_referred_micros,
+    ))
+
+
 def _plan_json(code: str, cfg: QEconomyConfig):
     p = PACKAGE_PLANS[code]
     price_usd = p["price_usd"]
@@ -689,7 +734,7 @@ def register_v28(app, current_user, get_db):
     def config(db: Session = Depends(get_db)):
         cfg = _config(db)
         return {
-            "version": "2.8.0",
+            "version": "2.8.1",
             "q_reference_usd": cfg.q_price_microusd / USD_MICROS,
             "marketplace_fee_percent": cfg.marketplace_fee_bps / 100,
             "cashout_enabled": bool(cfg.cashout_enabled),
