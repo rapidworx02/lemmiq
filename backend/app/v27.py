@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import os
 import re
 import uuid
@@ -17,6 +18,8 @@ from .models import QCoordinationRequest, SocialMemory, User, VisionMemory
 
 MAX_VISION_BYTES = 15 * 1024 * 1024
 VISION_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+logger = logging.getLogger("lemmiq.v27")
+
 COORDINATION_HINTS = (
     "availability", "available", "find a time", "what time", "when can",
     "coordinate", "meeting", "meet", "dinner", "lunch", "catch up",
@@ -66,7 +69,28 @@ def _json_text(message):
         raw = raw[:-3].strip()
     return json.loads(raw)
 
+def _sniff_image_mime(data: bytes, declared: str = "") -> str:
+    """Return the actual supported image MIME from file signatures.
+
+    Android content providers sometimes report image/jpeg for PNG content.
+    Q Vision must send a media_type that matches the actual base64 bytes.
+    """
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    clean = (declared or "").split(";")[0].strip().lower()
+    return clean if clean in VISION_MIME else ""
+
+
 def _vision_ai(data: bytes, mime: str, question: str, prior: dict | None = None):
+    mime = _sniff_image_mime(data, mime)
+    if mime not in VISION_MIME:
+        raise HTTPException(415, "Q Vision could not identify a supported image format.")
     encoded = base64.b64encode(data).decode("ascii")
     prior_text = ""
     if prior:
@@ -103,7 +127,8 @@ Return JSON only:
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(502, f"Q Vision analysis failed: {e}")
+        logger.exception("Q Vision provider analysis failed")
+        raise HTTPException(502, "Q Vision couldn't analyse this image right now. Please retry.")
     result["category"] = str(result.get("category") or "OTHER").upper()[:32]
     result["title"] = str(result.get("title") or "Vision scan")[:160]
     result["summary"] = str(result.get("summary") or "")
@@ -212,14 +237,15 @@ def register_v27(app, current_user, get_db, push):
         save: bool = Form(default=True),
         u=Depends(current_user), db: Session = Depends(dep_db),
     ):
-        mime = (file.content_type or "").split(";")[0].strip().lower()
-        if mime not in VISION_MIME:
-            raise HTTPException(415, "Q Vision currently supports JPG, PNG, WEBP and GIF images.")
+        declared_mime = (file.content_type or "").split(";")[0].strip().lower()
         data = await file.read(MAX_VISION_BYTES + 1)
         if not data:
             raise HTTPException(400, "Image is empty")
         if len(data) > MAX_VISION_BYTES:
             raise HTTPException(413, "Q Vision image limit is 15 MB")
+        mime = _sniff_image_mime(data, declared_mime)
+        if mime not in VISION_MIME:
+            raise HTTPException(415, "Q Vision currently supports JPG, PNG, WEBP and GIF images.")
         analysis = _vision_ai(data, mime, question)
         key = media_store.store(data)
         history = [{"role":"user","text":question},{"role":"q","text":analysis["summary"]}]
@@ -271,7 +297,10 @@ def register_v27(app, current_user, get_db, push):
             history = json.loads(row.history_json or "[]")
         except Exception:
             prior, history = {}, []
-        result = _vision_ai(data, row.mime_type, body.question.strip(), prior=prior)
+        actual_mime = _sniff_image_mime(data, row.mime_type)
+        if actual_mime and actual_mime != row.mime_type:
+            row.mime_type = actual_mime
+        result = _vision_ai(data, actual_mime or row.mime_type, body.question.strip(), prior=prior)
         history += [{"role":"user","text":body.question.strip()},{"role":"q","text":result["summary"]}]
         row.title = result.get("title") or row.title
         row.category = result.get("category") or row.category

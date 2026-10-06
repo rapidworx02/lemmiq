@@ -1,6 +1,6 @@
-/* LEMMIQ V2.8.2 Q Economy */
+/* LEMMIQ V2.8.3 Q Economy */
 (()=>{
-  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]},adminReferralRules:[],adminReferralOverview:null};
+  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminWalletMatrix:[],adminPackageRules:[],adminUsers:[],adminAudit:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]},adminReferralRules:[],adminReferralOverview:null};
   const fmtQ=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(Number(n||0));
   const fmtUsd=n=>new Intl.NumberFormat(undefined,{style:"currency",currency:"USD",maximumFractionDigits:4}).format(Number(n||0));
   const dt=x=>{try{return new Date(x).toLocaleString()}catch{return x||""}};
@@ -234,6 +234,108 @@
     ].map(x=>`<div class="q28-stat"><small>${x[0]}</small><strong>${x[1]}</strong></div>`).join("");
   }
 
+  function adminParty(system,info,id){
+    if(system)return escapeHtml(system);
+    if(info)return `User #${info.id} · ${escapeHtml(info.display_name||"")} · @${escapeHtml(info.username||"")}`;
+    if(id)return `User #${id}`;
+    return "—";
+  }
+
+  function renderWalletMatrix(){
+    const el=$("q28WalletMatrix");if(!el)return;
+    const grouped={};
+    (v28.adminWalletMatrix||[]).forEach(x=>{(grouped[x.package_code]??=[]).push(x)});
+    el.innerHTML=Object.entries(grouped).map(([code,items])=>`<section class="q28-wallet-package"><div class="q28-wallet-package-head"><strong>${escapeHtml(items[0]?.package_name||code)}</strong><span>US$${items[0]?.price_usd||""}</span></div><div class="q28-wallet-network-grid">${items.map(slot=>{
+      const w=slot.wallet||{};
+      return `<div class="q28-wallet-slot"><div class="q28-wallet-slot-title"><b>${slot.network}</b>${w.active?'<span class="q28-status APPROVED">Active</span>':'<span class="q28-status">Not set</span>'}</div><input data-wallet-label="${slot.slot_key}" value="${escapeHtml(w.label||`${slot.package_name} ${slot.network}`)}" placeholder="Label"><input data-wallet-address="${slot.slot_key}" value="${escapeHtml(w.address||"")}" placeholder="Public USDT ${slot.network} address"><div class="q28-actions"><button class="primary" data-wallet-save="${slot.slot_key}">${w.id?'Replace / Save':'Add wallet'}</button>${w.id?`<a class="ghost" target="_blank" href="${escapeHtml(w.qr_url||'')}">QR</a><button class="ghost" data-q28-upload-qr="${w.id}">Upload QR</button>`:''}</div></div>`;
+    }).join("")}</div></section>`).join("");
+    qsa("[data-wallet-save]").forEach(b=>b.onclick=()=>saveWalletSlot(b.dataset.walletSave));
+    qsa("[data-q28-upload-qr]").forEach(b=>b.onclick=()=>uploadWalletQr(Number(b.dataset.q28UploadQr)));
+  }
+
+  async function saveWalletSlot(slotKey){
+    const [code,network]=slotKey.split(":");
+    const address=document.querySelector(`[data-wallet-address="${slotKey}"]`)?.value.trim()||"";
+    const label=document.querySelector(`[data-wallet-label="${slotKey}"]`)?.value.trim()||"";
+    if(!address){toast("Enter the public USDT receiving address",true);return}
+    if(!confirm(`Save ${network} wallet for ${code}? New payment orders will use this address.`))return;
+    try{
+      await qApi(`/admin/payment-wallet-matrix/${code}/${network}`,{method:"PUT",body:JSON.stringify({address,label,active:true})});
+      toast("USDT wallet slot saved");await loadQAdmin();
+    }catch(e){toast(e.message,true)}
+  }
+
+  function renderPackageMasterRules(){
+    const el=$("q28PackageMasterRules");if(!el)return;
+    el.innerHTML=(v28.adminPackageRules||[]).map(r=>`<div class="q28-master-rule"><div><strong>${escapeHtml(r.name)}</strong><small>US$${r.price_usd}</small></div><label>Daily return %<input data-rule-daily="${r.package_code}" type="number" min="0" max="10" step="0.01" value="${r.daily_rate_percent}"></label><label>Maximum return %<input data-rule-cap="${r.package_code}" type="number" min="0" max="1000" step="1" value="${r.cap_percent}"></label><label class="q28-check"><input data-rule-preserve="${r.package_code}" type="checkbox"> Preserve individual overrides</label><div class="q28-actions"><button class="primary" data-rule-apply="${r.package_code}">Apply to all current + future</button><button class="ghost" data-rule-future="${r.package_code}">Future packages only</button></div></div>`).join("");
+    qsa("[data-rule-apply]").forEach(b=>b.onclick=()=>savePackageMasterRule(b.dataset.ruleApply,true));
+    qsa("[data-rule-future]").forEach(b=>b.onclick=()=>savePackageMasterRule(b.dataset.ruleFuture,false));
+  }
+
+  async function savePackageMasterRule(code,applyExisting){
+    const daily=Number(document.querySelector(`[data-rule-daily="${code}"]`)?.value);
+    const cap=Number(document.querySelector(`[data-rule-cap="${code}"]`)?.value);
+    const preserve=!!document.querySelector(`[data-rule-preserve="${code}"]`)?.checked;
+    if(!Number.isFinite(daily)||!Number.isFinite(cap)){toast("Enter valid daily and maximum return percentages",true);return}
+    const reason=prompt("Reason for this master package change",applyExisting?"Master package rate update":"Future package default update");if(reason===null)return;
+    const warning=applyExisting?`Apply ${daily}% daily / ${cap}% max to existing ${code} packages as well? Past earnings will not be recalculated.`:`Save ${daily}% daily / ${cap}% max for future ${code} packages only?`;
+    if(!confirm(warning))return;
+    try{
+      const r=await qApi(`/admin/package-rules/${code}`,{method:"PUT",body:JSON.stringify({daily_rate_percent:daily,cap_percent:cap,apply_to_existing:applyExisting,include_custom:applyExisting&&!preserve,reason:reason||"Package master update"})});
+      toast(`Package rule saved · ${r.affected||0} existing package(s) updated`);await loadQAdmin();
+    }catch(e){toast(e.message,true)}
+  }
+
+  function renderAdminUsers(){
+    const el=$("q28AdminUsers");if(!el)return;
+    el.innerHTML=(v28.adminUsers||[]).length?(v28.adminUsers||[]).map(x=>{
+      const p=x.packages||[];
+      const active=p.filter(a=>a.status==="ACTIVE").length;
+      const summary=p.slice(0,3).map(a=>`${escapeHtml(a.package_name)} · ${a.daily_rate_percent}%/day · ${a.earned_percent}% earned of ${a.cap_percent}% max · ${escapeHtml(a.status)}`).join("<br>") || "No package";
+      return qRow(`User #${x.user.id} · ${escapeHtml(x.user.display_name)} · @${escapeHtml(x.user.username)}`,`${fmtQ(x.wallet_q)} Q wallet · ${active} active package(s)<br>${summary}`,"",`<button class="primary" data-manage-user="${x.user.id}">Manage</button>`);
+    }).join(""):`<div class="empty-state"><p>No users matched your search.</p></div>`;
+    qsa("[data-manage-user]").forEach(b=>b.onclick=()=>openAdminUser(Number(b.dataset.manageUser)));
+  }
+
+  async function loadAdminUsers(){
+    try{
+      const q=$("q28AdminUserSearch")?.value.trim()||"";
+      const pc=$("q28AdminUserPackage")?.value||"";
+      const st=$("q28AdminUserStatus")?.value||"";
+      v28.adminUsers=await qApi(`/admin/users?q=${encodeURIComponent(q)}&package_code=${encodeURIComponent(pc)}&status=${encodeURIComponent(st)}`);
+      renderAdminUsers();
+    }catch(e){toast(e.message,true)}
+  }
+
+  function packageCardHtml(p){
+    return `<div class="q28-admin-package"><div class="q28-admin-package-head"><strong>${escapeHtml(p.package_name)} #${p.id}</strong>${status(p.status)}</div><div class="q28-package-metrics"><span>Daily <b>${p.daily_rate_percent}%</b>${p.daily_rate_override?' *':''}</span><span>Earned <b>${Number(p.earned_percent||0).toFixed(2)}%</b></span><span>Max <b>${Number(p.cap_percent||0).toFixed(2)}%</b>${p.cap_percent_override?' *':''}</span><span>Q earned <b>${fmtQ(p.accrued_q)}</b></span><span>Value <b>${fmtUsd(p.accrued_usd_reference)}</b></span><span>Remaining <b>${fmtUsd(p.remaining_cap_usd)}</b></span></div><small>* individual override</small><div class="q28-actions"><button class="primary" data-edit-user-package="${p.id}">Edit package</button></div></div>`;
+  }
+
+  async function openAdminUser(userId){
+    try{
+      const d=await qApi(`/admin/users/${userId}`);
+      openModal(`<span class="eyebrow">Q USER CONTROL</span><h2>User #${d.user.id} · ${escapeHtml(d.user.display_name)}</h2><p>@${escapeHtml(d.user.username)}</p><div class="q28-user-wallet-control"><div><small>Q Wallet</small><strong>${fmtQ(d.wallet_q)} Q</strong><span>≈ ${fmtUsd(d.wallet_usd_reference)} reference</span></div><div><input id="q28AdjustAmount" type="number" step="0.01" placeholder="+/- Q correction"><input id="q28AdjustReason" placeholder="Reason for adjustment"><button id="q28AdjustWallet" class="primary">Apply wallet correction</button></div></div><h3>Packages</h3><div class="q28-list">${(d.packages||[]).map(packageCardHtml).join("")||"<p>No packages.</p>"}</div><button id="q28CloseUserControl" class="ghost full">Close</button>`);
+      $("q28AdjustWallet").onclick=async()=>{
+        const amount=Number($("q28AdjustAmount").value),reason=$("q28AdjustReason").value.trim();
+        if(!amount||reason.length<3){toast("Enter a non-zero Q correction and reason",true);return}
+        if(!confirm(`Apply ${amount>0?'+':''}${amount} Q adjustment to @${d.user.username}?`))return;
+        try{await qApi(`/admin/users/${d.user.id}/wallet-adjust`,{method:"POST",body:JSON.stringify({amount_q:amount,reason})});toast("Wallet correction recorded");closeModal();await loadQAdmin();await openAdminUser(d.user.id)}catch(e){toast(e.message,true)}
+      };
+      qsa("[data-edit-user-package]").forEach(b=>b.onclick=()=>{const p=d.packages.find(x=>x.id===Number(b.dataset.editUserPackage));if(p)openAdminPackageEditor(d.user,p)});
+      $("q28CloseUserControl").onclick=closeModal;
+    }catch(e){toast(e.message,true)}
+  }
+
+  function openAdminPackageEditor(user,p){
+    openModal(`<span class="eyebrow">PACKAGE CONTROL</span><h2>${escapeHtml(p.package_name)} #${p.id}</h2><p>User #${user.id} · ${escapeHtml(user.display_name)} · @${escapeHtml(user.username)}</p><div class="q28-package-metrics"><span>Earned <b>${Number(p.earned_percent||0).toFixed(2)}%</b></span><span>Current max <b>${Number(p.cap_percent||0).toFixed(2)}%</b></span><span>Accrued <b>${fmtUsd(p.accrued_usd_reference)}</b></span><span>Q <b>${fmtQ(p.accrued_q)}</b></span></div><label>Daily return %<input id="q28EditDaily" type="number" step="0.01" value="${p.daily_rate_percent}"></label><label>Maximum return %<input id="q28EditCap" type="number" step="1" value="${p.cap_percent}"></label><label>Status<select id="q28EditStatus"><option ${p.status==='ACTIVE'?'selected':''}>ACTIVE</option><option ${p.status==='PAUSED'?'selected':''}>PAUSED</option><option ${p.status==='STOPPED'?'selected':''}>STOPPED</option><option ${p.status==='ADMIN_CANCELLED'?'selected':''}>ADMIN_CANCELLED</option></select></label><label>Admin reason<input id="q28EditReason" placeholder="Required reason"></label><div class="q28-actions"><button id="q28SaveUserPackage" class="primary">Save custom settings</button><button id="q28ResetUserDaily" class="ghost">Reset daily to master</button><button id="q28ResetUserCap" class="ghost">Reset max to master</button></div><div class="q28-danger-zone"><button data-package-status="PAUSED" class="ghost">Pause</button><button data-package-status="ACTIVE" class="ghost">Resume</button><button data-package-status="STOPPED" class="danger">Stop</button><button data-package-status="ADMIN_CANCELLED" class="danger">Cancel / remove</button></div>`);
+    const reason=()=>$("q28EditReason").value.trim();
+    const send=async body=>{if((body.reason||"").length<3){toast("Enter an admin reason",true);return}try{await qApi(`/admin/subscriptions/${p.id}`,{method:"PUT",body:JSON.stringify(body)});toast("Package updated and audit logged");closeModal();await loadQAdmin();await openAdminUser(user.id)}catch(e){toast(e.message,true)}};
+    $("q28SaveUserPackage").onclick=()=>send({daily_rate_percent:Number($("q28EditDaily").value),cap_percent:Number($("q28EditCap").value),status:$("q28EditStatus").value,reason:reason()});
+    $("q28ResetUserDaily").onclick=()=>send({clear_daily_override:true,reason:reason()});
+    $("q28ResetUserCap").onclick=()=>send({clear_cap_override:true,reason:reason()});
+    qsa("[data-package-status]").forEach(b=>b.onclick=()=>{const st=b.dataset.packageStatus;if(!confirm(`${st} this package?`))return;send({status:st,reason:reason()})});
+  }
+
   function renderAdmin(){
     const a=v28.admin;if(!a)return;
     $("q28AdminOverview").innerHTML=adminStats(a.economy);
@@ -246,17 +348,14 @@
         r.user_id===a.me.id?"Current admin":""
       )).join("")||`<div class="empty-state"><p>No admin roles configured.</p></div>`;
     }
-    $("q28AdminWallets").innerHTML=v28.adminWallets.length?v28.adminWallets.map(w=>qRow(
-      `${w.network} · ${escapeHtml(w.package_code||"ALL PACKAGES")}`,
-      `${escapeHtml(w.label||"Wallet")}<br>${escapeHtml(w.address)}`,
-      w.active?"Active":"Disabled",`<a target="_blank" class="ghost" href="${escapeHtml(w.qr_url)}">QR</a><button class="ghost" data-q28-upload-qr="${w.id}">Upload QR</button>`
-    )).join(""):`<div class="empty-state"><p>No receiving wallets configured.</p></div>`;
-    qsa("[data-q28-upload-qr]").forEach(b=>b.onclick=()=>uploadWalletQr(Number(b.dataset.q28UploadQr)));
+    renderWalletMatrix();
+    renderPackageMasterRules();
+    renderAdminUsers();
 
     const pending=v28.adminPayments.filter(x=>x.status==="PENDING");
     $("q28AdminPayments").innerHTML=pending.length?pending.map(o=>qRow(
       `${escapeHtml(o.package_name)} · ${fmtQ(o.expected_usdt)} USDT · ${o.network}`,
-      `${escapeHtml(o.order_code)} · @${escapeHtml(o.user?.username||"")}<br>TX: ${escapeHtml(o.tx_hash||"")}`,
+      `${escapeHtml(o.order_code)} · User #${o.user?.id||o.user_id} · ${escapeHtml(o.user?.display_name||"")} · @${escapeHtml(o.user?.username||"")}<br>TX: ${escapeHtml(o.tx_hash||"")}`,
       o.explorer_url?`<a target="_blank" rel="noopener" href="${escapeHtml(o.explorer_url)}">Explorer ↗</a>`:"",
       `<button class="primary" data-admin-pay="approve" data-id="${o.id}">Approve</button><button class="danger" data-admin-pay="reject" data-id="${o.id}">Reject</button>`
     )).join(""):`<div class="empty-state"><p>No pending USDT payments.</p></div>`;
@@ -269,9 +368,15 @@
 
     $("q28AdminLedger").innerHTML=v28.adminLedger.slice(0,100).map(x=>qRow(
       `${escapeHtml(x.kind)} · ${fmtQ(x.amount_q)} Q`,
-      `${dt(x.created_at)} · ${escapeHtml(x.reference||"")}`,
-      `${escapeHtml(x.from_system||x.from_user||"GENESIS")} → ${escapeHtml(x.to_system||x.to_user||"")}`
+      `${dt(x.created_at)}${x.note?` · ${escapeHtml(x.note)}`:""}`,
+      `${adminParty(x.from_system,x.from_user_info,x.from_user)} → ${adminParty(x.to_system,x.to_user_info,x.to_user)}`
     )).join("");
+
+    if($("q28AdminAudit"))$("q28AdminAudit").innerHTML=(v28.adminAudit||[]).slice(0,100).map(x=>qRow(
+      escapeHtml(x.action),
+      `${dt(x.created_at)} · ${escapeHtml(x.reason||"")}`,
+      `${x.admin?`Admin #${x.admin.id} · @${escapeHtml(x.admin.username||"")}`:""}${x.target_user?`<br>Target User #${x.target_user.id} · ${escapeHtml(x.target_user.display_name||"")} · @${escapeHtml(x.target_user.username||"")}`:""}${x.subscription_lot_id?`<br>Package #${x.subscription_lot_id}`:""}`
+    )).join("")||`<div class="empty-state"><p>No admin changes logged yet.</p></div>`;
 
     const disputes=v28.adminMarket.filter(x=>x.status==="DISPUTED");
     $("q28AdminMarketOrders").innerHTML=disputes.length?disputes.map(o=>qRow(
@@ -281,9 +386,9 @@
     )).join(""):`<div class="empty-state"><p>No open disputes.</p></div>`;
     qsa("[data-dispute-outcome]").forEach(b=>b.onclick=()=>resolveDispute(Number(b.dataset.id),b.dataset.disputeOutcome));
 
-    const c=a.config;
-    $("q28AdminPrice").value=c.q_reference_usd;
-    $("q28AdminFee").value=c.marketplace_fee_percent;
+    const cfg=a.config;
+    $("q28AdminPrice").value=cfg.q_reference_usd;
+    $("q28AdminFee").value=cfg.marketplace_fee_percent;
     $("q28AdminBasic").value=v28.wallet?.basic_daily_q??2;
     $("q28AdminSignup").value=v28.wallet?.signup_bonus_q??100;
     $("q28AdminReferrer").value=v28.wallet?.referral_reward_q??25;
@@ -300,11 +405,11 @@
 
   async function loadQAdmin(){
     try{
-      const [me,economy,wallets,payments,ledger,market,config,wallet,roles,referralRules,referralOverview]=await Promise.all([
-        qApi("/admin/me"),qApi("/admin/economy"),qApi("/admin/payment-wallets"),qApi("/admin/payment-orders"),
+      const [me,economy,wallets,walletMatrix,packageRules,users,audit,payments,ledger,market,config,wallet,roles,referralRules,referralOverview]=await Promise.all([
+        qApi("/admin/me"),qApi("/admin/economy"),qApi("/admin/payment-wallets"),qApi("/admin/payment-wallet-matrix"),qApi("/admin/package-rules"),qApi("/admin/users"),qApi("/admin/audit"),qApi("/admin/payment-orders"),
         qApi("/admin/ledger"),qApi("/admin/market/orders"),qApi("/config"),qApi("/wallet"),qApi("/admin/roles"),qApi("/admin/referral-rules"),qApi("/admin/referrals")
       ]);
-      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;v28.adminReferralRules=referralRules;v28.adminReferralOverview=referralOverview;
+      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminWalletMatrix=walletMatrix;v28.adminPackageRules=packageRules;v28.adminUsers=users;v28.adminAudit=audit;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;v28.adminReferralRules=referralRules;v28.adminReferralOverview=referralOverview;
       renderAdmin();
     }catch(e){toast(e.message,true);setView("more")}
   }
@@ -375,11 +480,6 @@
         $("q28AdminTeamUser").value="";toast("Admin role updated");await loadQAdmin();
       }catch(e){toast(e.message,true)}
     });
-    $("q28AdminAddWallet")?.addEventListener("click",async()=>{
-      const body={network:$("q28AdminNetwork").value,package_code:$("q28AdminPackage").value||null,label:$("q28AdminWalletLabel").value,address:$("q28AdminWalletAddress").value.trim(),active:true};
-      if(!body.address){toast("Enter a public USDT receiving address",true);return}
-      try{await qApi("/admin/payment-wallets",{method:"POST",body:JSON.stringify(body)});toast("Payment wallet added");$("q28AdminWalletAddress").value="";await loadQAdmin()}catch(e){toast(e.message,true)}
-    });
     $("q28AdminSaveConfig")?.addEventListener("click",async()=>{
       const body={q_price_usd:Number($("q28AdminPrice").value),marketplace_fee_percent:Number($("q28AdminFee").value),basic_daily_q:Number($("q28AdminBasic").value),signup_bonus_q:Number($("q28AdminSignup").value),referral_referrer_q:Number($("q28AdminReferrer").value),referral_referred_q:Number($("q28AdminReferred").value)};
       try{await qApi("/admin/config",{method:"PUT",body:JSON.stringify(body)});toast("Q settings saved");await loadQAdmin()}catch(e){toast(e.message,true)}
@@ -389,6 +489,9 @@
       try{await qApi("/admin/referral-rules",{method:"PUT",body:JSON.stringify(body)});toast("Package referral rewards saved");await loadQAdmin()}catch(e){toast(e.message,true)}
     });
     $("q28AdminRefreshPayments")?.addEventListener("click",loadQAdmin);
+    $("q28AdminRefreshUsers")?.addEventListener("click",loadAdminUsers);
+    $("q28AdminUserSearchBtn")?.addEventListener("click",loadAdminUsers);
+    $("q28AdminUserSearch")?.addEventListener("keydown",e=>{if(e.key==="Enter")loadAdminUsers()});
     $("q28TreasuryTransfer")?.addEventListener("click",async()=>{
       const body={from_wallet:$("q28TreasuryFrom").value,to_wallet:$("q28TreasuryTo").value,amount_q:Number($("q28TreasuryAmount").value),reason:$("q28TreasuryReason").value.trim()};
       if(!(body.amount_q>0)||body.reason.length<3){toast("Enter amount and reason",true);return}

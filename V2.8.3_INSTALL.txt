@@ -1,0 +1,430 @@
+LEMMIQ V2.8.3 - ADMIN CONTROL + RELIABILITY PATCH
+==================================================
+
+BASE REQUIRED
+-------------
+Apply this patch on top of your current working LEMMIQ V2.8.2 folder.
+
+VERSION
+-------
+Backend / PWA: 2.8.3
+Android versionName: 2.8.3
+Android versionCode: 48
+
+WHAT THIS PATCH FIXES / ADDS
+----------------------------
+
+1) Q VISION IMAGE MIME FIX + CLEAN RETRY
+- Fixes PNG images being sent to the vision provider as image/jpeg.
+- Backend now detects the real image format from file bytes (JPG/PNG/WEBP/GIF).
+- Existing saved Vision media also repairs a wrong stored MIME when re-analysed.
+- Raw provider/API errors are no longer shown to the user.
+- User sees a simple retry message instead.
+- Chat image action changes to "Retry Q Vision" after a Vision failure.
+
+2) Q-TO-Q MULTI-CONTACT SEARCH / SELECTION
+- Search and select one contact.
+- Selected contact remains visible.
+- Search again and add more contacts.
+- Selected contact list shows name + @username.
+- Remove individual contacts before sending.
+- Send one Q-to-Q request to all selected users.
+- Web and Android both updated.
+
+3) FIXED 10-SLOT USDT WALLET MATRIX
+Five subscription packages x two networks = 10 slots:
+
+$10 Starter      TRC20 + BEP20
+$50 Plus         TRC20 + BEP20
+$100 Pro         TRC20 + BEP20
+$500 Premium     TRC20 + BEP20
+$1,000 Elite     TRC20 + BEP20
+
+- Admin sees all 10 slots at once.
+- One active receiving wallet per package + network.
+- Replace / update wallet from the slot.
+- Old wallet rows remain for historical payment records.
+- New payment orders REQUIRE the exact package/network wallet.
+- No generic fallback wallet is used.
+- Historical QR URLs continue working after a wallet is replaced.
+- Custom QR upload remains available.
+
+IMPORTANT:
+Only PUBLIC receiving addresses belong in LEMMIQ.
+Never enter a seed phrase/private key/recovery phrase.
+
+4) ADMIN Q LEDGER USER IDENTIFICATION
+Admin ledger now shows:
+
+User #10 · Display Name · @username
+
+instead of only an internal user number.
+
+User-to-user transfer example:
+User #1 · Rohitz · @rohitz12345
+→ User #27 · Shweta · @shweta21
+
+5) MASTER ADMIN USER PACKAGE + WALLET CONTROL CENTRE
+Admin can search users by:
+- user number / ID;
+- display name;
+- @username;
+- package;
+- package status.
+
+Each user shows:
+- Q wallet balance;
+- package(s);
+- current daily return %;
+- current maximum return %;
+- earned Q;
+- accrued USD reference value;
+- how much return percentage has already been earned;
+- package status;
+- whether daily/cap settings are individual overrides.
+
+6) MANUAL Q WALLET CORRECTIONS
+Master Admin can enter a signed correction:
+
++100 Q  = add Q to the user's wallet
+-50 Q   = remove Q from the user's wallet
+
+Every correction requires an Admin reason and creates:
+- a Q ledger entry; and
+- an Admin audit entry.
+
+Positive corrections move Q from PROMOTIONS treasury to the user.
+Negative corrections return Q from the user to PROMOTIONS treasury.
+This preserves the 1B Q supply instead of silently editing balances.
+
+If PROMOTIONS does not have enough Q, transfer Q into PROMOTIONS from another
+admin treasury wallet first.
+
+7) INDIVIDUAL PACKAGE CONTROL
+Master Admin can edit each package lot independently:
+- daily return %;
+- maximum return %;
+- pause;
+- resume;
+- stop;
+- cancel/remove from active use.
+
+"Cancel / remove" is stored as ADMIN_CANCELLED instead of deleting the
+financial record. Historical payment/package/audit data remains available.
+
+8) EARNED PERCENTAGE TRACKING
+Example for a $500 package:
+
+Purchase value:          US$500
+Accrued package value:   US$317.50
+Earned percentage:       63.50%
+Maximum return:          200%
+
+Admin can see this for every package.
+
+9) MASTER SUBSCRIPTION DAILY RETURN + MAX RETURN CONTROLS
+Master Admin can edit the package defaults for:
+- Starter
+- Plus
+- Pro
+- Premium
+- Elite
+
+For each package:
+- Daily return %
+- Maximum return %
+
+Primary action:
+"Apply to all current + future"
+
+This changes existing package lots as well as future package purchases.
+Past earnings are NOT recalculated backwards.
+
+Example:
+Premium changes from 1.00% daily to 0.75% daily.
+Existing Premium package accrual is brought current at the OLD rate first.
+Future accrual uses 0.75%.
+
+The Master Admin may optionally preserve individual user overrides. If that
+option is NOT selected, the master change overrides custom user rates too.
+
+A second option "Future packages only" is also available.
+
+10) DIFFERENT MAXIMUM RETURNS PER USER
+You can now configure, for example:
+- User A max return = 200%
+- User B max return = 150%
+- User C max return = 100%
+
+Individual settings remain marked as custom overrides until reset to master.
+
+11) ADMIN AUDIT LOG
+Sensitive changes are recorded with:
+- admin user;
+- action;
+- target user;
+- package lot (where relevant);
+- previous settings;
+- new settings;
+- reason;
+- date/time.
+
+NEW DATABASE TABLES
+-------------------
+V2.8.3 adds new tables using SQLAlchemy Base.metadata.create_all():
+- q_package_rules
+- q_subscription_overrides
+- q_admin_audit_logs
+
+No manual SQL migration is required for these NEW tables.
+Existing Q tables are not dropped or recreated.
+
+IMPORTANT FINANCIAL RULE
+------------------------
+Cash-out remains DISABLED in V2.8.3.
+
+Admin package edits are internal Q Economy controls. Before enabling cash
+withdrawal/redemption later, complete the legal, financial, reserve, AML/KYC
+and Australian regulatory work discussed for the Q Economy.
+
+INSTALL - STEP 1: BACKUP
+------------------------
+Back up your current folder:
+
+C:\Users\pc\LEMMIQ
+
+Example backup:
+C:\Users\pc\LEMMIQ_BACKUP_V2.8.2
+
+INSTALL - STEP 2: EXTRACT PATCH
+-------------------------------
+Extract:
+
+LEMMIQ_V2.8.3_ADMIN_CONTROL_RELIABILITY_PATCH.zip
+
+into:
+
+C:\Users\pc\LEMMIQ
+
+Choose:
+Replace files in destination
+
+This ZIP is an overlay patch. It does not contain your private signing files,
+Firebase file, .env, wallet private keys or seed phrases.
+
+INSTALL - STEP 3: CHECK GIT STATUS
+----------------------------------
+Open CMD:
+
+cd /d C:\Users\pc\LEMMIQ
+git status
+
+Check secrets remain ignored:
+
+git check-ignore android/upload-keystore.jks
+git check-ignore android/keystore.properties
+git check-ignore android/app/google-services.json
+
+Then:
+
+git add .
+git status
+git diff --cached --name-only
+
+Confirm these are NOT staged:
+- android/upload-keystore.jks
+- android/keystore.properties
+- android/app/google-services.json
+- backend/.env
+- private keys
+- wallet seed/recovery phrases
+
+INSTALL - STEP 4: COMMIT + PUSH
+-------------------------------
+
+git commit -m "LEMMIQ V2.8.3 - admin controls Q Vision and Q2Q fixes"
+git push origin main
+
+If Render is connected to main it should redeploy automatically.
+
+INSTALL - STEP 5: VERIFY RENDER
+-------------------------------
+Open:
+
+https://lemmiq-api.onrender.com/health
+
+Expected:
+
+"version": "2.8.3"
+
+Then open:
+
+https://lemmiq-api.onrender.com/web/
+
+or Admin:
+
+https://lemmiq-api.onrender.com/admin
+
+Because the PWA service-worker cache changes in V2.8.3, close/reopen the PWA
+or hard refresh the browser once after deployment.
+
+ADMIN - STEP 6: CONFIGURE ALL 10 USDT WALLET SLOTS
+--------------------------------------------------
+Go to:
+
+Q Admin -> USDT wallet matrix
+
+Configure:
+
+Q Starter:
+- TRC20
+- BEP20
+
+Q Plus:
+- TRC20
+- BEP20
+
+Q Pro:
+- TRC20
+- BEP20
+
+Q Premium:
+- TRC20
+- BEP20
+
+Q Elite:
+- TRC20
+- BEP20
+
+Each slot requires its own PUBLIC receiving address.
+
+New subscription orders will fail clearly if the chosen package/network slot
+has not been configured. This is intentional so a user is never shown the
+wrong subscription wallet.
+
+ADMIN - STEP 7: MASTER PACKAGE CONTROLS
+---------------------------------------
+Go to:
+
+Q Admin -> Subscription master controls
+
+For each package set:
+- Daily return %
+- Maximum return %
+
+Use:
+Apply to all current + future
+
+when you want existing users changed too.
+
+If you deliberately want custom user overrides to remain untouched, tick:
+Preserve individual overrides
+
+Otherwise the master update will also replace custom values.
+
+ADMIN - STEP 8: USER CONTROL
+----------------------------
+Go to:
+
+Q Admin -> User package & wallet control
+
+Search by ID/name/@username.
+Tap Manage.
+
+You can:
+- review Q wallet;
+- add/remove Q correction with reason;
+- inspect each package;
+- see earned percentage;
+- change individual daily %;
+- change individual max %;
+- Pause;
+- Resume;
+- Stop;
+- Cancel/remove;
+- reset individual daily % back to master;
+- reset individual max % back to master.
+
+ANDROID - STEP 9: BUILD MANUAL TEST APK
+---------------------------------------
+PowerShell:
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;C:\Gradle\gradle-9.6.0\bin;" + $env:Path
+
+cd C:\Users\pc\LEMMIQ\android
+.\build-manual-test-apk.cmd
+
+Expected manual tester APK:
+
+C:\Users\pc\LEMMIQ\android\app\build\outputs\manual\LEMMIQ-v2.8.3-manual-release.apk
+
+This is release-signed with your existing LEMMIQ upload key. Android/Play
+Protect can still show a sideload scan/unknown-source warning because it is
+not Play-distributed. Do not disable Play Protect.
+
+PWA testing remains available at:
+https://lemmiq-api.onrender.com/web/
+
+TEST CHECKLIST
+--------------
+
+A. Q VISION
+1. Send a PNG image in chat.
+2. Tap Ask Q Vision.
+3. Confirm it analyses without JPEG/PNG mismatch error.
+4. Test JPG and WEBP too.
+5. Force/observe a Vision failure and confirm the user sees a short retry
+   message rather than the raw provider HTTP error.
+6. Tap Retry Q Vision.
+
+B. Q-TO-Q MULTI-CONTACT
+1. Q -> Q-to-Q.
+2. Search Shweta and select her.
+3. Search another contact.
+4. Confirm Shweta remains in Selected contacts.
+5. Select second/third contact.
+6. Remove one contact.
+7. Send request.
+8. Confirm all remaining selected contacts receive the same Q-to-Q plan.
+
+C. USDT WALLET MATRIX
+1. Configure all 10 slots.
+2. Buy Starter using TRC20: correct Starter TRC20 wallet must show.
+3. Buy Starter using BEP20: correct Starter BEP20 wallet must show.
+4. Repeat spot checks for Pro/Premium/Elite.
+5. Replace one wallet.
+6. Confirm new orders use the new address.
+7. Confirm an old payment record still references its historical wallet.
+
+D. ADMIN LEDGER
+1. Create signup bonus.
+2. Claim Basic Q.
+3. Send user-to-user Q.
+4. Confirm Admin ledger shows:
+   User ID + display name + @username.
+
+E. USER PACKAGE CONTROL
+1. Open a user with an active package.
+2. Confirm earned % is visible.
+3. Change individual daily return.
+4. Change individual max return to 150%.
+5. Pause and confirm no accrual while PAUSED.
+6. Resume.
+7. Stop.
+8. Test ADMIN_CANCELLED on a test package only.
+9. Confirm Admin audit log records each action.
+
+F. MASTER PACKAGE CHANGE
+1. On a test environment/package, change Premium daily %.
+2. Use Apply to all current + future.
+3. Confirm existing Premium users change.
+4. Confirm future Premium purchase uses new value.
+5. Confirm historical accrued value does not get recalculated.
+6. Test master max 200% -> 150%.
+7. Test Preserve individual overrides.
+8. Test force master change without preserving overrides.
+
+FILES CHANGED
+-------------
+See V2.8.3_CHANGED_FILES.txt inside the patch.

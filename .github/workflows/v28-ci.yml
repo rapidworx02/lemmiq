@@ -31,7 +31,7 @@ jobs:
           from app.main import app
 
           with TestClient(app) as c:
-              assert c.get("/health").json()["version"] == "2.8.2"
+              assert c.get("/health").json()["version"] == "2.8.3"
 
               a = c.post("/register", json={"username":"v28alpha","display_name":"Alpha","password":"password123"}).json()
               b = c.post("/register", json={"username":"v28beta","display_name":"Beta","password":"password123"}).json()
@@ -66,11 +66,22 @@ jobs:
                   db.commit()
               finally:
                   db.close()
-              wallet_cfg = c.post("/v28/admin/payment-wallets", headers=ha, json={
-                  "network":"BEP20","package_code":"STARTER_10","label":"CI",
+              wallet_cfg = c.put("/v28/admin/payment-wallet-matrix/STARTER_10/BEP20", headers=ha, json={
+                  "label":"CI Starter BEP20",
                   "address":"0x1111111111111111111111111111111111111111","active":True
               })
               assert wallet_cfg.status_code == 200, wallet_cfg.text
+              matrix = c.get("/v28/admin/payment-wallet-matrix", headers=ha)
+              assert matrix.status_code == 200
+              assert len(matrix.json()) == 10
+              rule = c.put("/v28/admin/package-rules/STARTER_10", headers=ha, json={
+                  "daily_rate_percent":0.30,"cap_percent":150,"apply_to_existing":False,
+                  "include_custom":False,"reason":"CI master rule"
+              })
+              assert rule.status_code == 200, rule.text
+              assert abs(rule.json()["rule"]["daily_rate_percent"] - 0.30) < 0.001
+              users_admin = c.get("/v28/admin/users?q=v28gamma", headers=ha)
+              assert users_admin.status_code == 200, users_admin.text
               po = c.post("/v28/payments/orders", headers=hg, json={"package_code":"STARTER_10","network":"BEP20"})
               assert po.status_code == 200, po.text
               pid = po.json()["id"]

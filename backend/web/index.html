@@ -10,9 +10,9 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.8.2">
+  <link rel="stylesheet" href="/web/styles.css?v=2.8.3">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.8.2">
+  <link rel="stylesheet" href="/web/v28.css?v=2.8.3">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -393,19 +393,24 @@
           <div id="q28AdminTeam" class="q28-list"></div>
         </article>
         <div class="grid two">
-          <article class="card glass"><div class="section-head"><div><h3>USDT receiving wallets</h3><p class="micro">Public receiving addresses only. Never enter private keys or seed phrases.</p></div></div>
-            <div class="q28-wallet-form"><select id="q28AdminNetwork"><option>TRC20</option><option>BEP20</option></select><select id="q28AdminPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><input id="q28AdminWalletLabel" placeholder="Label"><input id="q28AdminWalletAddress" placeholder="Public USDT address"><button id="q28AdminAddWallet" class="primary">Add wallet</button></div>
-            <div id="q28AdminWallets" class="q28-list"></div>
+          <article class="card glass"><div class="section-head"><div><h3>USDT wallet matrix</h3><p class="micro">10 fixed receiving slots: each subscription has one TRC20 wallet and one BEP20 wallet. Replacing a wallet keeps old payment history intact.</p></div></div>
+            <div id="q28WalletMatrix" class="q28-wallet-matrix"></div>
           </article>
           <article class="card glass"><h3>Q settings</h3><div class="q28-settings-grid"><label>Q reference USD<input id="q28AdminPrice" type="number" step="0.0001"></label><label>Marketplace fee %<input id="q28AdminFee" type="number" step="0.01"></label><label>Basic Q / day<input id="q28AdminBasic" type="number" step="0.01"></label><label>Signup bonus Q<input id="q28AdminSignup" type="number" step="0.01"></label><label>Free signup referrer Q<input id="q28AdminReferrer" type="number" step="0.01"></label><label>Referred user welcome Q<input id="q28AdminReferred" type="number" step="0.01"></label></div><button id="q28AdminSaveConfig" class="primary">Save Q settings</button></article>
         </div>
         <article class="card glass"><div class="section-head"><div><h3>Package referral rewards</h3><p class="micro">Paid to the original referrer only after the referred user's USDT package payment is approved.</p></div></div><div class="q28-settings-grid"><label>$10 Starter referral Q<input id="q28RefStarter" type="number" step="0.01"></label><label>$50 Plus referral Q<input id="q28RefPlus" type="number" step="0.01"></label><label>$100 Pro referral Q<input id="q28RefPro" type="number" step="0.01"></label><label>$500 Premium referral Q<input id="q28RefPremium" type="number" step="0.01"></label><label>$1,000 Elite referral Q<input id="q28RefElite" type="number" step="0.01"></label></div><button id="q28AdminSaveReferralRules" class="primary">Save referral rewards</button><div id="q28AdminReferralOverview" class="q28-ref-admin-summary"></div></article>
+        <article class="card glass"><div class="section-head"><div><h3>Subscription master controls</h3><p class="micro">Change daily return and maximum return by package. “Apply to all” updates active existing packages as well as future packages. Past earnings are never recalculated.</p></div></div><div id="q28PackageMasterRules" class="q28-package-rules"></div></article>
+        <article class="card glass"><div class="section-head"><div><h3>User package & wallet control</h3><p class="micro">Search any user, review packages, earned percentage, custom rates and make auditable corrections.</p></div><button id="q28AdminRefreshUsers" class="ghost">↻</button></div>
+          <div class="q28-admin-user-search"><input id="q28AdminUserSearch" placeholder="Search user ID, name or @username"><select id="q28AdminUserPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><select id="q28AdminUserStatus"><option value="">All statuses</option><option>ACTIVE</option><option>PAUSED</option><option>CAP_REACHED</option><option>STOPPED</option><option>ADMIN_CANCELLED</option><option>EXPIRED</option></select><button id="q28AdminUserSearchBtn" class="primary">Search</button></div>
+          <div id="q28AdminUsers" class="q28-list"></div>
+        </article>
         <article class="card glass"><div class="section-head"><div><h3>Pending USDT payments</h3><p class="micro">Open the blockchain transaction, verify amount/network/address, then approve or reject.</p></div><button id="q28AdminRefreshPayments" class="ghost">↻</button></div><div id="q28AdminPayments" class="q28-list"></div></article>
         <div class="grid two">
           <article class="card glass"><h3>Q Treasury</h3><div id="q28AdminTreasury" class="q28-list"></div><div class="q28-wallet-form"><select id="q28TreasuryFrom"></select><select id="q28TreasuryTo"></select><input id="q28TreasuryAmount" type="number" step="0.01" placeholder="Q amount"><input id="q28TreasuryReason" placeholder="Reason"><button id="q28TreasuryTransfer" class="primary">Transfer</button></div></article>
           <article class="card glass"><h3>Marketplace disputes</h3><div id="q28AdminMarketOrders" class="q28-list"></div></article>
         </div>
-        <article class="card glass"><h3>Recent Q ledger</h3><div id="q28AdminLedger" class="q28-list"></div></article>
+        <article class="card glass"><h3>Recent Q ledger</h3><p class="micro">User entries show internal user number, display name and @username.</p><div id="q28AdminLedger" class="q28-list"></div></article>
+        <article class="card glass"><h3>Admin change log</h3><p class="micro">Master changes, wallet corrections and package edits are preserved here for audit.</p><div id="q28AdminAudit" class="q28-list"></div></article>
       </section>
 
       <section id="view-me" class="view">
@@ -460,7 +465,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.8.2" defer></script>
-  <script src="/web/v28.js?v=2.8.2" defer></script>
+  <script src="/web/app.js?v=2.8.3" defer></script>
+  <script src="/web/v28.js?v=2.8.3" defer></script>
 </body>
 </html>

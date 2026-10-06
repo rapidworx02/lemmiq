@@ -17,7 +17,7 @@ Before you have a Google Play Console account, use either:
    build-manual-test-apk.cmd
 
    Output:
-   app\build\outputs\manual\LEMMIQ-v2.8.2-manual-release.apk
+   app\build\outputs\manual\LEMMIQ-v2.8.3-manual-release.apk
 
 This release APK is signed with YOUR existing LEMMIQ upload key. It is better
 for continuity than distributing random debug APKs, but Play Protect can still

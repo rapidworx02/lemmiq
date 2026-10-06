@@ -4,7 +4,7 @@ Centralised Q ledger + wallet, usage mining, referrals, subscription lots,
 manual USDT (TRC20/BEP20) payment approval, Q Marketplace, escrow, and
 browser-first admin controls.
 
-Q is an internal utility unit in V2.8.2. Cash-out is deliberately disabled.
+Q is an internal utility unit in V2.8.3. Cash-out is deliberately disabled.
 """
 from __future__ import annotations
 
@@ -124,6 +124,15 @@ class QEconomyConfig(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class QPackageRule(Base):
+    __tablename__ = "q_package_rules"
+    package_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80), default="")
+    daily_rate_bps: Mapped[int] = mapped_column(Integer)
+    cap_percent: Mapped[int] = mapped_column(Integer, default=200)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class QDailyClaim(Base):
     __tablename__ = "q_daily_claims"
     __table_args__ = (UniqueConstraint("user_id", "claim_date", name="uq_q_daily_user_date"),)
@@ -226,6 +235,27 @@ class QSubscriptionLot(Base):
     status: Mapped[str] = mapped_column(String(20), default="ACTIVE", index=True)
 
 
+class QSubscriptionOverride(Base):
+    __tablename__ = "q_subscription_overrides"
+    lot_id: Mapped[int] = mapped_column(ForeignKey("q_subscription_lots.id"), primary_key=True)
+    daily_rate_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    cap_percent_override: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QAdminAuditLog(Base):
+    __tablename__ = "q_admin_audit_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    admin_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    action: Mapped[str] = mapped_column(String(80), index=True)
+    target_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    subscription_lot_id: Mapped[int | None] = mapped_column(ForeignKey("q_subscription_lots.id"), nullable=True, index=True)
+    before_json: Mapped[str] = mapped_column(Text, default="{}")
+    after_json: Mapped[str] = mapped_column(Text, default="{}")
+    reason: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class QMarketListing(Base):
     __tablename__ = "q_market_listings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -299,6 +329,34 @@ class AdminPaymentWalletIn(BaseModel):
     label: str = Field(default="", max_length=100)
     address: str = Field(min_length=20, max_length=160)
     active: bool = True
+
+
+class AdminPaymentWalletSlotIn(BaseModel):
+    label: str = Field(default="", max_length=100)
+    address: str = Field(min_length=20, max_length=160)
+    active: bool = True
+
+
+class PackageRuleUpdateIn(BaseModel):
+    daily_rate_percent: float = Field(ge=0, le=10)
+    cap_percent: float = Field(ge=0, le=1000)
+    apply_to_existing: bool = True
+    include_custom: bool = False
+    reason: str = Field(default="Package master setting update", max_length=300)
+
+
+class UserPackageEditIn(BaseModel):
+    daily_rate_percent: float | None = Field(default=None, ge=0, le=10)
+    cap_percent: float | None = Field(default=None, ge=0, le=1000)
+    status: str | None = Field(default=None, max_length=30)
+    clear_daily_override: bool = False
+    clear_cap_override: bool = False
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class WalletAdjustmentIn(BaseModel):
+    amount_q: float = Field(ge=-100_000_000, le=100_000_000)
+    reason: str = Field(min_length=3, max_length=300)
 
 
 class AdminRoleIn(BaseModel):
@@ -551,6 +609,82 @@ def apply_signup_referral(db: Session, new_user: User, code: str | None) -> None
     ))
 
 
+def _user_json_brief(db: Session, uid: int | None):
+    if not uid:
+        return None
+    u = db.get(User, uid)
+    if not u:
+        return {"id": uid, "username": "", "display_name": f"User #{uid}"}
+    return {"id": u.id, "username": u.username, "display_name": u.display_name}
+
+
+def _seed_package_rules(db: Session):
+    for code, plan in PACKAGE_PLANS.items():
+        row = db.get(QPackageRule, code)
+        if not row:
+            db.add(QPackageRule(
+                package_code=code, label=plan["name"],
+                daily_rate_bps=plan["daily_rate_bps"], cap_percent=200,
+            ))
+    db.flush()
+
+
+def _package_rule(db: Session, code: str) -> QPackageRule:
+    row = db.get(QPackageRule, code)
+    if not row:
+        plan = PACKAGE_PLANS.get(code)
+        if not plan:
+            raise HTTPException(422, "Unknown package")
+        row = QPackageRule(
+            package_code=code, label=plan["name"],
+            daily_rate_bps=plan["daily_rate_bps"], cap_percent=200,
+        )
+        db.add(row); db.flush()
+    return row
+
+
+def _package_rule_json(row: QPackageRule):
+    plan = PACKAGE_PLANS.get(row.package_code, {})
+    return {
+        "package_code": row.package_code,
+        "name": plan.get("name", row.label or row.package_code),
+        "price_usd": plan.get("price_usd", 0),
+        "daily_rate_percent": row.daily_rate_bps / 100,
+        "cap_percent": row.cap_percent,
+        "updated_at": row.updated_at.isoformat(),
+    }
+
+
+def _subscription_override(db: Session, lot_id: int, create: bool = False) -> QSubscriptionOverride | None:
+    row = db.get(QSubscriptionOverride, lot_id)
+    if not row and create:
+        row = QSubscriptionOverride(lot_id=lot_id)
+        db.add(row); db.flush()
+    return row
+
+
+def _audit(db: Session, admin_id: int, action: str, *, target_user_id: int | None = None, lot_id: int | None = None, before=None, after=None, reason: str = ""):
+    db.add(QAdminAuditLog(
+        admin_user_id=admin_id, action=action[:80], target_user_id=target_user_id, subscription_lot_id=lot_id,
+        before_json=json.dumps(before or {}, ensure_ascii=False, default=str)[:12000],
+        after_json=json.dumps(after or {}, ensure_ascii=False, default=str)[:12000],
+        reason=(reason or "")[:300],
+    ))
+
+
+def _package_snapshot(row: QSubscriptionLot, db: Session):
+    ov = _subscription_override(db, row.id, False)
+    purchase = max(1, row.purchase_usd_micros)
+    return {
+        "id": row.id, "user_id": row.user_id, "package_code": row.package_code,
+        "daily_rate_percent": row.daily_rate_bps / 100,
+        "cap_percent": round(row.cap_usd_micros * 100 / purchase, 4),
+        "status": row.status,
+        "daily_override": bool(ov and ov.daily_rate_override),
+        "cap_override": bool(ov and ov.cap_percent_override),
+    }
+
+
 def _referral_rule_json(row: QReferralRewardRule):
     return {
         "package_code": row.package_code,
@@ -634,28 +768,35 @@ def _award_subscription_referral(db: Session, payment: QPaymentOrder):
     return earning
 
 
-def _plan_json(code: str, cfg: QEconomyConfig):
+def _plan_json(db: Session, code: str, cfg: QEconomyConfig):
     p = PACKAGE_PLANS[code]
+    rule = _package_rule(db, code)
     price_usd = p["price_usd"]
-    daily_usd = price_usd * p["daily_rate_bps"] / 10_000
+    daily_usd = price_usd * rule.daily_rate_bps / 10_000
+    cap_usd = price_usd * rule.cap_percent / 100
     daily_q_at_reference = daily_usd / (cfg.q_price_microusd / USD_MICROS)
     return {
         "code": code,
         "name": p["name"],
         "price_usd": price_usd,
-        "daily_rate_percent": p["daily_rate_bps"] / 100,
+        "daily_rate_percent": rule.daily_rate_bps / 100,
         "daily_usd_reference": round(daily_usd, 6),
         "daily_q_at_current_reference": round(daily_q_at_reference, 6),
         "valid_days": 365,
-        "cap_percent": 200,
-        "cap_usd": price_usd * 2,
-        "cap_q_at_current_reference": round((price_usd * 2) / (cfg.q_price_microusd / USD_MICROS), 6),
+        "cap_percent": rule.cap_percent,
+        "cap_usd": round(cap_usd, 6),
+        "cap_q_at_current_reference": round(cap_usd / (cfg.q_price_microusd / USD_MICROS), 6),
     }
 
 
-def _subscription_json(row: QSubscriptionLot, cfg: QEconomyConfig):
+def _subscription_json(row: QSubscriptionLot, cfg: QEconomyConfig, db: Session | None = None):
     p = PACKAGE_PLANS.get(row.package_code, {"name": row.package_code})
     remaining = max(0, row.cap_usd_micros - row.accrued_usd_micros)
+    purchase = max(1, row.purchase_usd_micros)
+    cap_percent = row.cap_usd_micros * 100 / purchase
+    earned_percent = row.accrued_usd_micros * 100 / purchase
+    progress_to_cap = (row.accrued_usd_micros * 100 / row.cap_usd_micros) if row.cap_usd_micros else 0
+    ov = _subscription_override(db, row.id, False) if db is not None else None
     return {
         "id": row.id,
         "package_code": row.package_code,
@@ -664,9 +805,14 @@ def _subscription_json(row: QSubscriptionLot, cfg: QEconomyConfig):
         "daily_rate_percent": row.daily_rate_bps / 100,
         "accrued_usd_reference": _usd(row.accrued_usd_micros),
         "accrued_q": _q(row.accrued_q_micros),
+        "earned_percent": round(earned_percent, 4),
+        "cap_percent": round(cap_percent, 4),
+        "progress_to_cap_percent": round(progress_to_cap, 4),
         "cap_usd": _usd(row.cap_usd_micros),
         "remaining_cap_usd": _usd(remaining),
         "status": row.status,
+        "daily_rate_override": bool(ov and ov.daily_rate_override),
+        "cap_percent_override": bool(ov and ov.cap_percent_override),
         "started_at": row.started_at.isoformat(),
         "expires_at": row.expires_at.isoformat(),
         "last_accrual_date": row.last_accrual_date.isoformat(),
@@ -718,15 +864,15 @@ def _wallet_summary(db: Session, u: User):
         "balance_usd_reference": round(_q(w.balance_micros) * cfg.q_price_microusd / USD_MICROS, 4),
         "q_reference_usd": cfg.q_price_microusd / USD_MICROS,
         "cashout_enabled": bool(cfg.cashout_enabled),
-        "cashout_note": "Cash-out is not enabled in LEMMIQ V2.8.",
+        "cashout_note": "Cash-out is not enabled in LEMMIQ V2.8.3.",
         "basic_daily_q": _q(cfg.basic_daily_micros),
         "basic_claimed_today": bool(today_claimed),
         "signup_bonus_q": _q(cfg.signup_bonus_micros),
         "referral_code": _referral_code(u),
         "referral_reward_q": _q(cfg.referral_referrer_micros),
         "admin_role": role.role if role and role.active else None,
-        "packages": [_subscription_json(x, cfg) for x in subs],
-        "plans": [_plan_json(code, cfg) for code in PACKAGE_PLANS],
+        "packages": [_subscription_json(x, cfg, db) for x in subs],
+        "plans": [_plan_json(db, code, cfg) for code in PACKAGE_PLANS],
     }
 
 
@@ -866,6 +1012,7 @@ def register_v28(app, current_user, get_db):
                     _ledger(db, "GENESIS", opening_q * Q_MICROS, to_system=key, reference="V2.8_GENESIS")
             _config(db)
             _seed_referral_rules(db)
+            _seed_package_rules(db)
             db.commit()
 
             username = os.getenv("LEMMIQ_MASTER_ADMIN_USERNAME", "").strip().lower()
@@ -889,13 +1036,13 @@ def register_v28(app, current_user, get_db):
     def config(db: Session = Depends(get_db)):
         cfg = _config(db)
         return {
-            "version": "2.8.2",
+            "version": "2.8.3",
             "q_reference_usd": cfg.q_price_microusd / USD_MICROS,
             "marketplace_fee_percent": cfg.marketplace_fee_bps / 100,
             "cashout_enabled": bool(cfg.cashout_enabled),
             "max_supply_q": 1_000_000_000,
             "initial_unlocked_q": 10_000_000,
-            "plans": [_plan_json(code, cfg) for code in PACKAGE_PLANS],
+            "plans": [_plan_json(db, code, cfg) for code in PACKAGE_PLANS],
             "referral_package_rewards": [_referral_rule_json(x) for x in db.scalars(select(QReferralRewardRule).order_by(QReferralRewardRule.package_code)).all()],
             "networks": sorted(NETWORKS),
         }
@@ -1047,12 +1194,7 @@ def register_v28(app, current_user, get_db):
             QPaymentWallet.package_code == code
         ).order_by(QPaymentWallet.id.desc()).limit(1))
         if not wallet:
-            wallet = db.scalar(select(QPaymentWallet).where(
-                QPaymentWallet.active.is_(True), QPaymentWallet.network == network,
-                QPaymentWallet.package_code.is_(None)
-            ).order_by(QPaymentWallet.id.desc()).limit(1))
-        if not wallet:
-            raise HTTPException(409, f"No active {network} payment wallet is configured for this package")
+            raise HTTPException(409, f"No active {network} wallet is configured for {PACKAGE_PLANS[code]['name']}")
         price = PACKAGE_PLANS[code]["price_usd"]
         row = QPaymentOrder(
             order_code=f"LQ-{_now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}",
@@ -1089,7 +1231,7 @@ def register_v28(app, current_user, get_db):
     @router.get("/payment-wallets/{wallet_id}/qr")
     def payment_qr(wallet_id: int, db: Session = Depends(get_db)):
         row = db.get(QPaymentWallet, wallet_id)
-        if not row or not row.active:
+        if not row:
             raise HTTPException(404, "Payment wallet not found")
         if row.qr_image_b64:
             raw = base64.b64decode(row.qr_image_b64)
@@ -1421,6 +1563,200 @@ def register_v28(app, current_user, get_db):
             "package_events": len(earnings),
         }
 
+    @router.get("/admin/package-rules")
+    def admin_package_rules(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        _seed_package_rules(db); db.commit()
+        return [_package_rule_json(_package_rule(db, code)) for code in PACKAGE_PLANS]
+
+    @router.put("/admin/package-rules/{package_code}")
+    def admin_update_package_rule(package_code: str, body: PackageRuleUpdateIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        code = package_code.strip().upper()
+        if code not in PACKAGE_PLANS:
+            raise HTTPException(404, "Package not found")
+        rule = _package_rule(db, code)
+        before_rule = _package_rule_json(rule)
+
+        lots = db.scalars(select(QSubscriptionLot).where(QSubscriptionLot.package_code == code)).all()
+        if body.apply_to_existing:
+            for uid in sorted(set(x.user_id for x in lots if x.status == "ACTIVE")):
+                _accrue_user_packages(db, uid)
+
+        rule.daily_rate_bps = int(round(body.daily_rate_percent * 100))
+        rule.cap_percent = int(round(body.cap_percent))
+        rule.updated_at = _now()
+        affected = 0; skipped_custom = 0
+        if body.apply_to_existing:
+            for lot in lots:
+                ov = _subscription_override(db, lot.id, False)
+                custom_daily = bool(ov and ov.daily_rate_override)
+                custom_cap = bool(ov and ov.cap_percent_override)
+                changed = False
+                if body.include_custom or not custom_daily:
+                    lot.daily_rate_bps = rule.daily_rate_bps; changed = True
+                    if ov and body.include_custom: ov.daily_rate_override = False
+                elif custom_daily:
+                    skipped_custom += 1
+                if body.include_custom or not custom_cap:
+                    requested_cap = int(lot.purchase_usd_micros * rule.cap_percent / 100)
+                    lot.cap_usd_micros = requested_cap; changed = True
+                    if ov and body.include_custom: ov.cap_percent_override = False
+                elif custom_cap:
+                    skipped_custom += 1
+                if changed:
+                    if lot.status == "CAP_REACHED" and lot.accrued_usd_micros < lot.cap_usd_micros and _now() < lot.expires_at:
+                        lot.status = "ACTIVE"
+                    if lot.accrued_usd_micros >= lot.cap_usd_micros and lot.status == "ACTIVE":
+                        lot.status = "CAP_REACHED"
+                    affected += 1
+        after_rule = _package_rule_json(rule)
+        _audit(db, u.id, "PACKAGE_MASTER_RULE_UPDATE", before=before_rule, after={**after_rule, "affected": affected}, reason=body.reason)
+        db.commit()
+        return {"ok": True, "rule": after_rule, "affected": affected, "skipped_custom": skipped_custom}
+
+    @router.get("/admin/users")
+    def admin_users(q: str = "", package_code: str = "", status: str = "", u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        term = q.strip().lower()
+        stmt = select(User).order_by(User.id.desc()).limit(500)
+        users = db.scalars(stmt).all()
+        out = []
+        for user in users:
+            if term and term not in f"{user.id} {user.username} {user.display_name}".lower():
+                continue
+            lots = db.scalars(select(QSubscriptionLot).where(QSubscriptionLot.user_id == user.id).order_by(QSubscriptionLot.id.desc())).all()
+            if package_code.strip():
+                lots = [x for x in lots if x.package_code == package_code.strip().upper()]
+            if status.strip():
+                lots = [x for x in lots if x.status == status.strip().upper()]
+            if (package_code.strip() or status.strip()) and not lots:
+                continue
+            wallet = db.get(QUserWallet, user.id)
+            out.append({
+                "user": {"id": user.id, "username": user.username, "display_name": user.display_name},
+                "wallet_q": _q(wallet.balance_micros) if wallet else 0,
+                "packages": [_subscription_json(x, _config(db), db) for x in lots],
+            })
+        return out[:250]
+
+    @router.get("/admin/users/{user_id}")
+    def admin_user_detail(user_id: int, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        user = db.get(User, user_id)
+        if not user:
+            raise HTTPException(404, "User not found")
+        _accrue_user_packages(db, user.id); db.commit()
+        wallet = _raw_user_wallet(db, user.id)
+        lots = db.scalars(select(QSubscriptionLot).where(QSubscriptionLot.user_id == user.id).order_by(QSubscriptionLot.id.desc())).all()
+        return {
+            "user": {"id": user.id, "username": user.username, "display_name": user.display_name},
+            "wallet_q": _q(wallet.balance_micros),
+            "wallet_usd_reference": round(_q(wallet.balance_micros) * _config(db).q_price_microusd / USD_MICROS, 4),
+            "packages": [_subscription_json(x, _config(db), db) for x in lots],
+        }
+
+    @router.post("/admin/users/{user_id}/wallet-adjust")
+    def admin_adjust_user_wallet(user_id: int, body: WalletAdjustmentIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        target = db.get(User, user_id)
+        if not target:
+            raise HTTPException(404, "User not found")
+        amount = int(round(body.amount_q * Q_MICROS))
+        if amount == 0:
+            raise HTTPException(422, "Adjustment cannot be zero")
+        before = _q(_raw_user_wallet(db, user_id).balance_micros)
+        if amount > 0:
+            _system_to_user(db, "PROMOTIONS", user_id, amount, "ADMIN_ADJUSTMENT", reference=f"admin:{u.id}", note=body.reason)
+        else:
+            _user_to_system(db, user_id, "PROMOTIONS", -amount, "ADMIN_ADJUSTMENT", reference=f"admin:{u.id}", note=body.reason)
+        after = _q(_raw_user_wallet(db, user_id).balance_micros)
+        _audit(db, u.id, "USER_WALLET_ADJUSTMENT", target_user_id=user_id, before={"balance_q": before}, after={"balance_q": after, "adjustment_q": body.amount_q}, reason=body.reason)
+        db.commit()
+        return {"ok": True, "balance_q": after}
+
+    @router.put("/admin/subscriptions/{lot_id}")
+    def admin_edit_subscription(lot_id: int, body: UserPackageEditIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        lot = db.get(QSubscriptionLot, lot_id)
+        if not lot:
+            raise HTTPException(404, "Subscription package not found")
+        _accrue_user_packages(db, lot.user_id)
+        before = _package_snapshot(lot, db)
+        ov = _subscription_override(db, lot.id, True)
+        rule = _package_rule(db, lot.package_code)
+
+        if body.clear_daily_override:
+            ov.daily_rate_override = False
+            lot.daily_rate_bps = rule.daily_rate_bps
+        elif body.daily_rate_percent is not None:
+            lot.daily_rate_bps = int(round(body.daily_rate_percent * 100))
+            ov.daily_rate_override = True
+
+        if body.clear_cap_override:
+            ov.cap_percent_override = False
+            requested_cap = int(lot.purchase_usd_micros * rule.cap_percent / 100)
+            lot.cap_usd_micros = requested_cap
+        elif body.cap_percent is not None:
+            requested_cap = int(lot.purchase_usd_micros * body.cap_percent / 100)
+            lot.cap_usd_micros = requested_cap
+            ov.cap_percent_override = True
+
+        if body.status is not None:
+            new_status = body.status.strip().upper()
+            allowed = {"ACTIVE", "PAUSED", "STOPPED", "ADMIN_CANCELLED"}
+            if new_status not in allowed:
+                raise HTTPException(422, "Status must be ACTIVE, PAUSED, STOPPED or ADMIN_CANCELLED")
+            if new_status == "ACTIVE":
+                if _now() >= lot.expires_at:
+                    raise HTTPException(409, "Expired package cannot be resumed")
+                if lot.accrued_usd_micros >= lot.cap_usd_micros:
+                    raise HTTPException(409, "Package has already reached its configured cap")
+            lot.status = new_status
+
+        if lot.status == "ACTIVE" and lot.accrued_usd_micros >= lot.cap_usd_micros:
+            lot.status = "CAP_REACHED"
+        ov.updated_at = _now()
+        after = _package_snapshot(lot, db)
+        _audit(db, u.id, "USER_PACKAGE_EDIT", target_user_id=lot.user_id, lot_id=lot.id, before=before, after=after, reason=body.reason)
+        db.commit()
+        return _subscription_json(lot, _config(db), db)
+
+    @router.get("/admin/audit")
+    def admin_audit(limit: int = 200, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        rows = db.scalars(select(QAdminAuditLog).order_by(QAdminAuditLog.id.desc()).limit(max(1, min(limit, 500)))).all()
+        return [{
+            "id": x.id, "admin": _user_json_brief(db, x.admin_user_id), "action": x.action,
+            "target_user": _user_json_brief(db, x.target_user_id), "subscription_lot_id": x.subscription_lot_id,
+            "before": json.loads(x.before_json or "{}"), "after": json.loads(x.after_json or "{}"),
+            "reason": x.reason, "created_at": x.created_at.isoformat(),
+        } for x in rows]
+
+    @router.get("/admin/payment-wallet-matrix")
+    def admin_payment_wallet_matrix(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        items = []
+        for code, plan in PACKAGE_PLANS.items():
+            for network in ("TRC20", "BEP20"):
+                row = db.scalar(select(QPaymentWallet).where(
+                    QPaymentWallet.package_code == code, QPaymentWallet.network == network, QPaymentWallet.active.is_(True)
+                ).order_by(QPaymentWallet.id.desc()).limit(1))
+                items.append({
+                    "slot_key": f"{code}:{network}", "package_code": code, "package_name": plan["name"],
+                    "price_usd": plan["price_usd"], "network": network,
+                    "wallet": _payment_wallet_json(row) if row else None,
+                })
+        return items
+
+    @router.put("/admin/payment-wallet-matrix/{package_code}/{network}")
+    def admin_set_payment_wallet_slot(package_code: str, network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        code = package_code.strip().upper(); net = network.strip().upper()
+        if code not in PACKAGE_PLANS:
+            raise HTTPException(404, "Package not found")
+        _validate_payment_address(net, body.address.strip())
+        previous = db.scalars(select(QPaymentWallet).where(QPaymentWallet.package_code == code, QPaymentWallet.network == net, QPaymentWallet.active.is_(True))).all()
+        before = [_payment_wallet_json(x) for x in previous]
+        for x in previous:
+            x.active = False; x.updated_at = _now()
+        row = QPaymentWallet(network=net, package_code=code, label=body.label.strip() or f"{PACKAGE_PLANS[code]['name']} {net}", address=body.address.strip(), active=body.active)
+        db.add(row); db.flush()
+        _audit(db, u.id, "PAYMENT_WALLET_SLOT_UPDATE", before={"wallets": before}, after=_payment_wallet_json(row), reason=f"{code} {net} receiving wallet")
+        db.commit(); db.refresh(row)
+        return _payment_wallet_json(row)
+
     @router.get("/admin/payment-wallets")
     def admin_payment_wallets(u: User = Depends(require_admin), db: Session = Depends(get_db)):
         rows = db.scalars(select(QPaymentWallet).order_by(QPaymentWallet.id.desc())).all()
@@ -1431,8 +1767,12 @@ def register_v28(app, current_user, get_db):
         network = body.network.strip().upper()
         _validate_payment_address(network, body.address.strip())
         code = body.package_code.strip().upper() if body.package_code else None
-        if code and code not in PACKAGE_PLANS:
-            raise HTTPException(422, "Unknown package code")
+        if not code or code not in PACKAGE_PLANS:
+            raise HTTPException(422, "Choose one of the five subscription packages")
+        for old_wallet in db.scalars(select(QPaymentWallet).where(
+            QPaymentWallet.package_code == code, QPaymentWallet.network == network, QPaymentWallet.active.is_(True)
+        )).all():
+            old_wallet.active = False; old_wallet.updated_at = _now()
         row = QPaymentWallet(
             network=network, package_code=code, label=body.label.strip(),
             address=body.address.strip(), active=body.active,
@@ -1492,12 +1832,13 @@ def register_v28(app, current_user, get_db):
         if db.scalar(select(QSubscriptionLot).where(QSubscriptionLot.payment_order_id == row.id)):
             raise HTTPException(409, "Package already activated for this payment")
         plan = PACKAGE_PLANS[row.package_code]
+        rule = _package_rule(db, row.package_code)
         now = _now()
         lot = QSubscriptionLot(
             user_id=row.user_id, payment_order_id=row.id, package_code=row.package_code,
             purchase_usd_micros=plan["price_usd"] * USD_MICROS,
-            daily_rate_bps=plan["daily_rate_bps"],
-            cap_usd_micros=plan["price_usd"] * 2 * USD_MICROS,
+            daily_rate_bps=rule.daily_rate_bps,
+            cap_usd_micros=int(plan["price_usd"] * USD_MICROS * rule.cap_percent / 100),
             accrued_usd_micros=0, accrued_q_micros=0,
             started_at=now, expires_at=now + timedelta(days=365),
             last_accrual_date=now.date(), status="ACTIVE",
@@ -1507,7 +1848,7 @@ def register_v28(app, current_user, get_db):
         db.flush()
         _award_subscription_referral(db, row)
         db.commit(); db.refresh(lot)
-        return {"ok": True, "payment": _payment_order_json(db, row), "subscription": _subscription_json(lot, _config(db))}
+        return {"ok": True, "payment": _payment_order_json(db, row), "subscription": _subscription_json(lot, _config(db), db)}
 
     @router.post("/admin/payment-orders/{order_id}/reject")
     def admin_reject_payment(order_id: int, body: DisputeIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -1554,8 +1895,8 @@ def register_v28(app, current_user, get_db):
         rows = db.scalars(select(QLedgerEntry).order_by(QLedgerEntry.id.desc()).limit(limit)).all()
         return [{
             "id": x.id, "tx_id": x.tx_id, "kind": x.kind, "amount_q": _q(x.amount_micros),
-            "from_system": x.from_system_key, "from_user": x.from_user_id,
-            "to_system": x.to_system_key, "to_user": x.to_user_id,
+            "from_system": x.from_system_key, "from_user": x.from_user_id, "from_user_info": _user_json_brief(db, x.from_user_id),
+            "to_system": x.to_system_key, "to_user": x.to_user_id, "to_user_info": _user_json_brief(db, x.to_user_id),
             "reference": x.reference, "note": x.note, "created_at": x.created_at.isoformat(),
         } for x in rows]
 

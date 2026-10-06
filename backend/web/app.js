@@ -1229,29 +1229,39 @@ function showVisionHistory(){
 }
 
 async function startQToQ(){
-  const selected=new Set();
-  openModal("<h3>Q-to-Q coordination</h3><p class='micro'>Only use this for shared plans, availability or polls. Private Q memory is not shared.</p><input id='qtqSearch' placeholder='Search LEMMIQ contacts'><div id='qtqUsers' class='modal-results'></div><textarea id='qtqPrompt' placeholder='What should Q coordinate?'></textarea><textarea id='qtqOptions' placeholder='Options / times — one per line'></textarea><button id='qtqSend' class='primary full'>Send Q request</button>");
+  const selected=new Map();
+  openModal("<h3>Q-to-Q coordination</h3><p class='micro'>Only use this for shared plans, availability or polls. Private Q memory is not shared.</p><div id='qtqSelected' class='qtq-selected'></div><input id='qtqSearch' placeholder='Search and add contacts'><p class='micro'>Select a contact, then search again to add more.</p><div id='qtqUsers' class='modal-results'></div><textarea id='qtqPrompt' placeholder='What should Q coordinate?'></textarea><textarea id='qtqOptions' placeholder='Options / times — one per line'></textarea><button id='qtqSend' class='primary full'>Send Q request</button>");
+  const renderSelected=()=>{
+    const el=$("qtqSelected");
+    if(!el)return;
+    if(!selected.size){el.innerHTML="<p class='micro'>No contacts selected yet.</p>";return}
+    el.innerHTML=`<div class="qtq-selected-head"><strong>${selected.size} selected</strong></div>${[...selected.values()].map(u=>`<span class="qtq-chip">${escapeHtml(u.display_name)} @${escapeHtml(u.username)} <button type="button" data-remove-uid="${u.id}" aria-label="Remove">×</button></span>`).join("")}`;
+    qsa("#qtqSelected [data-remove-uid]").forEach(b=>b.onclick=()=>{selected.delete(Number(b.dataset.removeUid));renderSelected()});
+  };
+  renderSelected();
   $("qtqSearch").oninput=async()=>{
     const q=$("qtqSearch").value.trim();
     if(q.length<2){$("qtqUsers").innerHTML="";return}
     try{
       const users=await api(`/users/search?q=${encodeURIComponent(q)}`);
-      $("qtqUsers").innerHTML=users.map(u=>`<label class="user-result"><span>${escapeHtml(u.display_name)} @${escapeHtml(u.username)}</span><input type="checkbox" data-uid="${u.id}"></label>`).join("");
+      $("qtqUsers").innerHTML=users.map(u=>`<label class="user-result"><span>${escapeHtml(u.display_name)} @${escapeHtml(u.username)}</span><input type="checkbox" data-uid="${u.id}" ${selected.has(u.id)?"checked":""}></label>`).join("");
       qsa("#qtqUsers input[data-uid]").forEach(x=>x.onchange=()=>{
-        const id=Number(x.dataset.uid);
-        x.checked?selected.add(id):selected.delete(id);
+        const id=Number(x.dataset.uid),u=users.find(v=>v.id===id);
+        if(x.checked&&u){selected.set(id,u);$("qtqSearch").value="";$("qtqUsers").innerHTML=""}
+        else selected.delete(id);
+        renderSelected();
       });
     }catch(e){toast(e.message,true)}
   };
   $("qtqSend").onclick=async()=>{
     const prompt=$("qtqPrompt").value.trim();
     const options=$("qtqOptions").value.split("\n").map(x=>x.trim()).filter(Boolean);
-    if(!selected.size||!prompt)return toast("Choose a contact and enter a shared plan.",true);
+    if(!selected.size||!prompt)return toast("Choose at least one contact and enter a shared plan.",true);
     try{
-      await api("/v27/q/coordination",{method:"POST",body:JSON.stringify({target_user_ids:[...selected],kind:options.length?"AVAILABILITY":"PLAN",prompt,options})});
+      await api("/v27/q/coordination",{method:"POST",body:JSON.stringify({target_user_ids:[...selected.keys()],kind:options.length?"AVAILABILITY":"PLAN",prompt,options})});
       closeModal();
       await loadAgentV24();
-      toast("Q-to-Q request sent");
+      toast(`Q-to-Q request sent to ${selected.size} contact${selected.size===1?"":"s"}`);
     }catch(e){toast(e.message,true)}
   };
 }
@@ -1348,7 +1358,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.2").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.3").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

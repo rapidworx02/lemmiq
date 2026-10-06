@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ===============================================
-echo LEMMIQ V2.8.2 - Manual Tester Release APK
+echo LEMMIQ V2.8.3 - Manual Tester Release APK
 echo ===============================================
 
 echo.
@@ -40,12 +40,12 @@ if not exist "%SRC%" (
   exit /b 1
 )
 if not exist "%OUT%" mkdir "%OUT%"
-copy /Y "%SRC%" "%OUT%\LEMMIQ-v2.8.2-manual-release.apk" >nul
+copy /Y "%SRC%" "%OUT%\LEMMIQ-v2.8.3-manual-release.apk" >nul
 
 echo.
 echo SUCCESS
 echo Manual tester APK:
-echo %OUT%\LEMMIQ-v2.8.2-manual-release.apk
+echo %OUT%\LEMMIQ-v2.8.3-manual-release.apk
 echo.
 echo IMPORTANT: This APK is signed with your LEMMIQ upload key, but because it
  echo is installed outside Google Play, Android/Play Protect can still show an

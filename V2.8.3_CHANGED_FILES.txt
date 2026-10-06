@@ -1,0 +1,23 @@
+LEMMIQ V2.8.3 CHANGED FILES
+===========================
+
+backend/app/main.py
+backend/app/v27.py
+backend/app/v28.py
+backend/web/index.html
+backend/web/app.js
+backend/web/styles.css
+backend/web/sw.js
+backend/web/v28.css
+backend/web/v28.js
+
+android/app/build.gradle.kts
+android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+android/build-manual-test-apk.cmd
+
+.github/workflows/v28-ci.yml
+
+V2.8.3_INSTALL.txt
+V2.8.3_CHANGED_FILES.txt
+PLAY_PROTECT_MANUAL_TESTING.txt

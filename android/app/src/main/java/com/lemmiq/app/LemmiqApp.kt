@@ -750,7 +750,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                     vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.")
                                 }catch(e:Exception){mediaError=e.message}
                             }
-                        }){Text("📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
+                        }){Text(if(vm.error?.startsWith("Q Vision") == true)"↻ Retry Q Vision" else "📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
                     }
                     if(a.kind=="CONTACT"){
                         Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
@@ -879,7 +879,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
     var coordSearch by remember{mutableStateOf("")}
     var coordPrompt by remember{mutableStateOf("")}
     var coordOptions by remember{mutableStateOf("")}
-    var selectedTargets by remember{mutableStateOf(setOf<Int>())}
+    var selectedCoordUsers by remember{mutableStateOf<Map<Int,UserDto>>(emptyMap())}
     var visionQuestion by remember{mutableStateOf("")}
     var visionFollowUp by remember{mutableStateOf("")}
 
@@ -1058,12 +1058,37 @@ private fun ChatAgent(vm:LemmiqViewModel){
             text={
                 Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Use Q-to-Q only for shared plans, availability or polls. Private Q memory is never shared.",fontSize=10.sp,color=Muted)
-                    OutlinedTextField(value=coordSearch,onValueChange={coordSearch=it;vm.search(it)},label={Text("Search contacts")},singleLine=true,modifier=Modifier.fillMaxWidth())
-                    Column(Modifier.heightIn(max=150.dp).verticalScroll(rememberScrollState())){
-                        vm.users.take(10).forEach{u->
-                            Row(Modifier.fillMaxWidth().clickable{selectedTargets=if(u.id in selectedTargets)selectedTargets-u.id else selectedTargets+u.id}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
-                                Checkbox(checked=u.id in selectedTargets,onCheckedChange={checked->selectedTargets=if(checked)selectedTargets+u.id else selectedTargets-u.id})
-                                Text("${u.display_name}  @${u.username}",fontSize=11.sp)
+                    if(selectedCoordUsers.isNotEmpty()){
+                        Text("${selectedCoordUsers.size} contact${if(selectedCoordUsers.size==1)"" else "s"} selected",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                        Column(Modifier.heightIn(max=120.dp).verticalScroll(rememberScrollState())){
+                            selectedCoordUsers.values.forEach{u->
+                                Row(Modifier.fillMaxWidth().padding(vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
+                                    Text("${u.display_name}  @${u.username}",fontSize=11.sp,modifier=Modifier.weight(1f))
+                                    TextButton(onClick={selectedCoordUsers=selectedCoordUsers-u.id}){Text("Remove",fontSize=10.sp)}
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        value=coordSearch,
+                        onValueChange={coordSearch=it;vm.search(it)},
+                        label={Text("Search and add contacts")},
+                        singleLine=true,modifier=Modifier.fillMaxWidth()
+                    )
+                    if(coordSearch.length>=2){
+                        Column(Modifier.heightIn(max=150.dp).verticalScroll(rememberScrollState())){
+                            vm.users.take(10).forEach{u->
+                                val checked=u.id in selectedCoordUsers
+                                Row(Modifier.fillMaxWidth().clickable{
+                                    selectedCoordUsers=if(checked)selectedCoordUsers-u.id else selectedCoordUsers+(u.id to u)
+                                    if(!checked){coordSearch="";vm.search("")}
+                                }.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+                                    Checkbox(checked=checked,onCheckedChange={isChecked->
+                                        selectedCoordUsers=if(isChecked)selectedCoordUsers+(u.id to u) else selectedCoordUsers-u.id
+                                        if(isChecked){coordSearch="";vm.search("")}
+                                    })
+                                    Text("${u.display_name}  @${u.username}",fontSize=11.sp)
+                                }
                             }
                         }
                     }
@@ -1073,9 +1098,9 @@ private fun ChatAgent(vm:LemmiqViewModel){
             },
             confirmButton={
                 Button(onClick={
-                    vm.createQCoordination(selectedTargets.toList(),if(coordOptions.isBlank())"PLAN" else "AVAILABILITY",coordPrompt,coordOptions.lines().map{it.trim()}.filter{it.isNotBlank()})
-                    showCoord=false;selectedTargets=emptySet();coordSearch="";coordOptions=""
-                },enabled=selectedTargets.isNotEmpty()&&coordPrompt.isNotBlank()){Text("Send request")}
+                    vm.createQCoordination(selectedCoordUsers.keys.toList(),if(coordOptions.isBlank())"PLAN" else "AVAILABILITY",coordPrompt,coordOptions.lines().map{it.trim()}.filter{it.isNotBlank()})
+                    showCoord=false;selectedCoordUsers=emptyMap();coordSearch="";coordOptions="";vm.search("")
+                },enabled=selectedCoordUsers.isNotEmpty()&&coordPrompt.isNotBlank()){Text("Send to ${selectedCoordUsers.size}")}
             },
             dismissButton={TextButton({showCoord=false}){Text("Cancel")}}
         )

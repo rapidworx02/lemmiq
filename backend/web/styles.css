@@ -205,3 +205,6 @@ dialog{border:0;padding:0;background:transparent;color:inherit;width:min(680px,c
 @media(max-width:900px){
   .sidebar nav button[data-view="q-economy"] span{font-size:15px;letter-spacing:-1px}
 }
+
+/* V2.8.3 Q-to-Q persistent multi-select */
+.qtq-selected{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 10px}.qtq-selected .micro{width:100%}.qtq-selected-head{width:100%;font-size:12px}.qtq-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 9px;border-radius:999px;background:rgba(122,92,255,.14);border:1px solid rgba(122,92,255,.28);font-size:11px}.qtq-chip button{border:0;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;padding:0 2px}

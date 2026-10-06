@@ -614,6 +614,28 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
+    private fun detectedVisionType(name:String,declared:String?,bytes:ByteArray):Pair<String,String>{
+        fun u(i:Int)=if(i<bytes.size) bytes[i].toInt() and 0xFF else -1
+        val mime=when{
+            bytes.size>=3 && u(0)==0xFF && u(1)==0xD8 && u(2)==0xFF -> "image/jpeg"
+            bytes.size>=8 && u(0)==0x89 && bytes.copyOfRange(1,4).toString(Charsets.US_ASCII)=="PNG" -> "image/png"
+            bytes.size>=12 && bytes.copyOfRange(0,4).toString(Charsets.US_ASCII)=="RIFF" && bytes.copyOfRange(8,12).toString(Charsets.US_ASCII)=="WEBP" -> "image/webp"
+            bytes.size>=6 && bytes.copyOfRange(0,6).toString(Charsets.US_ASCII) in setOf("GIF87a","GIF89a") -> "image/gif"
+            else -> declared?.substringBefore(';')?.lowercase().takeIf{it in setOf("image/jpeg","image/png","image/webp","image/gif")} ?: when(name.substringAfterLast('.',"").lowercase()){
+                "png"->"image/png";"webp"->"image/webp";"gif"->"image/gif";else->"image/jpeg"
+            }
+        }
+        val safeName=when(mime){
+            "image/png"->name.substringBeforeLast('.',name)+".png"
+            "image/webp"->name.substringBeforeLast('.',name)+".webp"
+            "image/gif"->name.substringBeforeLast('.',name)+".gif"
+            else->name.substringBeforeLast('.',name)+".jpg"
+        }
+        return safeName to mime
+    }
+
+    private fun qVisionFriendlyError():String = "Q Vision couldn't analyse this image. Tap Ask Q Vision again to retry."
+
     fun refreshVision()=viewModelScope.launch{
         runCatching{visionHistory=api.visionList();qHome=api.qHome()}.onFailure{error=it.message}
     }
@@ -626,20 +648,22 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{x->if(x.moveToFirst())name=x.getString(0)?:name}
                 val bytes=cr.openInputStream(uri)?.use{it.readBytes()}?:throw IllegalArgumentException("Cannot read selected image")
                 if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
-                Triple(name,cr.getType(uri)?:"image/jpeg",bytes)
+                val detected=detectedVisionType(name,cr.getType(uri),bytes)
+                Triple(detected.first,detected.second,bytes)
             }
             activeVision=api.visionScan(data.first,data.second,data.third,question)
             visionHistory=api.visionList();qHome=api.qHome()
-        }catch(e:Exception){error=e.message}finally{visionBusy=false}
+        }catch(e:Exception){error=qVisionFriendlyError()}finally{visionBusy=false}
     }
 
     fun scanVisionBytes(bytes:ByteArray,question:String="What is in this image? Give me the useful details.")=viewModelScope.launch{
         visionBusy=true;error=null
         try{
             if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
-            activeVision=api.visionScan("camera.jpg","image/jpeg",bytes,question)
+            val detected=detectedVisionType("q-vision",null,bytes)
+            activeVision=api.visionScan(detected.first,detected.second,bytes,question)
             visionHistory=api.visionList();qHome=api.qHome()
-        }catch(e:Exception){error=e.message}finally{visionBusy=false}
+        }catch(e:Exception){error=qVisionFriendlyError()}finally{visionBusy=false}
     }
 
     fun askVision(question:String)=viewModelScope.launch{
