@@ -659,6 +659,28 @@ class Api(private val store:SessionStore){
         return gson.fromJson(req(b("$base/v28/market/listings").post(rb).build()),QMarketListingDto::class.java)
     }
 
+    suspend fun qUploadListingMedia(listingId:Int,name:String,mime:String,bytes:ByteArray):QMarketMediaDto=withContext(Dispatchers.IO){
+        val body=bytes.toRequestBody(mime.toMediaType())
+        val multipart=MultipartBody.Builder().setType(MultipartBody.FORM)
+            .addFormDataPart("file",name,body).build()
+        val request=b("$base/v28/market/listings/$listingId/media").post(multipart).build()
+        mediaClient.newCall(request).execute().use{
+            val text=it.body?.string().orEmpty()
+            if(!it.isSuccessful) throw IOException(
+                runCatching{gson.fromJson(text,Map::class.java)["detail"]?.toString()}.getOrNull()
+                    ?: "HTTP ${it.code}"
+            )
+            gson.fromJson(text,QMarketMediaDto::class.java)
+        }
+    }
+
+    suspend fun qDeleteListingMedia(listingId:Int,mediaId:Int){
+        req(b("$base/v28/market/listings/$listingId/media/$mediaId").delete().build())
+    }
+
+    suspend fun qSetListingCover(listingId:Int,mediaId:Int):QMarketListingDto =
+        gson.fromJson(req(b("$base/v28/market/listings/$listingId/media/$mediaId/cover").post("{}".toRequestBody(json)).build()),QMarketListingDto::class.java)
+
     suspend fun qBuyListing(id:Int):QMarketOrderDto{
         val rb=gson.toJson(mapOf("quantity" to 1)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v28/market/listings/$id/buy").post(rb).build()),QMarketOrderDto::class.java)

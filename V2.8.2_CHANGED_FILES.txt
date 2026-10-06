@@ -1,0 +1,23 @@
+LEMMIQ V2.8.2 PATCH FILES
+
+backend/app/main.py
+backend/app/v28.py
+backend/web/index.html
+backend/web/app.js
+backend/web/v28.js
+backend/web/v28.css
+backend/web/sw.js
+
+android/app/build.gradle.kts
+android/app/src/main/java/com/lemmiq/app/Models.kt
+android/app/src/main/java/com/lemmiq/app/Api.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+android/app/src/main/java/com/lemmiq/app/V28Q.kt
+android/build-manual-test-apk.cmd
+android/build-debug-test-apk.cmd
+
+.github/workflows/v28-ci.yml
+
+V2.8.2_INSTALL.txt
+PLAY_PROTECT_MANUAL_TESTING.txt
+V2.8.2_CHANGED_FILES.txt

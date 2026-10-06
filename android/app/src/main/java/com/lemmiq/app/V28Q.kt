@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -12,12 +13,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
 import java.util.Locale
 
 private val Q28Bg=Color(0xFFF7F7FB)
@@ -44,7 +50,7 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 Spacer(Modifier.height(8.dp))
                 Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)
-                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled in V2.8",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled in V2.8.2",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
             }
         }
         Row(Modifier.fillMaxWidth().padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
@@ -70,9 +76,15 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 Text("Pay ${p.price_usd.toInt()} USDT. Select the exact network you will use.")
                 Spacer(Modifier.height(8.dp))
                 Text("Package rate: ${p.daily_rate_percent}% daily · 200% package ceiling · 365-day validity",fontSize=12.sp,color=Q28Muted)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick={buyPlan=null;vm.qCreatePaymentOrder(p.code,"TRC20")},modifier=Modifier.fillMaxWidth()){Text("USDT TRC20")}
+                Spacer(Modifier.height(9.dp))
+                OutlinedButton(onClick={buyPlan=null;vm.qCreatePaymentOrder(p.code,"BEP20")},modifier=Modifier.fillMaxWidth()){Text("USDT BEP20")}
+                Spacer(Modifier.height(10.dp))
+                Text("⚠ Send only on the selected network. Sending on another network may result in loss of funds.",fontSize=10.sp,color=Color(0xFFB7791F))
             }},
-            confirmButton={Button(onClick={buyPlan=null;vm.qCreatePaymentOrder(p.code,"TRC20")}){Text("USDT TRC20")}},
-            dismissButton={Row{TextButton(onClick={buyPlan=null;vm.qCreatePaymentOrder(p.code,"BEP20")}){Text("USDT BEP20")};TextButton(onClick={buyPlan=null}){Text("Cancel")}}}
+            confirmButton={},
+            dismissButton={TextButton(onClick={buyPlan=null}){Text("Cancel")}}
         )
     }
 
@@ -174,20 +186,36 @@ private fun Q28PackagesTab(vm:LemmiqViewModel,onBuy:(QPlanDto)->Unit){
 @Composable
 private fun Q28PaymentDialog(vm:LemmiqViewModel,o:QPaymentOrderDto){
     var tx by remember(o.id){mutableStateOf(o.tx_hash?:"")}
+    var copied by remember(o.id){mutableStateOf("")}
+    var enlarged by remember(o.id){mutableStateOf(false)}
+    val clipboard=LocalClipboardManager.current
     val pending=o.status!="CREATED"&&o.status!="REJECTED"
     AlertDialog(
         onDismissRequest={vm.qDismissPayment()},
         title={Text(if(pending)"Payment submitted" else "Pay ${o.expected_usdt} USDT")},
         text={
             Column(horizontalAlignment=Alignment.CenterHorizontally){
-                Text("${o.network} · ${o.order_code}",fontSize=11.sp,color=Q28Muted)
+                Text("${o.network} · ${o.order_code}",fontSize=12.sp,color=Q28Muted)
                 Spacer(Modifier.height(8.dp))
                 o.wallet?.let{w->
-                    AsyncImage(model=vm.serverUrl+w.qr_url,contentDescription="USDT payment QR",modifier=Modifier.size(180.dp))
-                    Text(w.address,fontSize=10.sp,modifier=Modifier.fillMaxWidth().padding(6.dp),color=Q28Muted)
+                    AsyncImage(
+                        model=vm.serverUrl+w.qr_url,contentDescription="USDT payment QR",
+                        modifier=Modifier.size(260.dp).clickable{enlarged=true}
+                    )
+                    Text("Tap QR to enlarge",fontSize=10.sp,color=Q28Muted)
+                    Spacer(Modifier.height(7.dp))
+                    Text("Wallet address",fontSize=10.sp,color=Q28Muted,modifier=Modifier.fillMaxWidth())
+                    Text(w.address,fontSize=10.sp,modifier=Modifier.fillMaxWidth().padding(vertical=5.dp),color=Color(0xFF303040))
+                    OutlinedButton(onClick={clipboard.setText(AnnotatedString(w.address));copied="Address copied ✓"},modifier=Modifier.fillMaxWidth()){Text("Copy address")}
                 }
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(7.dp)){
+                    OutlinedButton(onClick={clipboard.setText(AnnotatedString(o.expected_usdt.toString()));copied="Amount copied ✓"},modifier=Modifier.weight(1f)){Text("Copy amount",fontSize=11.sp)}
+                    OutlinedButton(onClick={clipboard.setText(AnnotatedString(o.order_code));copied="Order ID copied ✓"},modifier=Modifier.weight(1f)){Text("Copy order",fontSize=11.sp)}
+                }
+                if(copied.isNotBlank())Text(copied,color=Q28Mint,fontSize=10.sp,modifier=Modifier.padding(top=4.dp))
+                Text("⚠ Send USDT using ${o.network} only.",fontSize=10.sp,color=Color(0xFFB7791F),modifier=Modifier.padding(vertical=8.dp))
                 if(!pending){
-                    OutlinedTextField(tx,{tx=it},label={Text("Transaction hash")},modifier=Modifier.fillMaxWidth())
+                    OutlinedTextField(tx,{tx=it},label={Text("Transaction hash")},modifier=Modifier.fillMaxWidth(),singleLine=true)
                     Text("Admin manually verifies network, address and amount before activation.",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=7.dp))
                 }else Text("Status: ${o.status}. Package activates after admin verification.",fontSize=12.sp)
             }
@@ -198,6 +226,14 @@ private fun Q28PaymentDialog(vm:LemmiqViewModel,o:QPaymentOrderDto){
         },
         dismissButton={if(!pending)TextButton(onClick={vm.qDismissPayment()}){Text("Cancel")}}
     )
+    if(enlarged){
+        AlertDialog(
+            onDismissRequest={enlarged=false},
+            title={Text("${o.network} QR")},
+            text={o.wallet?.let{w->AsyncImage(model=vm.serverUrl+w.qr_url,contentDescription="Large payment QR",modifier=Modifier.fillMaxWidth().aspectRatio(1f))}},
+            confirmButton={TextButton(onClick={enlarged=false}){Text("Close")}}
+        )
+    }
 }
 
 @Composable
@@ -207,6 +243,11 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
     var price by remember{mutableStateOf("")}
     var showSell by remember{mutableStateOf(false)}
     var editListing by remember{mutableStateOf<QMarketListingDto?>(null)}
+    var selectedMedia by remember{mutableStateOf<List<Uri>>(emptyList())}
+    val context=LocalContext.current
+    val uriHandler=LocalUriHandler.current
+    val mediaPicker=rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris->selectedMedia=uris.take(10)}
+
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         item{
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
@@ -219,17 +260,36 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
                 Text("Create listing",fontWeight=FontWeight.Bold)
                 OutlinedTextField(title,{title=it},label={Text("Product or service")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(desc,{desc=it},label={Text("Description")},modifier=Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick={mediaPicker.launch(arrayOf("image/*","video/*","application/pdf","text/plain","text/csv","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))},modifier=Modifier.fillMaxWidth()){Text("Add photos, videos or files")}
+                if(selectedMedia.isNotEmpty()){
+                    Text("${selectedMedia.size} attachment(s) selected",fontSize=11.sp,color=Q28Muted,modifier=Modifier.padding(vertical=6.dp))
+                    TextButton(onClick={selectedMedia=emptyList()}){Text("Clear selected files")}
+                }
                 OutlinedTextField(price,{price=it},label={Text("Price in Q")},modifier=Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
-                Button(onClick={vm.qCreateListing(title,desc,price.toDoubleOrNull()?:0.0);title="";desc="";price="";showSell=false},enabled=title.isNotBlank()&&(price.toDoubleOrNull()?:0.0)>0){Text("List for Q")}
+                Button(onClick={
+                    vm.qCreateListingWithMedia(title,desc,price.toDoubleOrNull()?:0.0,1,selectedMedia)
+                    title="";desc="";price="";selectedMedia=emptyList();showSell=false
+                },enabled=title.isNotBlank()&&(price.toDoubleOrNull()?:0.0)>0&&!vm.qEconomyBusy){Text(if(vm.qEconomyBusy)"Uploading…" else "List for Q")}
+                Text("Up to 10 attachments · images/files 20 MB · videos 100 MB",fontSize=9.sp,color=Q28Muted,modifier=Modifier.padding(top=6.dp))
             }}
         }
         items(vm.qMarketListings,key={"market-${it.id}"}){x->
             Card(shape=RoundedCornerShape(18.dp)){
                 Column(Modifier.padding(15.dp)){
+                    x.media.firstOrNull{it.kind=="PHOTO"}?.let{m->
+                        AsyncImage(model=vm.serverUrl+m.media_url,contentDescription=x.title,modifier=Modifier.fillMaxWidth().height(170.dp).clickable{uriHandler.openUri(vm.serverUrl+m.media_url)})
+                        Spacer(Modifier.height(8.dp))
+                    }
                     Text(x.title,fontWeight=FontWeight.Black,fontSize=17.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
                     if(x.description.isNotBlank())Text(x.description,color=Q28Muted,fontSize=11.sp,maxLines=3,overflow=TextOverflow.Ellipsis)
-                    Text("@${x.seller?.username?:"seller"} · ${x.inventory} available",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=5.dp))
+                    if(x.media.isNotEmpty()){
+                        LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp),modifier=Modifier.padding(top=6.dp)){
+                            items(x.media,key={it.id}){m->AssistChip(onClick={uriHandler.openUri(vm.serverUrl+(if(m.kind=="FILE")m.download_url else m.media_url))},label={Text(if(m.kind=="PHOTO")"Photo" else if(m.kind=="VIDEO")"Video" else m.name.take(18),fontSize=9.sp)})}
+                        }
+                    }
+                    Text("@${x.seller?.username?:"seller"} · ${x.inventory} available · ${x.media.size} attachment(s)",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=5.dp))
                     Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically){
                         Column(Modifier.weight(1f)){Text("${q28Q(x.price_q)} Q",fontWeight=FontWeight.Black,fontSize=20.sp);Text("≈ ${q28Usd(x.price_usd_reference)} reference",fontSize=10.sp,color=Q28Muted)}
                         if(x.seller?.id!=vm.store.userId)Button(onClick={vm.qBuyListing(x.id)}){Text("Buy")}
@@ -241,10 +301,7 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
         if(vm.qMyListings.isEmpty())item{Text("No listings yet.",color=Q28Muted)}
         items(vm.qMyListings,key={"mine-${it.id}"}){x->
             Card(shape=RoundedCornerShape(17.dp)){Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
-                Column(Modifier.weight(1f)){
-                    Text(x.title,fontWeight=FontWeight.Bold)
-                    Text("${q28Q(x.price_q)} Q · ${x.inventory} available · ${if(x.active)"Active" else "Paused"}",fontSize=10.sp,color=Q28Muted)
-                }
+                Column(Modifier.weight(1f)){Text(x.title,fontWeight=FontWeight.Bold);Text("${q28Q(x.price_q)} Q · ${x.inventory} available · ${x.media.size} attachment(s) · ${if(x.active)"Active" else "Paused"}",fontSize=10.sp,color=Q28Muted)}
                 TextButton(onClick={editListing=x}){Text("Edit")}
             }}
         }
@@ -272,19 +329,19 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
         var einventory by remember(x.id){mutableStateOf(x.inventory.toString())}
         var eactive by remember(x.id){mutableStateOf(x.active)}
         AlertDialog(
-            onDismissRequest={editListing=null},
-            title={Text("Edit Q Market listing")},
+            onDismissRequest={editListing=null},title={Text("Edit Q Market listing")},
             text={Column{
                 OutlinedTextField(etitle,{etitle=it},label={Text("Title")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(edesc,{edesc=it},label={Text("Description")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(eprice,{eprice=it},label={Text("Price in Q")},modifier=Modifier.fillMaxWidth())
                 OutlinedTextField(einventory,{einventory=it},label={Text("Inventory")},modifier=Modifier.fillMaxWidth())
                 Row(verticalAlignment=Alignment.CenterVertically){Checkbox(checked=eactive,onCheckedChange={eactive=it});Text("Listing active")}
+                if(x.media.isNotEmpty()){
+                    Text("Attachments",fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=8.dp))
+                    x.media.take(6).forEach{m->Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("${if(m.kind=="PHOTO")"🖼" else if(m.kind=="VIDEO")"🎥" else "📎"} ${m.name.take(20)}",fontSize=10.sp,modifier=Modifier.weight(1f));if(m.kind=="PHOTO"&&!m.is_cover)TextButton(onClick={vm.qSetListingCover(x.id,m.id)}){Text("Cover",fontSize=9.sp)};TextButton(onClick={vm.qDeleteListingMedia(x.id,m.id)}){Text("Remove",fontSize=9.sp)}}}
+                }
             }},
-            confirmButton={Button(onClick={
-                vm.qUpdateListing(x,etitle,edesc,eprice.toDoubleOrNull()?:0.0,einventory.toIntOrNull()?:1,eactive)
-                editListing=null
-            },enabled=etitle.isNotBlank()&&(eprice.toDoubleOrNull()?:0.0)>0&&(einventory.toIntOrNull()?:0)>0){Text("Save")}},
+            confirmButton={Button(onClick={vm.qUpdateListing(x,etitle,edesc,eprice.toDoubleOrNull()?:0.0,einventory.toIntOrNull()?:1,eactive);editListing=null},enabled=etitle.isNotBlank()&&(eprice.toDoubleOrNull()?:0.0)>0&&(einventory.toIntOrNull()?:0)>0){Text("Save")}},
             dismissButton={TextButton(onClick={editListing=null}){Text("Cancel")}}
         )
     }
@@ -301,7 +358,7 @@ private fun Q28ReferralTab(vm:LemmiqViewModel){
                 Text("Refer & Earn",fontWeight=FontWeight.Black,fontSize=21.sp)
                 Text("Your code",fontSize=11.sp,color=Q28Muted)
                 Text(vm.qWallet?.referral_code?:"—",fontSize=25.sp,fontWeight=FontWeight.Black,color=Q28Purple,modifier=Modifier.padding(vertical=10.dp))
-                Text("Current referrer reward: ${q28Q(vm.qWallet?.referral_reward_q?:0.0)} Q",fontSize=11.sp,color=Q28Muted)
+                Text("Free signup referral: ${q28Q(vm.qWallet?.referral_reward_q?:0.0)} Q. Package referrals are paid when the referred user's package payment is approved.",fontSize=11.sp,color=Q28Muted)
                 Button(onClick={clipboard.setText(AnnotatedString(vm.qWallet?.referral_code?:""))}){Text("Copy referral code")}
             }}
         }
@@ -314,9 +371,25 @@ private fun Q28ReferralTab(vm:LemmiqViewModel){
                 Text("Referral claims are limited to new accounts and one referral per account.",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=6.dp))
             }}
         }
-        item{Text("${r?.count?:0} referrals · ${q28Q(r?.earned_q?:0.0)} Q earned",fontWeight=FontWeight.Bold)}
+        item{
+            Card(shape=RoundedCornerShape(18.dp)){Column(Modifier.padding(15.dp)){
+                Text("My referrals",fontWeight=FontWeight.Black,fontSize=19.sp)
+                Text("${r?.count?:0} referred · ${r?.paid_users?:0} paid subscriber(s)",fontSize=11.sp,color=Q28Muted)
+                Text("${q28Q(r?.earned_q?:0.0)} Q earned${if((r?.pending_q?:0.0)>0)" · ${q28Q(r?.pending_q?:0.0)} Q pending" else ""}",fontWeight=FontWeight.Bold,color=Q28Purple,modifier=Modifier.padding(top=4.dp))
+            }}
+        }
+        if((r?.items?:emptyList()).isEmpty())item{Text("No referrals yet.",color=Q28Muted)}
         items(r?.items?:emptyList(),key={it.user_id}){x->
-            Card(shape=RoundedCornerShape(15.dp)){Row(Modifier.fillMaxWidth().padding(13.dp)){Text("User #${x.user_id}",Modifier.weight(1f));Text("+${q28Q(x.reward_q)} Q",color=Q28Mint,fontWeight=FontWeight.Bold)}}
+            Card(shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(14.dp)){
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){Text(x.display_name.ifBlank{x.username.ifBlank{"User #${x.user_id}"}},fontWeight=FontWeight.Bold);Text("@${x.username} · ${x.current_tier}",fontSize=10.sp,color=Q28Muted)}
+                    Column(horizontalAlignment=Alignment.End){Text("${q28Q(x.reward_q)} Q",fontWeight=FontWeight.Black,color=Q28Mint);if(x.pending_q>0)Text("${q28Q(x.pending_q)} pending",fontSize=9.sp,color=Q28Muted)}
+                }
+                if(x.events.isNotEmpty()){
+                    Spacer(Modifier.height(7.dp))
+                    x.events.forEach{e->Row(Modifier.fillMaxWidth().padding(vertical=3.dp)){Text(e.label,fontSize=10.sp,modifier=Modifier.weight(1f));Text("+${q28Q(e.reward_q)} Q · ${e.status}",fontSize=10.sp,fontWeight=FontWeight.Bold)}}
+                }
+            }}
         }
     }
 }

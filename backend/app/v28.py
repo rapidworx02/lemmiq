@@ -4,7 +4,7 @@ Centralised Q ledger + wallet, usage mining, referrals, subscription lots,
 manual USDT (TRC20/BEP20) payment approval, Q Marketplace, escrow, and
 browser-first admin controls.
 
-Q is an internal utility unit in V2.8. Cash-out is deliberately disabled.
+Q is an internal utility unit in V2.8.2. Cash-out is deliberately disabled.
 """
 from __future__ import annotations
 
@@ -18,13 +18,14 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .database import Base
 from .models import User
+from . import media_store
 
 Q_MICROS = 1_000_000
 USD_MICROS = 1_000_000
@@ -53,6 +54,25 @@ ADMIN_ROLES = {
     "MASTER_ADMIN", "FINANCE_ADMIN", "MARKETPLACE_ADMIN",
     "SUPPORT_ADMIN", "RISK_ADMIN", "READ_ONLY",
 }
+
+REFERRAL_PACKAGE_DEFAULT_Q = {
+    "STARTER_10": 10,
+    "PLUS_50": 25,
+    "PRO_100": 50,
+    "PREMIUM_500": 200,
+    "ELITE_1000": 400,
+}
+
+MARKET_ALLOWED_MIME = {
+    "image/jpeg": "PHOTO", "image/png": "PHOTO", "image/webp": "PHOTO",
+    "video/mp4": "VIDEO", "video/webm": "VIDEO", "video/quicktime": "VIDEO",
+    "application/pdf": "FILE", "text/plain": "FILE", "text/csv": "FILE",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "FILE",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "FILE",
+}
+MARKET_IMAGE_FILE_MAX = 20 * 1024 * 1024
+MARKET_VIDEO_MAX = 100 * 1024 * 1024
+MARKET_MAX_ATTACHMENTS = 10
 
 
 def utcnow():
@@ -124,6 +144,29 @@ class QReferral(Base):
     referrer_reward_micros: Mapped[int] = mapped_column(BigInteger, default=0)
     referred_reward_micros: Mapped[int] = mapped_column(BigInteger, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QReferralRewardRule(Base):
+    __tablename__ = "q_referral_reward_rules"
+    package_code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80), default="")
+    reward_micros: Mapped[int] = mapped_column(BigInteger, default=0)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class QReferralEarning(Base):
+    __tablename__ = "q_referral_earnings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    referrer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    referred_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(40), index=True)
+    package_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    payment_order_id: Mapped[int] = mapped_column(ForeignKey("q_payment_orders.id"), unique=True, index=True)
+    reward_micros: Mapped[int] = mapped_column(BigInteger, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="PAID", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class QAdminRole(Base):
@@ -198,6 +241,22 @@ class QMarketListing(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class QMarketMedia(Base):
+    __tablename__ = "q_market_media"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    listing_id: Mapped[int] = mapped_column(ForeignKey("q_market_listings.id"), index=True)
+    uploader_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True)
+    original_name: Mapped[str] = mapped_column(String(190), default="Attachment")
+    mime_type: Mapped[str] = mapped_column(String(120), default="application/octet-stream")
+    object_key: Mapped[str] = mapped_column(String(240))
+    access_token: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_cover: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class QMarketOrder(Base):
     __tablename__ = "q_market_orders"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -255,6 +314,14 @@ class AdminConfigIn(BaseModel):
     signup_bonus_q: float | None = Field(default=None, ge=0, le=100000)
     referral_referrer_q: float | None = Field(default=None, ge=0, le=100000)
     referral_referred_q: float | None = Field(default=None, ge=0, le=100000)
+
+
+class ReferralRulesIn(BaseModel):
+    starter_10_q: float = Field(ge=0, le=1_000_000)
+    plus_50_q: float = Field(ge=0, le=1_000_000)
+    pro_100_q: float = Field(ge=0, le=1_000_000)
+    premium_500_q: float = Field(ge=0, le=1_000_000)
+    elite_1000_q: float = Field(ge=0, le=1_000_000)
 
 
 class TreasuryTransferIn(BaseModel):
@@ -484,6 +551,89 @@ def apply_signup_referral(db: Session, new_user: User, code: str | None) -> None
     ))
 
 
+def _referral_rule_json(row: QReferralRewardRule):
+    return {
+        "package_code": row.package_code,
+        "label": row.label or PACKAGE_PLANS.get(row.package_code, {}).get("name", row.package_code),
+        "reward_q": _q(row.reward_micros),
+        "active": bool(row.active),
+    }
+
+
+def _seed_referral_rules(db: Session):
+    for code, reward_q in REFERRAL_PACKAGE_DEFAULT_Q.items():
+        if not db.get(QReferralRewardRule, code):
+            db.add(QReferralRewardRule(
+                package_code=code,
+                label=PACKAGE_PLANS[code]["name"],
+                reward_micros=int(reward_q * Q_MICROS),
+                active=True,
+            ))
+
+
+def _market_media_json(row: QMarketMedia):
+    url = f"/v28/market/media/{row.id}/{row.access_token}"
+    return {
+        "id": row.id, "kind": row.kind, "name": row.original_name,
+        "mime_type": row.mime_type, "size_bytes": row.size_bytes,
+        "is_cover": bool(row.is_cover), "sort_order": row.sort_order,
+        "media_url": url, "download_url": url + "?download=1",
+        "created_at": row.created_at.isoformat(),
+    }
+
+
+def _verify_market_bytes(mime: str, payload: bytes):
+    if mime == "image/jpeg" and not payload.startswith(b"\xff\xd8\xff"):
+        raise HTTPException(415, "File bytes do not match JPEG")
+    if mime == "image/png" and not payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise HTTPException(415, "File bytes do not match PNG")
+    if mime == "image/webp" and not (payload.startswith(b"RIFF") and payload[8:12] == b"WEBP"):
+        raise HTTPException(415, "File bytes do not match WebP")
+    if mime == "application/pdf" and not payload.startswith(b"%PDF-"):
+        raise HTTPException(415, "File bytes do not match PDF")
+    if mime == "video/mp4" and b"ftyp" not in payload[:32]:
+        raise HTTPException(415, "File bytes do not match MP4")
+
+
+def _active_tier_for_user(db: Session, uid: int) -> str:
+    now = _now()
+    lots = db.scalars(select(QSubscriptionLot).where(
+        QSubscriptionLot.user_id == uid, QSubscriptionLot.expires_at > now
+    )).all()
+    if not lots:
+        return "Free"
+    best = max(lots, key=lambda x: PACKAGE_PLANS.get(x.package_code, {}).get("price_usd", 0))
+    return PACKAGE_PLANS.get(best.package_code, {}).get("name", best.package_code)
+
+
+def _award_subscription_referral(db: Session, payment: QPaymentOrder):
+    link = db.scalar(select(QReferral).where(QReferral.referred_user_id == payment.user_id))
+    if not link:
+        return None
+    existing = db.scalar(select(QReferralEarning).where(QReferralEarning.payment_order_id == payment.id))
+    if existing:
+        return existing
+    rule = db.get(QReferralRewardRule, payment.package_code)
+    if not rule or not rule.active or rule.reward_micros <= 0:
+        return None
+    earning = QReferralEarning(
+        referrer_user_id=link.referrer_user_id, referred_user_id=payment.user_id,
+        event_type="PACKAGE_PURCHASE", package_code=payment.package_code,
+        payment_order_id=payment.id, reward_micros=rule.reward_micros, status="PENDING",
+    )
+    db.add(earning)
+    treasury = _system(db, "REFERRALS")
+    if treasury.balance_micros >= rule.reward_micros:
+        _system_to_user(
+            db, "REFERRALS", link.referrer_user_id, rule.reward_micros,
+            "REFERRAL_PACKAGE_REWARD", reference=f"payment:{payment.id}",
+            note=f"Referral reward for {PACKAGE_PLANS.get(payment.package_code, {}).get('name', payment.package_code)}",
+        )
+        earning.status = "PAID"
+        earning.paid_at = _now()
+    return earning
+
+
 def _plan_json(code: str, cfg: QEconomyConfig):
     p = PACKAGE_PLANS[code]
     price_usd = p["price_usd"]
@@ -595,6 +745,9 @@ def _admin_role(db: Session, uid: int) -> QAdminRole | None:
 def _listing_json(db: Session, row: QMarketListing):
     seller = db.get(User, row.seller_id)
     cfg = _config(db)
+    media = db.scalars(select(QMarketMedia).where(QMarketMedia.listing_id == row.id).order_by(
+        QMarketMedia.is_cover.desc(), QMarketMedia.sort_order, QMarketMedia.id
+    )).all()
     return {
         "id": row.id,
         "seller": {"id": seller.id, "username": seller.username, "display_name": seller.display_name} if seller else None,
@@ -606,6 +759,7 @@ def _listing_json(db: Session, row: QMarketListing):
         "price_usd_reference": round(_q(row.price_micros) * cfg.q_price_microusd / USD_MICROS, 4),
         "inventory": row.inventory,
         "active": row.active,
+        "media": [_market_media_json(x) for x in media],
         "created_at": row.created_at.isoformat(),
         "updated_at": row.updated_at.isoformat(),
     }
@@ -711,6 +865,7 @@ def register_v28(app, current_user, get_db):
                     db.add(QSystemWallet(key=key, label=key.replace("_", " ").title(), balance_micros=opening_q * Q_MICROS))
                     _ledger(db, "GENESIS", opening_q * Q_MICROS, to_system=key, reference="V2.8_GENESIS")
             _config(db)
+            _seed_referral_rules(db)
             db.commit()
 
             username = os.getenv("LEMMIQ_MASTER_ADMIN_USERNAME", "").strip().lower()
@@ -734,13 +889,14 @@ def register_v28(app, current_user, get_db):
     def config(db: Session = Depends(get_db)):
         cfg = _config(db)
         return {
-            "version": "2.8.1",
+            "version": "2.8.2",
             "q_reference_usd": cfg.q_price_microusd / USD_MICROS,
             "marketplace_fee_percent": cfg.marketplace_fee_bps / 100,
             "cashout_enabled": bool(cfg.cashout_enabled),
             "max_supply_q": 1_000_000_000,
             "initial_unlocked_q": 10_000_000,
             "plans": [_plan_json(code, cfg) for code in PACKAGE_PLANS],
+            "referral_package_rewards": [_referral_rule_json(x) for x in db.scalars(select(QReferralRewardRule).order_by(QReferralRewardRule.package_code)).all()],
             "networks": sorted(NETWORKS),
         }
 
@@ -817,11 +973,65 @@ def register_v28(app, current_user, get_db):
     @router.get("/referrals")
     def referrals(u: User = Depends(current_user), db: Session = Depends(get_db)):
         rows = db.scalars(select(QReferral).where(QReferral.referrer_user_id == u.id).order_by(QReferral.id.desc())).all()
+        items = []
+        total_paid = 0
+        total_pending = 0
+        paid_users = 0
+        for link in rows:
+            referred = db.get(User, link.referred_user_id)
+            earnings = db.scalars(select(QReferralEarning).where(
+                QReferralEarning.referrer_user_id == u.id,
+                QReferralEarning.referred_user_id == link.referred_user_id,
+            ).order_by(QReferralEarning.id)).all()
+            package_paid = sum(x.reward_micros for x in earnings if x.status == "PAID")
+            package_pending = sum(x.reward_micros for x in earnings if x.status == "PENDING")
+            pending_orders = db.scalars(select(QPaymentOrder).where(
+                QPaymentOrder.user_id == link.referred_user_id, QPaymentOrder.status == "PENDING"
+            )).all()
+            pending_potential = 0
+            for po in pending_orders:
+                rule = db.get(QReferralRewardRule, po.package_code)
+                if rule and rule.active:
+                    pending_potential += rule.reward_micros
+            approved_count = db.scalar(select(func.count()).select_from(QPaymentOrder).where(
+                QPaymentOrder.user_id == link.referred_user_id, QPaymentOrder.status == "APPROVED"
+            )) or 0
+            if approved_count:
+                paid_users += 1
+            signup_paid = link.referrer_reward_micros
+            earned = signup_paid + package_paid
+            pending = package_pending + pending_potential
+            total_paid += earned
+            total_pending += pending
+            events = [{
+                "type": "FREE_SIGNUP", "label": "Free signup referral",
+                "reward_q": _q(signup_paid), "status": "PAID",
+                "created_at": link.created_at.isoformat(),
+            }]
+            events += [{
+                "type": x.event_type,
+                "label": PACKAGE_PLANS.get(x.package_code or "", {}).get("name", x.package_code or x.event_type),
+                "package_code": x.package_code, "reward_q": _q(x.reward_micros),
+                "status": x.status, "created_at": x.created_at.isoformat(),
+                "paid_at": x.paid_at.isoformat() if x.paid_at else None,
+            } for x in earnings]
+            items.append({
+                "user_id": link.referred_user_id,
+                "username": referred.username if referred else "",
+                "display_name": referred.display_name if referred else "",
+                "current_tier": _active_tier_for_user(db, link.referred_user_id),
+                "reward_q": _q(earned),
+                "pending_q": _q(pending),
+                "created_at": link.created_at.isoformat(),
+                "events": events,
+            })
         return {
             "code": _referral_code(u),
             "count": len(rows),
-            "earned_q": _q(sum(x.referrer_reward_micros for x in rows)),
-            "items": [{"user_id": x.referred_user_id, "reward_q": _q(x.referrer_reward_micros), "created_at": x.created_at.isoformat()} for x in rows],
+            "paid_users": paid_users,
+            "earned_q": _q(total_paid),
+            "pending_q": _q(total_pending),
+            "items": items,
         }
 
     @router.post("/payments/orders")
@@ -929,6 +1139,88 @@ def register_v28(app, current_user, get_db):
         row.active = body.active; row.updated_at = _now()
         db.commit()
         return _listing_json(db, row)
+
+    @router.post("/market/listings/{listing_id}/media")
+    async def upload_market_media(listing_id: int, file: UploadFile = File(...), u: User = Depends(current_user), db: Session = Depends(get_db)):
+        listing = db.get(QMarketListing, listing_id)
+        if not listing or listing.seller_id != u.id:
+            raise HTTPException(404, "Listing not found")
+        count = db.scalar(select(func.count()).select_from(QMarketMedia).where(QMarketMedia.listing_id == listing_id)) or 0
+        if count >= MARKET_MAX_ATTACHMENTS:
+            raise HTTPException(409, f"A listing can have up to {MARKET_MAX_ATTACHMENTS} attachments")
+        mime = (file.content_type or "").split(";")[0].strip().lower()
+        kind = MARKET_ALLOWED_MIME.get(mime)
+        if not kind:
+            raise HTTPException(415, "Unsupported marketplace file type")
+        limit = MARKET_VIDEO_MAX if kind == "VIDEO" else MARKET_IMAGE_FILE_MAX
+        payload = await file.read(limit + 1)
+        if not payload or len(payload) > limit:
+            max_mb = limit // (1024 * 1024)
+            raise HTTPException(413, f"File must be between 1 byte and {max_mb} MB")
+        _verify_market_bytes(mime, payload)
+        original = (file.filename or "Attachment").replace("\\", "/").split("/")[-1]
+        original = re.sub(r"[^A-Za-z0-9 .()_\-]", "_", original)[:190] or "Attachment"
+        object_key = media_store.store(payload)
+        first_media = count == 0
+        row = QMarketMedia(
+            listing_id=listing.id, uploader_user_id=u.id, kind=kind, original_name=original,
+            mime_type=mime, object_key=object_key, access_token=secrets.token_hex(20),
+            size_bytes=len(payload), sort_order=int(count), is_cover=first_media and kind == "PHOTO",
+        )
+        db.add(row); listing.updated_at = _now(); db.commit(); db.refresh(row)
+        return _market_media_json(row)
+
+    @router.get("/market/media/{media_id}/{token}")
+    def market_media(media_id: int, token: str, download: int = 0, db: Session = Depends(get_db)):
+        row = db.get(QMarketMedia, media_id)
+        if not row or not secrets.compare_digest(row.access_token, token):
+            raise HTTPException(404, "Marketplace media not found")
+        safe_name = (row.original_name or "file").replace('"', '').replace("\r", "").replace("\n", "")
+        disposition = "attachment" if download or row.kind == "FILE" else "inline"
+        return StreamingResponse(
+            media_store.stream(row.object_key), media_type=row.mime_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'{disposition}; filename="{safe_name}"',
+                "Cache-Control": "private, max-age=3600", "X-Content-Type-Options": "nosniff",
+            },
+        )
+
+    @router.delete("/market/listings/{listing_id}/media/{media_id}")
+    def delete_market_media(listing_id: int, media_id: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
+        listing = db.get(QMarketListing, listing_id)
+        row = db.get(QMarketMedia, media_id)
+        if not listing or listing.seller_id != u.id or not row or row.listing_id != listing_id:
+            raise HTTPException(404, "Marketplace attachment not found")
+        was_cover = row.is_cover
+        object_key = row.object_key
+        db.delete(row); db.flush()
+        if was_cover:
+            replacement = db.scalar(select(QMarketMedia).where(
+                QMarketMedia.listing_id == listing_id, QMarketMedia.kind == "PHOTO"
+            ).order_by(QMarketMedia.sort_order, QMarketMedia.id).limit(1))
+            if replacement:
+                replacement.is_cover = True
+        listing.updated_at = _now(); db.commit()
+        delete_fn = getattr(media_store, "delete", None)
+        if callable(delete_fn):
+            try:
+                delete_fn(object_key)
+            except Exception:
+                pass
+        return {"ok": True}
+
+    @router.post("/market/listings/{listing_id}/media/{media_id}/cover")
+    def set_market_cover(listing_id: int, media_id: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
+        listing = db.get(QMarketListing, listing_id)
+        row = db.get(QMarketMedia, media_id)
+        if not listing or listing.seller_id != u.id or not row or row.listing_id != listing_id:
+            raise HTTPException(404, "Marketplace attachment not found")
+        if row.kind != "PHOTO":
+            raise HTTPException(422, "Only a photo can be the cover image")
+        for item in db.scalars(select(QMarketMedia).where(QMarketMedia.listing_id == listing_id)).all():
+            item.is_cover = item.id == media_id
+        listing.updated_at = _now(); db.commit()
+        return _listing_json(db, listing)
 
     @router.post("/market/listings/{listing_id}/buy")
     def buy_listing(listing_id: int, body: BuyIn, u: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -1094,6 +1386,41 @@ def register_v28(app, current_user, get_db):
             "cashout_enabled": bool(cfg.cashout_enabled),
         }
 
+    @router.get("/admin/referral-rules")
+    def admin_referral_rules(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        rows = db.scalars(select(QReferralRewardRule).order_by(QReferralRewardRule.package_code)).all()
+        return [_referral_rule_json(x) for x in rows]
+
+    @router.put("/admin/referral-rules")
+    def admin_save_referral_rules(body: ReferralRulesIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        values = {
+            "STARTER_10": body.starter_10_q, "PLUS_50": body.plus_50_q,
+            "PRO_100": body.pro_100_q, "PREMIUM_500": body.premium_500_q,
+            "ELITE_1000": body.elite_1000_q,
+        }
+        for code, value in values.items():
+            row = db.get(QReferralRewardRule, code)
+            if not row:
+                row = QReferralRewardRule(package_code=code, label=PACKAGE_PLANS[code]["name"])
+                db.add(row)
+            row.reward_micros = int(round(value * Q_MICROS))
+            row.active = True
+            row.updated_at = _now()
+        db.commit()
+        return admin_referral_rules(u, db)
+
+    @router.get("/admin/referrals")
+    def admin_referral_overview(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        links = db.scalars(select(QReferral)).all()
+        earnings = db.scalars(select(QReferralEarning)).all()
+        return {
+            "total_referred_users": len(links),
+            "free_signup_q": _q(sum(x.referrer_reward_micros for x in links)),
+            "package_paid_q": _q(sum(x.reward_micros for x in earnings if x.status == "PAID")),
+            "package_pending_q": _q(sum(x.reward_micros for x in earnings if x.status == "PENDING")),
+            "package_events": len(earnings),
+        }
+
     @router.get("/admin/payment-wallets")
     def admin_payment_wallets(u: User = Depends(require_admin), db: Session = Depends(get_db)):
         rows = db.scalars(select(QPaymentWallet).order_by(QPaymentWallet.id.desc())).all()
@@ -1176,7 +1503,10 @@ def register_v28(app, current_user, get_db):
             last_accrual_date=now.date(), status="ACTIVE",
         )
         row.status = "APPROVED"; row.reviewed_at = now; row.reviewed_by = u.id
-        db.add(lot); db.commit(); db.refresh(lot)
+        db.add(lot)
+        db.flush()
+        _award_subscription_referral(db, row)
+        db.commit(); db.refresh(lot)
         return {"ok": True, "payment": _payment_order_json(db, row), "subscription": _subscription_json(lot, _config(db))}
 
     @router.post("/admin/payment-orders/{order_id}/reject")

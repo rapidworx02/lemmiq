@@ -479,6 +479,63 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         try{api.qCreateListing(title.trim(),description.trim(),priceQ,inventory);qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
+    fun qCreateListingWithMedia(title:String,description:String,priceQ:Double,inventory:Int=1,mediaUris:List<Uri>)=viewModelScope.launch{
+        if(title.isBlank()||priceQ<=0)return@launch
+        qEconomyBusy=true;error=null
+        try{
+            val listing=api.qCreateListing(title.trim(),description.trim(),priceQ,inventory)
+            for(uri in mediaUris.take(10)){
+                val data=withContext(Dispatchers.IO){
+                    val cr=appCtx.contentResolver
+                    var name="market_attachment"
+                    var declaredSize:Long?=null
+                    cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME,OpenableColumns.SIZE),null,null,null)?.use{cursor->
+                        if(cursor.moveToFirst()){
+                            val ni=cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(ni>=0)name=cursor.getString(ni)?:name
+                            val si=cursor.getColumnIndex(OpenableColumns.SIZE);if(si>=0&&!cursor.isNull(si))declaredSize=cursor.getLong(si)
+                        }
+                    }
+                    val extension=name.substringAfterLast('.',"").lowercase()
+                    val mime=(cr.getType(uri)?.lowercase()).takeUnless{it.isNullOrBlank()||it=="application/octet-stream"} ?: when(extension){
+                        "jpg","jpeg"->"image/jpeg";"png"->"image/png";"webp"->"image/webp"
+                        "mp4"->"video/mp4";"webm"->"video/webm";"mov"->"video/quicktime"
+                        "pdf"->"application/pdf";"txt"->"text/plain";"csv"->"text/csv"
+                        "docx"->"application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        "xlsx"->"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        else->"application/octet-stream"
+                    }
+                    val max=if(mime.startsWith("video/"))100*1024*1024 else 20*1024*1024
+                    if(declaredSize!=null&&declaredSize!!>max)throw IllegalArgumentException(if(mime.startsWith("video/"))"Video exceeds 100 MB" else "Attachment exceeds 20 MB")
+                    val bytes=cr.openInputStream(uri)?.use{input->
+                        val out=java.io.ByteArrayOutputStream()
+                        val buffer=ByteArray(65536)
+                        while(true){
+                            val n=input.read(buffer);if(n<0)break
+                            out.write(buffer,0,n)
+                            if(out.size()>max)throw IllegalArgumentException(if(mime.startsWith("video/"))"Video exceeds 100 MB" else "Attachment exceeds 20 MB")
+                        }
+                        out.toByteArray()
+                    }?:throw IllegalArgumentException("Cannot read selected marketplace file")
+                    Triple(name,mime,bytes)
+                }
+                api.qUploadListingMedia(listing.id,data.first,data.second,data.third)
+            }
+            qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qDeleteListingMedia(listingId:Int,mediaId:Int)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qDeleteListingMedia(listingId,mediaId);qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()}
+        catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qSetListingCover(listingId:Int,mediaId:Int)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qSetListingCover(listingId,mediaId);qMarketListings=api.qMarketListings();qMyListings=api.qMyListings()}
+        catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
     fun qUpdateListing(x:QMarketListingDto,title:String,description:String,priceQ:Double,inventory:Int,active:Boolean)=viewModelScope.launch{
         if(title.isBlank()||priceQ<=0||inventory<1)return@launch
         qEconomyBusy=true;error=null

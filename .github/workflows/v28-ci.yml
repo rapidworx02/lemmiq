@@ -31,7 +31,7 @@ jobs:
           from app.main import app
 
           with TestClient(app) as c:
-              assert c.get("/health").json()["version"] == "2.8.1"
+              assert c.get("/health").json()["version"] == "2.8.2"
 
               a = c.post("/register", json={"username":"v28alpha","display_name":"Alpha","password":"password123"}).json()
               b = c.post("/register", json={"username":"v28beta","display_name":"Beta","password":"password123"}).json()
@@ -56,6 +56,38 @@ jobs:
               wa_after_referral = c.get("/v28/wallet", headers=ha)
               assert wa_after_referral.json()["balance_q"] >= 125.0
 
+              # Promote Alpha as CI Master Admin, configure a package wallet, then
+              # verify that an approved package purchase pays the original referrer.
+              from app.database import SessionLocal
+              from app.v28 import QAdminRole
+              db = SessionLocal()
+              try:
+                  db.add(QAdminRole(user_id=a["user"]["id"], role="MASTER_ADMIN", active=True))
+                  db.commit()
+              finally:
+                  db.close()
+              wallet_cfg = c.post("/v28/admin/payment-wallets", headers=ha, json={
+                  "network":"BEP20","package_code":"STARTER_10","label":"CI",
+                  "address":"0x1111111111111111111111111111111111111111","active":True
+              })
+              assert wallet_cfg.status_code == 200, wallet_cfg.text
+              po = c.post("/v28/payments/orders", headers=hg, json={"package_code":"STARTER_10","network":"BEP20"})
+              assert po.status_code == 200, po.text
+              pid = po.json()["id"]
+              submitted = c.post(f"/v28/payments/orders/{pid}/submit", headers=hg, json={
+                  "tx_hash":"0x" + "a"*64, "note":"CI referral package reward"
+              })
+              assert submitted.status_code == 200, submitted.text
+              approved = c.post(f"/v28/admin/payment-orders/{pid}/approve", headers=ha, json={})
+              assert approved.status_code == 200, approved.text
+              refs = c.get("/v28/referrals", headers=ha)
+              assert refs.status_code == 200, refs.text
+              assert refs.json()["paid_users"] >= 1
+              assert any(x["current_tier"] == "Q Starter" for x in refs.json()["items"])
+              assert any(e["type"] == "PACKAGE_PURCHASE" for x in refs.json()["items"] for e in x["events"])
+              q_referral_package_reward = True
+              assert q_referral_package_reward
+
               claim = c.post("/v28/wallet/claim-daily", headers=ha, json={})
               assert claim.status_code == 200, claim.text
               assert claim.json()["balance_q"] >= 102.0
@@ -69,6 +101,14 @@ jobs:
               })
               assert listing.status_code == 200, listing.text
               lid = listing.json()["id"]
+              media = c.post(
+                  f"/v28/market/listings/{lid}/media", headers=ha,
+                  files={"file": ("ci-photo.jpg", b"\xff\xd8\xffCIJPEG", "image/jpeg")}
+              )
+              assert media.status_code == 200, media.text
+              refreshed_listing = c.get("/v28/market/my-listings", headers=ha)
+              assert refreshed_listing.status_code == 200
+              assert len(refreshed_listing.json()[0]["media"]) == 1
 
               buy = c.post(f"/v28/market/listings/{lid}/buy", headers=hb, json={"quantity":1})
               assert buy.status_code == 200, buy.text

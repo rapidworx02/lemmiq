@@ -243,9 +243,18 @@ data class QLedgerDto(
     val other_user_id:Int?=null,val system_wallet:String?=null,val usd_cents:Int?=null,
     val reference:String="",val note:String="",val created_at:String=""
 )
-data class QReferralItemDto(val user_id:Int=0,val reward_q:Double=0.0,val created_at:String="")
+data class QReferralEventDto(
+    val type:String="",val label:String="",val package_code:String?=null,val reward_q:Double=0.0,
+    val status:String="",val created_at:String="",val paid_at:String?=null
+)
+data class QReferralItemDto(
+    val user_id:Int=0,val username:String="",val display_name:String="",val current_tier:String="Free",
+    val reward_q:Double=0.0,val pending_q:Double=0.0,val created_at:String="",
+    val events:List<QReferralEventDto> = emptyList()
+)
 data class QReferralSummaryDto(
-    val code:String="",val count:Int=0,val earned_q:Double=0.0,val items:List<QReferralItemDto> = emptyList()
+    val code:String="",val count:Int=0,val paid_users:Int=0,val earned_q:Double=0.0,val pending_q:Double=0.0,
+    val items:List<QReferralItemDto> = emptyList()
 )
 data class QPaymentWalletDto(
     val id:Int=0,val network:String="",val package_code:String?=null,val label:String="",val address:String="",
@@ -258,10 +267,14 @@ data class QPaymentOrderDto(
     val created_at:String="",val submitted_at:String?=null,val reviewed_at:String?=null
 )
 data class QMarketSellerDto(val id:Int=0,val username:String="",val display_name:String="")
+data class QMarketMediaDto(
+    val id:Int=0,val kind:String="",val name:String="",val mime_type:String="",val size_bytes:Long=0,
+    val is_cover:Boolean=false,val sort_order:Int=0,val media_url:String="",val download_url:String="",val created_at:String=""
+)
 data class QMarketListingDto(
     val id:Int=0,val seller:QMarketSellerDto?=null,val title:String="",val description:String="",val category:String="OTHER",
     val condition:String="SERVICE",val price_q:Double=0.0,val price_usd_reference:Double=0.0,
-    val inventory:Int=0,val active:Boolean=true,val created_at:String="",val updated_at:String=""
+    val inventory:Int=0,val active:Boolean=true,val media:List<QMarketMediaDto> = emptyList(),val created_at:String="",val updated_at:String=""
 )
 data class QMarketOrderDto(
     val id:Int=0,val order_code:String="",val listing:QMarketListingDto?=null,val buyer_id:Int=0,val seller_id:Int=0,

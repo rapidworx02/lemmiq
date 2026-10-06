@@ -1,0 +1,308 @@
+LEMMIQ V2.8.2 - REFERRALS + Q MARKET MEDIA + USDT UX
+======================================================
+
+WHAT THIS UPGRADE ADDS
+----------------------
+1. Tier-based referral rewards.
+   - Free signup keeps the basic referrer reward and referred-user welcome Q.
+   - If that referred user later buys a paid package, the ORIGINAL referrer
+     receives an additional package-specific Q reward after Admin approves the
+     USDT payment.
+   - Every approved package order can generate one referral package reward.
+   - Duplicate payment-order referral rewards are blocked.
+
+2. User referral dashboard.
+   Users can see:
+   - referred users under them;
+   - username/display name;
+   - current active Q tier;
+   - total Q earned from each referred user;
+   - pending referral Q from a submitted package payment;
+   - signup/package reward history;
+   - total referred users, paid referred users and total Q earned.
+
+3. Admin package referral reward controls.
+   Initial configurable defaults in V2.8.2:
+   - $10 Starter: 10 Q
+   - $50 Plus: 25 Q
+   - $100 Pro: 50 Q
+   - $500 Premium: 200 Q
+   - $1,000 Elite: 400 Q
+
+   These are defaults only. Master Admin can change them from Q Admin.
+
+4. Q Market media/files.
+   Sellers can add up to 10 attachments to a product/service listing:
+   - JPG/JPEG, PNG, WebP
+   - MP4, WebM, MOV
+   - PDF, TXT, CSV
+   - DOCX, XLSX
+
+   Limits:
+   - images/files: 20 MB each
+   - videos: 100 MB each
+
+   Marketplace listing cards show media/attachment information. Sellers can
+   add more media later, remove attachments and select a photo as the cover.
+
+5. Improved USDT payment flow.
+   - TRC20 and BEP20 are equal, full-width network choices.
+   - Cancel is separate.
+   - QR is substantially larger.
+   - Tap QR to enlarge on Android/web.
+   - Copy Address button.
+   - Copy Amount button.
+   - Copy Order ID button.
+   - clearer selected-network warning.
+   - Submit remains disabled until a transaction hash is entered.
+
+6. Android version:
+   versionName = 2.8.2
+   versionCode = 47
+
+7. PWA cache bumped to V2.8.2.
+
+IMPORTANT Q/FINANCIAL NOTE
+--------------------------
+Cash-out remains DISABLED in this build. The existing Q package model and any
+future redemption/cash-out should receive appropriate Australian legal,
+financial-product, tax and AML/CTF review before public cash redemption is
+switched on.
+
+STEP 1 - BACK UP YOUR CURRENT V2.8.1
+------------------------------------
+Copy:
+C:\Users\pc\LEMMIQ
+
+to, for example:
+C:\Users\pc\LEMMIQ_BACKUP_V2.8.1
+
+STEP 2 - EXTRACT THE PATCH
+--------------------------
+Extract:
+LEMMIQ_V2.8.2_REFERRAL_MARKET_MEDIA_PATCH.zip
+
+directly into:
+C:\Users\pc\LEMMIQ
+
+Choose:
+Replace files in the destination
+
+This is an overlay patch. It does NOT contain your private:
+- android\upload-keystore.jks
+- android\keystore.properties
+- android\app\google-services.json
+- backend\.env
+
+STEP 3 - GITHUB CHECK
+---------------------
+Open CMD:
+
+cd /d C:\Users\pc\LEMMIQ
+git status
+
+git check-ignore android/upload-keystore.jks
+git check-ignore android/keystore.properties
+git check-ignore android/app/google-services.json
+
+Then:
+
+git add .
+git status
+git diff --cached --name-only
+
+Make sure none of these are staged:
+- upload-keystore.jks
+- keystore.properties
+- google-services.json
+- backend/.env
+- private keys
+- seed phrases
+- wallet passwords
+
+Commit and push:
+
+git commit -m "LEMMIQ V2.8.2 - referral tiers market media and USDT UX"
+git push origin main
+
+STEP 4 - RENDER
+---------------
+Render should redeploy from main.
+
+Check:
+https://lemmiq-api.onrender.com/health
+
+Expected version:
+2.8.2
+
+No manual SQL migration is required for the new V2.8.2 tables because the Q
+module uses SQLAlchemy Base.metadata.create_all() during startup.
+
+New tables include:
+- q_referral_reward_rules
+- q_referral_earnings
+- q_market_media
+
+Existing Q Economy tables/data remain in place.
+
+STEP 5 - ADMIN REFERRAL SETTINGS
+--------------------------------
+Login using the existing Master Admin account.
+Open:
+More -> Q Admin
+
+Under Package referral rewards, set the Q reward for:
+- Starter
+- Plus
+- Pro
+- Premium
+- Elite
+
+Free signup referrer Q and referred-user welcome Q remain under normal Q
+settings.
+
+PACKAGE REFERRAL FLOW
+---------------------
+Example:
+A refers B
+-> B joins Free
+-> A receives free signup referral Q
+-> B receives welcome referral Q
+
+Later:
+B buys $500 Premium
+-> B submits USDT payment
+-> Admin verifies and approves
+-> Premium subscription lot is activated
+-> A automatically receives configured Premium referral Q
+
+If B later purchases another approved package, that new approved package order
+can generate its own configured referral reward for A.
+
+STEP 6 - Q MARKET MEDIA TEST
+----------------------------
+1. Open Q Economy -> Market.
+2. Tap Sell / Create listing.
+3. Enter product/service title and description.
+4. Tap Add photos, videos or files.
+5. Select up to 10 attachments.
+6. Enter Q price and list.
+7. Confirm the image/media appears on the listing.
+8. Open My listings -> Media on web, or Edit on Android.
+9. Test remove attachment and cover-photo selection.
+10. Test a buyer account can open the attachments and buy the listing.
+
+IMPORTANT MEDIA STORAGE NOTE
+----------------------------
+V2.8.2 uses LEMMIQ's existing media_store layer. For real production use,
+make sure your media_store is backed by persistent object storage. Do not rely
+on temporary Render local filesystem storage for important marketplace files.
+
+STEP 7 - USDT PAYMENT TEST
+--------------------------
+1. Open Packages.
+2. Select $10 Starter.
+3. Confirm TRC20 and BEP20 have equal button treatment.
+4. Select a network.
+5. Confirm larger QR.
+6. Test Copy address.
+7. Test Copy amount.
+8. Test Copy Order ID.
+9. Enter transaction hash.
+10. Submit for verification.
+11. Admin verifies on-chain and approves.
+12. Confirm package activates.
+13. If this user was referred, confirm the original referrer receives the
+    configured Starter referral Q.
+
+STEP 8 - ANDROID MANUAL TESTER APK (NO PLAY CONSOLE REQUIRED)
+-------------------------------------------------------------
+The patch includes:
+android\build-manual-test-apk.cmd
+
+Your existing private signing files must remain in:
+android\upload-keystore.jks
+android\keystore.properties
+
+PowerShell setup:
+
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:Path = "$env:JAVA_HOME\bin;C:\Gradle\gradle-9.6.0\bin;" + $env:Path
+
+Then:
+
+cd C:\Users\pc\LEMMIQ\android
+.\build-manual-test-apk.cmd
+
+Expected output:
+C:\Users\pc\LEMMIQ\android\app\build\outputs\manual\LEMMIQ-v2.8.2-manual-release.apk
+
+You can share that APK privately with testers.
+
+PLAY PROTECT IMPORTANT
+----------------------
+There is NO legitimate "Play Protect bypass file".
+
+A release APK signed with your existing LEMMIQ upload key is the correct type
+of manual Android test build, but Android/Google Play Protect may still show
+an unknown-source or app-scan warning because the APK was installed outside
+Google Play.
+
+Do NOT disable or bypass Play Protect for testers.
+
+Once you create a Google Play Console developer account, use Internal Testing
+with an AAB. Google Play distribution is the normal way to avoid sideloading
+friction and preserve Play App Signing/update continuity.
+
+STEP 9 - PWA TESTING (RECOMMENDED NOW)
+--------------------------------------
+Until you create the Play Console account, PWA testing is the simplest path.
+
+Open:
+https://lemmiq-api.onrender.com/web/
+
+Android Chrome:
+menu -> Add to Home screen / Install app
+
+iPhone Safari:
+Share -> Add to Home Screen
+
+PWA testers receive web/Q Economy features without installing an APK or
+encountering Play Protect sideload checks.
+
+STEP 10 - OPTIONAL PWA ANDROID DOWNLOAD BUTTON
+----------------------------------------------
+Your existing backend supports ANDROID_APK_URL.
+
+After you create the manual release APK, you can host it at a trusted direct
+HTTPS download URL and set in Render:
+
+ANDROID_APK_URL=<direct HTTPS link to LEMMIQ-v2.8.2-manual-release.apk>
+
+Leave ANDROID_PLAY_URL blank until you have Google Play Internal Testing.
+
+The web/PWA "Get LEMMIQ for Android" button will then use /download/android
+and redirect to your manual APK URL.
+
+TEST CHECKLIST
+--------------
+[ ] Health reports 2.8.2
+[ ] Existing chat/calls/Q still work
+[ ] Free referral works
+[ ] My Referrals shows referred users
+[ ] My Referrals shows Q earned per user
+[ ] Pending package referral shows while payment is pending
+[ ] Approved package pays configured package referral Q
+[ ] No duplicate reward for same payment order
+[ ] Admin can edit package referral rewards
+[ ] Q Market photo upload works
+[ ] Q Market video upload works
+[ ] Q Market file upload works
+[ ] Cover photo works
+[ ] Remove attachment works
+[ ] Buyer can open listing media
+[ ] TRC20/BEP20 buttons are equal
+[ ] Large QR works
+[ ] Copy address/amount/order works
+[ ] Manual release APK builds locally
+[ ] PWA refreshes to V2.8.2

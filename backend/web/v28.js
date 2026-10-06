@@ -1,6 +1,6 @@
-/* LEMMIQ V2.8 Q Economy */
+/* LEMMIQ V2.8.2 Q Economy */
 (()=>{
-  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]}};
+  const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]},adminReferralRules:[],adminReferralOverview:null};
   const fmtQ=n=>new Intl.NumberFormat(undefined,{maximumFractionDigits:6}).format(Number(n||0));
   const fmtUsd=n=>new Intl.NumberFormat(undefined,{style:"currency",currency:"USD",maximumFractionDigits:4}).format(Number(n||0));
   const dt=x=>{try{return new Date(x).toLocaleString()}catch{return x||""}};
@@ -10,6 +10,29 @@
 
   function qRow(title,sub,right="",actions=""){
     return `<div class="q28-row"><div class="q28-main"><strong>${title}</strong><small>${sub||""}</small></div><div><div>${right||""}</div><div class="q28-actions">${actions||""}</div></div></div>`;
+  }
+
+  function marketMediaHtml(media=[]){
+    if(!media?.length)return "";
+    return `<div class="q28-media-strip">${media.map(m=>{
+      const url=escapeHtml(m.media_url||"");
+      if(m.kind==="PHOTO")return `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${escapeHtml(m.name||"Listing photo")}"></a>`;
+      if(m.kind==="VIDEO")return `<a class="q28-media-file" href="${url}" target="_blank" rel="noopener">🎥 ${escapeHtml(m.name||"Video")}</a>`;
+      return `<a class="q28-media-file" href="${escapeHtml(m.download_url||url)}" target="_blank" rel="noopener">📎 ${escapeHtml(m.name||"File")}</a>`;
+    }).join("")}</div>`;
+  }
+
+  function selectedMediaPreview(){
+    const files=[...($(`q28ListingMedia`)?.files||[])].slice(0,10);
+    if(!$(`q28ListingMediaPreview`))return;
+    $(`q28ListingMediaPreview`).innerHTML=files.map(f=>`<span>${f.type.startsWith("image/")?"🖼️":f.type.startsWith("video/")?"🎥":"📎"} ${escapeHtml(f.name)} <small>${Math.max(1,Math.round(f.size/1024))} KB</small></span>`).join("");
+  }
+
+  async function uploadListingMedia(listingId,files){
+    for(const file of files.slice(0,10)){
+      const form=new FormData();form.append("file",file,file.name);
+      await qApi(`/market/listings/${listingId}/media`,{method:"POST",body:form});
+    }
   }
 
   function renderWallet(){
@@ -49,9 +72,17 @@
   }
 
   function renderReferrals(){
-    const r=v28.referrals||{items:[],count:0,earned_q:0};
-    $("q28ReferralList").innerHTML=qRow("Referral summary",`${r.count||0} successful referral(s)`,`${fmtQ(r.earned_q)} Q earned`)+
-      ((r.items||[]).map(x=>qRow(`User #${x.user_id}`,dt(x.created_at),`+${fmtQ(x.reward_q)} Q`)).join(""));
+    const r=v28.referrals||{items:[],count:0,paid_users:0,earned_q:0,pending_q:0};
+    const summary=qRow(
+      "Referral summary",
+      `${r.count||0} referred · ${r.paid_users||0} paid subscriber(s)`,
+      `${fmtQ(r.earned_q)} Q earned${Number(r.pending_q||0)>0?` · ${fmtQ(r.pending_q)} Q pending`:""}`
+    );
+    const rows=(r.items||[]).map(x=>{
+      const events=(x.events||[]).map(e=>`<div class="q28-ref-event"><span>${escapeHtml(e.label||e.type)}</span><b>+${fmtQ(e.reward_q)} Q</b><em>${escapeHtml(e.status||"")}</em></div>`).join("");
+      return `<details class="q28-referral-card"><summary><div><strong>${escapeHtml(x.display_name||x.username||("User #"+x.user_id))}</strong><small>@${escapeHtml(x.username||"")} · ${escapeHtml(x.current_tier||"Free")} · joined ${dt(x.created_at)}</small></div><div><b>${fmtQ(x.reward_q)} Q</b>${Number(x.pending_q||0)>0?`<small>${fmtQ(x.pending_q)} Q pending</small>`:""}</div></summary><div class="q28-ref-events">${events||"<span>No reward events yet.</span>"}</div></details>`;
+    }).join("");
+    $("q28ReferralList").innerHTML=summary+(rows||`<div class="empty-state"><p>No referrals yet.</p></div>`);
   }
 
   function renderPayments(){
@@ -65,8 +96,8 @@
   function renderMarket(){
     $("q28MarketListings").innerHTML=v28.listings.length?v28.listings.map(x=>`<article class="q28-listing">
       <small>${escapeHtml(x.category)} · ${escapeHtml(x.condition)}</small>
-      <h4>${escapeHtml(x.title)}</h4><p>${escapeHtml(x.description||"")}</p>
-      <div class="seller">@${escapeHtml(x.seller?.username||"seller")} · ${x.inventory} available</div>
+      <h4>${escapeHtml(x.title)}</h4>${marketMediaHtml(x.media)}<p>${escapeHtml(x.description||"")}</p>
+      <div class="seller">@${escapeHtml(x.seller?.username||"seller")} · ${x.inventory} available · ${(x.media||[]).length} attachment(s)</div>
       <div class="q-price">${fmtQ(x.price_q)} Q</div><div class="q-usd">≈ ${fmtUsd(x.price_usd_reference)} reference</div>
       ${x.seller?.id===state.user?.id?'<button class="ghost" disabled>Your listing</button>':`<button class="primary" data-q28-market-buy="${x.id}">Buy with Q</button>`}
     </article>`).join(""):`<article class="card glass"><p>No active listings found.</p></article>`;
@@ -74,11 +105,12 @@
     if($("q28MyListings")){
       $("q28MyListings").innerHTML=v28.myListings.length?v28.myListings.map(x=>qRow(
         `${escapeHtml(x.title)} · ${x.active?"Active":"Paused"}`,
-        `${fmtQ(x.price_q)} Q · ${x.inventory} available · ${escapeHtml(x.category)}`,
+        `${fmtQ(x.price_q)} Q · ${x.inventory} available · ${escapeHtml(x.category)} · ${(x.media||[]).length} attachment(s)`,
         `≈ ${fmtUsd(x.price_usd_reference)}`,
-        `<button class="ghost" data-q28-edit-listing="${x.id}">Edit</button>`
+        `<button class="ghost" data-q28-edit-listing="${x.id}">Edit</button><button class="ghost" data-q28-media-listing="${x.id}">Media</button>`
       )).join(""):`<div class="empty-state"><p>No listings yet.</p></div>`;
       qsa("[data-q28-edit-listing]").forEach(b=>b.onclick=()=>editListing(Number(b.dataset.q28EditListing)));
+      qsa("[data-q28-media-listing]").forEach(b=>b.onclick=()=>manageListingMedia(Number(b.dataset.q28MediaListing)));
     }
     $("q28MarketOrders").innerHTML=v28.orders.length?v28.orders.map(o=>{
       const mineSeller=o.seller_id===state.user?.id,mineBuyer=o.buyer_id===state.user?.id;
@@ -117,33 +149,40 @@
   async function openPayment(code){
     try{
       const p=(v28.wallet?.plans||[]).find(x=>x.code===code);if(!p)return;
-      $("modalContent").innerHTML=`<span class="eyebrow">Q SUBSCRIPTION</span><h2>${escapeHtml(p.name)}</h2><p>Pay <strong>${p.price_usd} USDT</strong>. Choose the exact network you will use.</p>
-      <div class="q28-inline"><button class="primary" data-pay-net="TRC20">USDT TRC20</button><button class="primary" data-pay-net="BEP20">USDT BEP20</button></div>
-      <p class="micro">Never send using a different network. V2.8 uses manual admin verification.</p>`;
+      $("modalContent").innerHTML=`<div class="q28-network-modal"><span class="eyebrow">Q SUBSCRIPTION</span><h2>${escapeHtml(p.name)}</h2><p>Pay <strong>${p.price_usd} USDT</strong>. Select the exact network you will use.</p><p class="micro">Package rate: ${p.daily_rate_percent}% daily · 200% package ceiling · 365-day validity</p><div class="q28-network-buttons"><button class="primary full" data-pay-net="TRC20">USDT TRC20</button><button class="ghost full" data-pay-net="BEP20">USDT BEP20</button></div><p class="micro q28-warning">⚠ Send only on the selected network. Sending on another network may result in loss of funds.</p><button id="q28CancelNetwork" class="ghost full">Cancel</button></div>`;
       $("modal").showModal();
       qsa("[data-pay-net]").forEach(b=>b.onclick=()=>createPayment(code,b.dataset.payNet));
+      $("q28CancelNetwork").onclick=()=>$("modal").close();
     }catch(e){toast(e.message,true)}
   }
 
   async function createPayment(code,network){
     try{
       const o=await qApi("/payments/orders",{method:"POST",body:JSON.stringify({package_code:code,network})});
-      $("modalContent").innerHTML=`<div class="q28-payment-box"><span class="eyebrow">PAYMENT ORDER</span><h2>${escapeHtml(o.package_name)}</h2>
-        <p>Send exactly <strong>${fmtQ(o.expected_usdt)} USDT</strong> using <strong>${o.network}</strong>.</p>
-        <img class="q28-qr" src="${escapeHtml(o.wallet.qr_url)}" alt="Payment QR">
-        <p class="q28-address">${escapeHtml(o.wallet.address)}</p><p><small>Order ${escapeHtml(o.order_code)}</small></p>
-        <input id="q28TxHash" placeholder="Paste transaction hash after payment">
-        <textarea id="q28PaymentNote" placeholder="Optional note"></textarea>
-        <button id="q28SubmitPayment" class="primary full">I have paid — submit for verification</button>
-        <p class="micro">Admin will verify the network, destination, amount and transaction hash before activation.</p></div>`;
+      $("modalContent").innerHTML=`<div class="q28-payment-box"><span class="eyebrow">PAYMENT ORDER</span><h2>Pay ${fmtQ(o.expected_usdt)} USDT</h2><div class="q28-payment-network">${escapeHtml(o.network)} · ${escapeHtml(o.order_code)}</div><img id="q28PaymentQr" class="q28-qr q28-qr-large" src="${escapeHtml(o.wallet.qr_url)}" alt="Payment QR"><small>Tap QR to enlarge</small><div class="q28-copy-card"><label>Wallet address</label><div class="q28-address">${escapeHtml(o.wallet.address)}</div><button id="q28CopyAddress" class="ghost full">📋 Copy address</button></div><div class="q28-copy-actions"><button id="q28CopyAmount" class="ghost">Copy ${fmtQ(o.expected_usdt)} USDT</button><button id="q28CopyOrder" class="ghost">Copy Order ID</button></div><p class="micro q28-warning">⚠ Send USDT using <strong>${escapeHtml(o.network)}</strong> only.</p><input id="q28TxHash" placeholder="Paste transaction hash"><textarea id="q28PaymentNote" placeholder="Optional note"></textarea><button id="q28SubmitPayment" class="primary full" disabled>Submit for verification</button><button id="q28CancelPayment" class="ghost full">Cancel</button><p class="micro">Admin manually verifies network, address and amount before activation.</p></div>`;
+      const copy=async(text,msg)=>{try{await navigator.clipboard.writeText(String(text));toast(msg)}catch{toast("Copy failed — select and copy manually",true)}};
+      $("q28CopyAddress").onclick=()=>copy(o.wallet.address,"Address copied ✓");
+      $("q28CopyAmount").onclick=()=>copy(o.expected_usdt,"Amount copied ✓");
+      $("q28CopyOrder").onclick=()=>copy(o.order_code,"Order ID copied ✓");
+      $("q28CancelPayment").onclick=()=>$("modal").close();
+      $("q28PaymentQr").onclick=()=>{const w=window.open("","_blank");if(w)w.document.write(`<body style="margin:0;background:#fff;display:grid;place-items:center;height:100vh"><img src="${escapeHtml(o.wallet.qr_url)}" style="width:min(90vw,720px);height:auto"></body>`)};
+      $("q28TxHash").oninput=()=>{$("q28SubmitPayment").disabled=$("q28TxHash").value.trim().length<20};
       $("q28SubmitPayment").onclick=async()=>{
         const tx=$("q28TxHash").value.trim();if(tx.length<20){toast("Enter the transaction hash",true);return}
-        try{
-          await qApi(`/payments/orders/${o.id}/submit`,{method:"POST",body:JSON.stringify({tx_hash:tx,note:$("q28PaymentNote").value})});
-          $("modal").close();toast("Payment submitted for admin verification");await loadQEconomy();
-        }catch(e){toast(e.message,true)}
+        try{await qApi(`/payments/orders/${o.id}/submit`,{method:"POST",body:JSON.stringify({tx_hash:tx,note:$("q28PaymentNote").value})});$("modal").close();toast("Payment submitted for admin verification");await loadQEconomy()}catch(e){toast(e.message,true)}
       };
     }catch(e){toast(e.message,true)}
+  }
+
+  async function manageListingMedia(id){
+    const x=v28.myListings.find(y=>y.id===id);if(!x)return;
+    const rows=(x.media||[]).map(m=>`<div class="q28-row"><div class="q28-main"><strong>${m.kind==="PHOTO"?"🖼️":m.kind==="VIDEO"?"🎥":"📎"} ${escapeHtml(m.name)}</strong><small>${Math.max(1,Math.round((m.size_bytes||0)/1024))} KB ${m.is_cover?"· Cover":""}</small></div><div class="q28-actions">${m.kind==="PHOTO"&&!m.is_cover?`<button class="ghost" data-set-cover="${m.id}">Set cover</button>`:""}<button class="danger" data-delete-media="${m.id}">Remove</button></div></div>`).join("");
+    $("modalContent").innerHTML=`<span class="eyebrow">Q MARKET MEDIA</span><h2>${escapeHtml(x.title)}</h2><label class="q28-upload-box">Add more photos, videos or files<input id="q28MoreMedia" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/csv,.docx,.xlsx" hidden><span>+ Add media / files</span><small>Maximum 10 attachments total</small></label><div class="q28-list">${rows||"<p>No attachments yet.</p>"}</div><button id="q28CloseMedia" class="ghost full">Close</button>`;
+    $("modal").showModal();
+    $("q28CloseMedia").onclick=()=>$("modal").close();
+    $("q28MoreMedia").onchange=async()=>{try{await uploadListingMedia(x.id,[...$("q28MoreMedia").files].slice(0,Math.max(0,10-(x.media||[]).length)));$("modal").close();toast("Media uploaded");await loadQEconomy()}catch(e){toast(e.message,true)}};
+    qsa("[data-delete-media]").forEach(b=>b.onclick=async()=>{if(!confirm("Remove this marketplace attachment?"))return;try{await qApi(`/market/listings/${x.id}/media/${b.dataset.deleteMedia}`,{method:"DELETE"});$("modal").close();toast("Attachment removed");await loadQEconomy()}catch(e){toast(e.message,true)}});
+    qsa("[data-set-cover]").forEach(b=>b.onclick=async()=>{try{await qApi(`/market/listings/${x.id}/media/${b.dataset.setCover}/cover`,{method:"POST",body:"{}"});$("modal").close();toast("Cover photo updated");await loadQEconomy()}catch(e){toast(e.message,true)}});
   }
 
   async function editListing(id){
@@ -249,15 +288,23 @@
     $("q28AdminSignup").value=v28.wallet?.signup_bonus_q??100;
     $("q28AdminReferrer").value=v28.wallet?.referral_reward_q??25;
     $("q28AdminReferred").value=25;
+    const rules=Object.fromEntries((v28.adminReferralRules||[]).map(x=>[x.package_code,x.reward_q]));
+    $("q28RefStarter").value=rules.STARTER_10??10;
+    $("q28RefPlus").value=rules.PLUS_50??25;
+    $("q28RefPro").value=rules.PRO_100??50;
+    $("q28RefPremium").value=rules.PREMIUM_500??200;
+    $("q28RefElite").value=rules.ELITE_1000??400;
+    const ro=v28.adminReferralOverview||{};
+    if($("q28AdminReferralOverview"))$("q28AdminReferralOverview").innerHTML=`<span>${ro.total_referred_users||0} referred users</span><span>${fmtQ(ro.free_signup_q||0)} Q signup rewards</span><span>${fmtQ(ro.package_paid_q||0)} Q package rewards</span>${Number(ro.package_pending_q||0)>0?`<span>${fmtQ(ro.package_pending_q)} Q pending</span>`:""}`;
   }
 
   async function loadQAdmin(){
     try{
-      const [me,economy,wallets,payments,ledger,market,config,wallet,roles]=await Promise.all([
+      const [me,economy,wallets,payments,ledger,market,config,wallet,roles,referralRules,referralOverview]=await Promise.all([
         qApi("/admin/me"),qApi("/admin/economy"),qApi("/admin/payment-wallets"),qApi("/admin/payment-orders"),
-        qApi("/admin/ledger"),qApi("/admin/market/orders"),qApi("/config"),qApi("/wallet"),qApi("/admin/roles")
+        qApi("/admin/ledger"),qApi("/admin/market/orders"),qApi("/config"),qApi("/wallet"),qApi("/admin/roles"),qApi("/admin/referral-rules"),qApi("/admin/referrals")
       ]);
-      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;
+      v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;v28.adminReferralRules=referralRules;v28.adminReferralOverview=referralOverview;
       renderAdmin();
     }catch(e){toast(e.message,true);setView("more")}
   }
@@ -306,10 +353,16 @@
     });
     $("q28RefreshLedger")?.addEventListener("click",loadQEconomy);
     $("q28MarketSearchBtn")?.addEventListener("click",loadQEconomy);
+    $("q28ListingMedia")?.addEventListener("change",selectedMediaPreview);
     $("q28CreateListing")?.addEventListener("click",async()=>{
-      const title=$("q28ListingTitle").value.trim(),description=$("q28ListingDescription").value.trim(),price=Number($("q28ListingPrice").value),inventory=Number($("q28ListingInventory").value||1);
+      const title=$("q28ListingTitle").value.trim(),description=$("q28ListingDescription").value.trim(),price=Number($("q28ListingPrice").value),inventory=Number($("q28ListingInventory").value||1),files=[...($("q28ListingMedia")?.files||[])].slice(0,10);
       if(!title||!(price>0)){toast("Enter title and Q price",true);return}
-      try{await qApi("/market/listings",{method:"POST",body:JSON.stringify({title,description,category:"OTHER",condition:"SERVICE",price_q:price,inventory})});toast("Q Market listing created");$("q28ListingTitle").value="";$("q28ListingDescription").value="";$("q28ListingPrice").value="";await loadQEconomy()}catch(e){toast(e.message,true)}
+      try{
+        $("q28CreateListing").disabled=true;$("q28CreateListing").textContent=files.length?"Uploading…":"Listing…";
+        const listing=await qApi("/market/listings",{method:"POST",body:JSON.stringify({title,description,category:"OTHER",condition:"SERVICE",price_q:price,inventory})});
+        if(files.length)await uploadListingMedia(listing.id,files);
+        toast("Q Market listing created");$("q28ListingTitle").value="";$("q28ListingDescription").value="";$("q28ListingPrice").value="";if($("q28ListingMedia"))$("q28ListingMedia").value="";selectedMediaPreview();await loadQEconomy();
+      }catch(e){toast(e.message,true)}finally{$("q28CreateListing").disabled=false;$("q28CreateListing").textContent="List"}
     });
     $("q28CopyReferral")?.addEventListener("click",async()=>{const code=v28.wallet?.referral_code||"";if(!code)return;await navigator.clipboard?.writeText(code);toast("Referral code copied")});
     $("q28ClaimReferralBtn")?.addEventListener("click",async()=>{const code=$("q28ClaimReferralCode").value.trim();if(!code)return;try{await qApi("/referrals/claim",{method:"POST",body:JSON.stringify({code})});toast("Referral reward claimed");await loadQEconomy()}catch(e){toast(e.message,true)}});
@@ -330,6 +383,10 @@
     $("q28AdminSaveConfig")?.addEventListener("click",async()=>{
       const body={q_price_usd:Number($("q28AdminPrice").value),marketplace_fee_percent:Number($("q28AdminFee").value),basic_daily_q:Number($("q28AdminBasic").value),signup_bonus_q:Number($("q28AdminSignup").value),referral_referrer_q:Number($("q28AdminReferrer").value),referral_referred_q:Number($("q28AdminReferred").value)};
       try{await qApi("/admin/config",{method:"PUT",body:JSON.stringify(body)});toast("Q settings saved");await loadQAdmin()}catch(e){toast(e.message,true)}
+    });
+    $("q28AdminSaveReferralRules")?.addEventListener("click",async()=>{
+      const body={starter_10_q:Number($("q28RefStarter").value),plus_50_q:Number($("q28RefPlus").value),pro_100_q:Number($("q28RefPro").value),premium_500_q:Number($("q28RefPremium").value),elite_1000_q:Number($("q28RefElite").value)};
+      try{await qApi("/admin/referral-rules",{method:"PUT",body:JSON.stringify(body)});toast("Package referral rewards saved");await loadQAdmin()}catch(e){toast(e.message,true)}
     });
     $("q28AdminRefreshPayments")?.addEventListener("click",loadQAdmin);
     $("q28TreasuryTransfer")?.addEventListener("click",async()=>{

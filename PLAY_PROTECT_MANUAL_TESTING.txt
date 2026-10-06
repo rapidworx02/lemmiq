@@ -1,0 +1,33 @@
+LEMMIQ - PLAY PROTECT / MANUAL TESTING
+======================================
+
+There is no legitimate APK/file that bypasses Google Play Protect.
+
+Before you have a Google Play Console account, use either:
+
+1. PWA TESTING - recommended
+   https://lemmiq-api.onrender.com/web/
+   Install from the browser to the Home Screen.
+
+2. MANUAL RELEASE-SIGNED APK
+   Keep your existing LEMMIQ upload-keystore.jks and keystore.properties.
+   Run:
+
+   cd C:\Users\pc\LEMMIQ\android
+   build-manual-test-apk.cmd
+
+   Output:
+   app\build\outputs\manual\LEMMIQ-v2.8.2-manual-release.apk
+
+This release APK is signed with YOUR existing LEMMIQ upload key. It is better
+for continuity than distributing random debug APKs, but Play Protect can still
+show a scan/unknown-source warning because the install is outside Google Play.
+
+Do not ask testers to disable Play Protect.
+
+When you later create a Play Console account:
+- enable Play App Signing;
+- upload the AAB to Internal Testing;
+- invite tester Google accounts;
+- set Render ANDROID_PLAY_URL to the Internal Testing link;
+- remove/blank ANDROID_APK_URL if you no longer want sideload distribution.

@@ -10,9 +10,9 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.8.1">
+  <link rel="stylesheet" href="/web/styles.css?v=2.8.2">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.8.1">
+  <link rel="stylesheet" href="/web/v28.css?v=2.8.2">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -358,7 +358,7 @@
 
         <div id="q28Tab-market" class="q28-tab">
           <div class="grid two">
-            <article class="card glass"><span class="eyebrow">SELL FOR Q</span><h3>Create listing</h3><input id="q28ListingTitle" placeholder="Product or service"><textarea id="q28ListingDescription" placeholder="Description"></textarea><div class="q28-inline"><input id="q28ListingPrice" type="number" min="0.01" step="0.01" placeholder="Price in Q"><input id="q28ListingInventory" type="number" min="1" value="1"><button id="q28CreateListing" class="primary">List</button></div></article>
+            <article class="card glass"><span class="eyebrow">SELL FOR Q</span><h3>Create listing</h3><input id="q28ListingTitle" placeholder="Product or service"><textarea id="q28ListingDescription" placeholder="Description"></textarea><label class="q28-upload-box">Photos, videos or files<input id="q28ListingMedia" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/csv,.docx,.xlsx" hidden><span>+ Add media / files</span><small>Up to 10 attachments · images/files up to 20 MB · videos up to 100 MB</small></label><div id="q28ListingMediaPreview" class="q28-selected-media"></div><div class="q28-inline"><input id="q28ListingPrice" type="number" min="0.01" step="0.01" placeholder="Price in Q"><input id="q28ListingInventory" type="number" min="1" value="1"><button id="q28CreateListing" class="primary">List</button></div></article>
             <article class="card glass"><span class="eyebrow">Q MARKET</span><h3>Explore</h3><div class="q28-inline"><input id="q28MarketSearch" placeholder="Search Q Market"><button id="q28MarketSearchBtn" class="ghost">Search</button></div><p class="micro">Marketplace purchases settle in Q and use escrow.</p></article>
           </div>
           <div id="q28MarketListings" class="q28-market-grid"></div>
@@ -397,8 +397,9 @@
             <div class="q28-wallet-form"><select id="q28AdminNetwork"><option>TRC20</option><option>BEP20</option></select><select id="q28AdminPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><input id="q28AdminWalletLabel" placeholder="Label"><input id="q28AdminWalletAddress" placeholder="Public USDT address"><button id="q28AdminAddWallet" class="primary">Add wallet</button></div>
             <div id="q28AdminWallets" class="q28-list"></div>
           </article>
-          <article class="card glass"><h3>Q settings</h3><div class="q28-settings-grid"><label>Q reference USD<input id="q28AdminPrice" type="number" step="0.0001"></label><label>Marketplace fee %<input id="q28AdminFee" type="number" step="0.01"></label><label>Basic Q / day<input id="q28AdminBasic" type="number" step="0.01"></label><label>Signup bonus Q<input id="q28AdminSignup" type="number" step="0.01"></label><label>Referrer reward Q<input id="q28AdminReferrer" type="number" step="0.01"></label><label>Referred user reward Q<input id="q28AdminReferred" type="number" step="0.01"></label></div><button id="q28AdminSaveConfig" class="primary">Save Q settings</button></article>
+          <article class="card glass"><h3>Q settings</h3><div class="q28-settings-grid"><label>Q reference USD<input id="q28AdminPrice" type="number" step="0.0001"></label><label>Marketplace fee %<input id="q28AdminFee" type="number" step="0.01"></label><label>Basic Q / day<input id="q28AdminBasic" type="number" step="0.01"></label><label>Signup bonus Q<input id="q28AdminSignup" type="number" step="0.01"></label><label>Free signup referrer Q<input id="q28AdminReferrer" type="number" step="0.01"></label><label>Referred user welcome Q<input id="q28AdminReferred" type="number" step="0.01"></label></div><button id="q28AdminSaveConfig" class="primary">Save Q settings</button></article>
         </div>
+        <article class="card glass"><div class="section-head"><div><h3>Package referral rewards</h3><p class="micro">Paid to the original referrer only after the referred user's USDT package payment is approved.</p></div></div><div class="q28-settings-grid"><label>$10 Starter referral Q<input id="q28RefStarter" type="number" step="0.01"></label><label>$50 Plus referral Q<input id="q28RefPlus" type="number" step="0.01"></label><label>$100 Pro referral Q<input id="q28RefPro" type="number" step="0.01"></label><label>$500 Premium referral Q<input id="q28RefPremium" type="number" step="0.01"></label><label>$1,000 Elite referral Q<input id="q28RefElite" type="number" step="0.01"></label></div><button id="q28AdminSaveReferralRules" class="primary">Save referral rewards</button><div id="q28AdminReferralOverview" class="q28-ref-admin-summary"></div></article>
         <article class="card glass"><div class="section-head"><div><h3>Pending USDT payments</h3><p class="micro">Open the blockchain transaction, verify amount/network/address, then approve or reject.</p></div><button id="q28AdminRefreshPayments" class="ghost">↻</button></div><div id="q28AdminPayments" class="q28-list"></div></article>
         <div class="grid two">
           <article class="card glass"><h3>Q Treasury</h3><div id="q28AdminTreasury" class="q28-list"></div><div class="q28-wallet-form"><select id="q28TreasuryFrom"></select><select id="q28TreasuryTo"></select><input id="q28TreasuryAmount" type="number" step="0.01" placeholder="Q amount"><input id="q28TreasuryReason" placeholder="Reason"><button id="q28TreasuryTransfer" class="primary">Transfer</button></div></article>
@@ -459,7 +460,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.8.1" defer></script>
-  <script src="/web/v28.js?v=2.8.1" defer></script>
+  <script src="/web/app.js?v=2.8.2" defer></script>
+  <script src="/web/v28.js?v=2.8.2" defer></script>
 </body>
 </html>
