@@ -1,13 +1,14 @@
-const CACHE = "lemmiq-v29-shell-1";
+const CACHE = "lemmiq-v2101-shell-1";
 const SHELL = [
   "/web/",
-  "/web/index.html?v=2.9",
-  "/web/styles.css?v=2.9",
-  "/web/app.js?v=2.9",
-  "/web/v28.js?v=2.9",
-  "/web/v28.css?v=2.9",
-  "/web/v29.js?v=2.9",
-  "/web/v29.css?v=2.9",
+  "/web/index.html?v=2.10.1",
+  "/web/styles.css?v=2.10.1",
+  "/web/app.js?v=2.10.1",
+  "/web/v28.js?v=2.10.1",
+  "/web/v28.css?v=2.10.1",
+  "/web/v29.js?v=2.10.1",
+  "/web/v29.css?v=2.10.1",
+  "/web/v210.css?v=2.10.1",
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",
@@ -31,11 +32,11 @@ self.addEventListener("fetch", event => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  const apiPrefixes = ["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/v24","/v26","/v27","/v28","/v29","/app-config"];
+  const apiPrefixes = ["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/v24","/v26","/v27","/v28","/v29","/v210","/app-config"];
   if (apiPrefixes.some(x => url.pathname.startsWith(x))) return;
 
   if (url.pathname === "/web/" || url.pathname.endsWith("/index.html") ||
-      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css")) {
+      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css") || url.pathname.endsWith("/v210.css")) {
     event.respondWith(
       fetch(req).then(res => {
         const copy=res.clone();

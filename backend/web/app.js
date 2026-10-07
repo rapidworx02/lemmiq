@@ -102,9 +102,9 @@ function showApp(){
   renderMeAvatar();
   connectSocket();
   const requested=(location.hash||"").replace(/^#/,"");
-  if(requested==="admin"||requested==="q-admin") setView("q-admin");
-  else if(requested==="q-economy") setView("q-economy");
-  else if(requested==="q-predict") setView("q-predict");
+  const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin"]);
+  if(requested==="admin") setView("q-admin");
+  else if(directViews.has(requested)) setView(requested);
   else refreshCurrent();
   if(window.refreshV28Access) window.refreshV28Access();
 }
@@ -1307,8 +1307,13 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   qsa("#nav button").forEach(b=>b.onclick=()=>{
     const view=b.dataset.view;
-    if(view==="chats")chatsHome(true);
-    setView(view);
+    if(view==="chats"){
+      chatsHome(false);
+      setView("chats");
+    }else{
+      setView(view);
+    }
+    if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
   });
   qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
   qsa("[data-q-prompt]").forEach(b=>b.onclick=()=>runQStarter(b.dataset.qPrompt));
@@ -1363,7 +1368,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.9").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.1").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
