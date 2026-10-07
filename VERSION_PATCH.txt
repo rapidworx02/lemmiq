@@ -1,0 +1,13 @@
+LEMMIQ V2.10.2 version target
+
+android/app/build.gradle.kts
+
+android {
+    defaultConfig {
+        versionCode = 52
+        versionName = "2.10.2"
+    }
+}
+
+IMPORTANT:
+Use a versionCode higher than every APK/AAB already installed or uploaded.

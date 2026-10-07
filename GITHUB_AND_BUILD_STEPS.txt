@@ -1,0 +1,41 @@
+LEMMIQ V2.10.2 — GitHub / build commands
+
+1) Extract this ZIP.
+
+2) Copy:
+   LemmiqUiV2102.kt
+   LemmiqChatMediaV2102.kt
+   CallDeclineV2102.kt
+
+to:
+C:\Users\pc\LEMMIQ\android\app\src\main\java\com\lemmiq\app\
+
+3) Merge the small LemmiqApp.kt changes from V2.10.2_MERGE_GUIDE.md.
+   Do NOT just upload the new helper files without wiring LemmiqApp.kt.
+
+4) Update build.gradle.kts:
+   versionCode = 52
+   versionName = "2.10.2"
+
+5) Commit:
+cd /d C:\Users\pc\LEMMIQ
+git status
+git add android/app/src/main/java/com/lemmiq/app/LemmiqUiV2102.kt
+git add android/app/src/main/java/com/lemmiq/app/LemmiqChatMediaV2102.kt
+git add android/app/src/main/java/com/lemmiq/app/CallDeclineV2102.kt
+git add android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+git add android/app/build.gradle.kts
+git commit -m "LEMMIQ V2.10.2 native More navigation and chat photo viewer"
+git push origin main
+
+6) Build:
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+7) Install:
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+If Android refuses the upgrade because of a signature mismatch:
+adb uninstall com.lemmiq.app
+adb install app\build\outputs\apk\debug\app-debug.apk

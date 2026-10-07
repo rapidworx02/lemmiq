@@ -1,0 +1,29 @@
+LEMMIQ V2.10.1 WEB/PWA HOTFIX
+
+Copy these files into backend/web/:
+- index.html
+- app.js
+- styles.css
+- sw.js
+- v210.css (NEW)
+
+CMD:
+cd /d C:\Users\pc\LEMMIQ
+git status
+git add backend/web/index.html backend/web/app.js backend/web/styles.css backend/web/sw.js backend/web/v210.css
+git commit -m "LEMMIQ V2.10.1 fix Q Predict mobile layout and add More tab"
+git push origin main
+
+After Render deploys:
+1. Open the site and refresh.
+2. If old UI remains, clear site data/cache and reopen.
+3. Fully close/reopen installed PWA so the new service worker activates.
+
+Expected bottom nav:
+Chats | Updates | Q Economy | Q Predict | Calls | More
+
+Expected Q Predict mobile layout:
+- full phone width
+- no blank right side
+- one readable market card per row
+- category chips horizontally scrollable
