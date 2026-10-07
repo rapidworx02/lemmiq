@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.OpenableColumns
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -18,7 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -220,16 +223,62 @@ fun V24GroupChat(vm:LemmiqViewModel){
 @Composable
 private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     val mine=m.sender_id==vm.store.userId
+    val a=m.attachment
+    val isPhoto=isLemmiqImageAttachmentV2102(a)
+    val mediaId=a?.media_id
+    var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
+    var mediaError by remember(m.id){mutableStateOf<String?>(null)}
+    var photoOpen by remember(m.id){mutableStateOf(false)}
+
+    LaunchedEffect(mediaId,isPhoto){
+        if(mediaId!=null && isPhoto){
+            try{
+                val bytes=withContext(Dispatchers.IO){vm.groupMediaBytes(m.id)}
+                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+                BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+                var sample=1
+                while(bounds.outWidth/sample>1600 || bounds.outHeight/sample>1600)sample*=2
+                bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size,BitmapFactory.Options().apply{inSampleSize=sample})
+                if(bitmap==null)mediaError="Unable to decode this photo"
+            }catch(e:Exception){mediaError=e.message?:"Unable to load this photo"}
+        }
+    }
+
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
         Surface(color=if(mine)V24Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
-            Column(Modifier.widthIn(max=300.dp).padding(11.dp)){
-                if(!mine)Text(m.sender?.display_name?:"Member",fontSize=9.sp,color=V24Purple,fontWeight=FontWeight.Bold)
-                val a=m.attachment
-                if(a?.kind=="VOICE")V24VoiceContent(a,m.id,true,vm,mine)
-                else Text(m.text,color=if(mine)Color.White else V24Ink)
-                Text(v24Time(m.created_at),fontSize=9.sp,color=if(mine)Color.White.copy(alpha=.75f) else V24Muted,modifier=Modifier.align(Alignment.End))
+            Column(Modifier.widthIn(max=330.dp).padding(if(isPhoto)4.dp else 11.dp)){
+                if(!mine)Text(m.sender?.display_name?:"Member",fontSize=9.sp,color=V24Purple,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=if(isPhoto)6.dp else 0.dp,vertical=if(isPhoto)4.dp else 0.dp))
+                when{
+                    a?.kind=="VOICE" -> V24VoiceContent(a,m.id,true,vm,mine)
+                    isPhoto -> {
+                        bitmap?.let{bmp->
+                            Image(
+                                bmp.asImageBitmap(),
+                                contentDescription="Group photo",
+                                modifier=Modifier.fillMaxWidth().heightIn(min=150.dp,max=360.dp).clip(RoundedCornerShape(15.dp)).clickable{photoOpen=true},
+                                contentScale=ContentScale.Fit
+                            )
+                        } ?: Surface(
+                            color=if(mine)Color.White.copy(alpha=.10f) else V24Soft,
+                            shape=RoundedCornerShape(14.dp),
+                            modifier=Modifier.fillMaxWidth().height(190.dp)
+                        ){
+                            Box(contentAlignment=Alignment.Center){
+                                if(mediaError==null)CircularProgressIndicator(modifier=Modifier.size(30.dp),strokeWidth=3.dp)
+                                else Text("Unable to load this photo",fontSize=11.sp,color=if(mine)Color.White else V24Muted)
+                            }
+                        }
+                        if(m.text.isNotBlank())Text(m.text,color=if(mine)Color.White else V24Ink,modifier=Modifier.padding(horizontal=7.dp,vertical=6.dp))
+                    }
+                    else -> Text(m.text,color=if(mine)Color.White else V24Ink)
+                }
+                Text(v24Time(m.created_at),fontSize=9.sp,color=if(mine)Color.White.copy(alpha=.75f) else V24Muted,modifier=Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp))
             }
         }
+    }
+
+    if(photoOpen){
+        bitmap?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
     }
 }
 

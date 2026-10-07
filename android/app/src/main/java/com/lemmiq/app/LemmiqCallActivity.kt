@@ -115,7 +115,7 @@ class LemmiqCallActivity:ComponentActivity(){
                             }
                         }
                         Spacer(Modifier.height(22.dp))
-                        Text("LEMMIQ V2.6 · LiveKit/WebRTC",color=Color(0xFF8E89A5),fontSize=11.sp)
+                        Text("LEMMIQ V${BuildConfig.VERSION_NAME} · LiveKit/WebRTC",color=Color(0xFF8E89A5),fontSize=11.sp)
                     }
                 }
             }
@@ -125,7 +125,7 @@ class LemmiqCallActivity:ComponentActivity(){
     }
 
     private fun answer(){
-        if(closing)return
+        if(closing || CallDeclineV2102.isTerminal(callId))return
         stopTones();cancelCallNotification()
         lifecycleScope.launch{
             try{
@@ -142,11 +142,29 @@ class LemmiqCallActivity:ComponentActivity(){
 
     private fun decline():()->Unit = {
         if(!closing){
-            closing=true;stopTones();cancelCallNotification()
+            closing=true
+            status.value="Declined"
+            stopTones()
+            stateJob?.cancel()
+            timerJob?.cancel()
+            timeoutJob?.cancel()
+            cancelCallNotification()
             lifecycleScope.launch{
-                runCatching{Api(SessionStore(this@LemmiqCallActivity)).declineCall(callId)}
-                disconnectLocalRoom()
-                finish()
+                CallDeclineV2102.decline(
+                    callId=callId,
+                    stopRingingImmediately={stopTones();cancelCallNotification()},
+                    backendDecline={id->Api(SessionStore(this@LemmiqCallActivity)).declineCall(id)},
+                    disconnectRoomAndTracks={disconnectLocalRoom()},
+                    releaseAudioFocus={
+                        val am=getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                        if(Build.VERSION.SDK_INT>=31)runCatching{am.clearCommunicationDevice()}
+                        am.mode=AudioManager.MODE_NORMAL
+                    },
+                    cancelTimersAndListeners={timerJob?.cancel();timeoutJob?.cancel();stateJob?.cancel()},
+                    stopCallForegroundService={},
+                    closeIncomingCallUi={finish()},
+                    onBackendFailure={status.value="Declined"}
+                )
             }
         }
     }
@@ -157,7 +175,7 @@ class LemmiqCallActivity:ComponentActivity(){
     }
 
     private fun connectRoom(){
-        if(closing)return
+        if(closing || CallDeclineV2102.isTerminal(callId))return
         if(wsUrl.isBlank()||token.isBlank()){status.value="Call credentials unavailable";return}
         lifecycleScope.launch{
             try{
@@ -201,7 +219,7 @@ class LemmiqCallActivity:ComponentActivity(){
     }
 
     private fun onAnswered(){
-        if(status.value=="Connected")return
+        if(closing || CallDeclineV2102.isTerminal(callId) || status.value=="Connected")return
         stopTones();timeoutJob?.cancel();status.value="Connected";seconds.intValue=0
         timerJob?.cancel();timerJob=lifecycleScope.launch{while(true){delay(1000);seconds.intValue++}}
     }

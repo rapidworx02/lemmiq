@@ -117,7 +117,7 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
     var open by remember{mutableStateOf(false)}
     var prompt by remember{mutableStateOf("")}
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
-        FloatingActionButton(onClick={open=true},containerColor=Purple,contentColor=Color.White,shape=CircleShape,modifier=Modifier.padding(end=18.dp,bottom=92.dp)){
+        FloatingActionButton(onClick={open=true},containerColor=Purple.copy(alpha=.68f),contentColor=Color.White,shape=CircleShape,modifier=Modifier.padding(end=18.dp,bottom=92.dp)){
             Text("Q",fontSize=23.sp,fontWeight=FontWeight.Black)
         }
     }
@@ -195,7 +195,12 @@ private fun Home(vm:LemmiqViewModel){
         vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict()
     }
     val nav=listOf(
-        "💬" to "Chats","⭕" to "Updates","Q+" to "Q Economy","◈" to "Q Predict","📞" to "Calls"
+        "💬" to "Chats",
+        "⭕" to "Updates",
+        "Q+" to "Q Economy",
+        "◈" to "Q Predict",
+        "📞" to "Calls",
+        "☰" to "More"
     )
     Scaffold(
         containerColor=Bg,
@@ -203,10 +208,19 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=!showMore&&!qFullScreen&&tab==i,
-                        onClick={tab=i;showMore=false;morePage=null;qFullScreen=false},
-                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=17.sp)},
-                        label={Text(x.second,fontSize=9.sp,maxLines=1)},
+                        selected=!qFullScreen && if(i==5) showMore else (!showMore && tab==i),
+                        onClick={
+                            qFullScreen=false
+                            morePage=null
+                            if(i==5){
+                                showMore=true
+                            }else{
+                                tab=i
+                                showMore=false
+                            }
+                        },
+                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=if(i==2)15.sp else 17.sp)},
+                        label={Text(x.second,fontSize=8.sp,maxLines=1)},
                         alwaysShowLabel=true
                     )
                 }
@@ -215,7 +229,12 @@ private fun Home(vm:LemmiqViewModel){
         floatingActionButton={
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
-                if(!qFullScreen)FloatingActionButton({qSheet=true},containerColor=Purple,contentColor=Color.White,shape=CircleShape){Text("Q",fontSize=24.sp,fontWeight=FontWeight.Black)}
+                if(!qFullScreen)FloatingActionButton(
+                    {qSheet=true},
+                    containerColor=Purple.copy(alpha=.68f),
+                    contentColor=Color.White,
+                    shape=CircleShape
+                ){Text("Q",fontSize=24.sp,fontWeight=FontWeight.Black)}
             }
         }
     ){pad->
@@ -231,6 +250,8 @@ private fun Home(vm:LemmiqViewModel){
                     "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
                     "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
                     "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
+                    "settings"->V241MoreSubPage("Settings",{morePage=null}){V2102SettingsScreen(vm)}
+                    "privacy"->V241MoreSubPage("Privacy & Security",{morePage=null}){V2102PrivacyScreen(vm)}
                     else->V241MoreMenu{morePage=it}
                 }
                 else->when(tab){
@@ -241,7 +262,11 @@ private fun Home(vm:LemmiqViewModel){
                     1->V24Updates(vm)
                     2->V28QEconomyScreen(vm)
                     3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
-                    else->V241CallsScreen(vm)
+                    4->V241CallsScreen(vm)
+                    else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
+                        qFullScreen=true
+                        if(prompt.isNotBlank())vm.askAgent(prompt)
+                    })
                 }
             }
         }
@@ -254,7 +279,6 @@ private fun Home(vm:LemmiqViewModel){
                     OutlinedButton(onClick={qSheet=false;qFullScreen=true;vm.askAgent(prompt)},modifier=Modifier.fillMaxWidth()){Text(prompt)}
                 }
                 Button(onClick={qSheet=false;qFullScreen=true},modifier=Modifier.fillMaxWidth()){Text("Open full Q workspace")}
-                TextButton(onClick={qSheet=false;showMore=true;morePage=null},modifier=Modifier.fillMaxWidth()){Text("Profile, Trust, Business & Settings")}
                 Spacer(Modifier.height(18.dp))
             }
         }
@@ -333,7 +357,9 @@ private fun V241MoreMenu(onOpen:(String)->Unit){
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
         Triple("💳","Money","Review detected payment insights") to "money",
-        Triple("🙂","Me / Profile","Photo, privacy, push and account") to "me"
+        Triple("🙂","Me / Profile","Photo, account and sign out") to "me",
+        Triple("⚙","Settings","Notifications, app version and controls") to "settings",
+        Triple("🔒","Privacy & Security","Profile, last-seen and status privacy") to "privacy"
     )
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
         item{Header("More","Tools, privacy and account")}
@@ -364,6 +390,55 @@ private fun V241MoreSubPage(title:String,onBack:()->Unit,content:@Composable ()-
             }
         }
         Box(Modifier.weight(1f)){content()}
+    }
+}
+
+@Composable
+private fun V2102SettingsScreen(vm:LemmiqViewModel){
+    val ctx=LocalContext.current
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom=24.dp),
+        verticalArrangement=Arrangement.spacedBy(10.dp)
+    ){
+        Card(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=8.dp),shape=RoundedCornerShape(20.dp)){
+            Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                Text("LEMMIQ app",fontWeight=FontWeight.Bold,fontSize=18.sp)
+                Text("Version ${BuildConfig.VERSION_NAME}",color=Muted,fontSize=12.sp)
+                Text("Server: ${vm.serverUrl}",color=Muted,fontSize=11.sp)
+            }
+        }
+        Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(20.dp)){
+            Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                Text("Notifications",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                Text("LEMMIQ push registration refreshes automatically. Android notification permission can be managed in system settings.",fontSize=11.sp,color=Muted)
+                OutlinedButton(onClick={
+                    val intent=Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply{
+                        putExtra(Settings.EXTRA_APP_PACKAGE,ctx.packageName)
+                    }
+                    runCatching{ctx.startActivity(intent)}
+                },modifier=Modifier.fillMaxWidth()){Text("Open notification settings")}
+            }
+        }
+        Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(20.dp)){
+            Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+                Text("Q & app controls",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                Text("Q assistant, Q Economy, Q Predict and Calls remain separate main tabs. Profile, Trust, Business and privacy live under More.",fontSize=11.sp,color=Muted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun V2102PrivacyScreen(vm:LemmiqViewModel){
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom=24.dp)){
+        V24PrivacyCard(vm)
+        Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp),shape=RoundedCornerShape(20.dp)){
+            Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                Text("Security",fontWeight=FontWeight.Bold,fontSize=18.sp)
+                Text("LEMMIQ never reads its own notifications. Cross-app intelligence only processes third-party apps that you explicitly permit.",fontSize=11.sp,color=Muted)
+                Text("Private beta: messenger and synced events are currently server-readable and are not end-to-end encrypted.",fontSize=11.sp,color=Muted)
+            }
+        }
     }
 }
 
@@ -770,47 +845,105 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     val mine=m.sender_id==me
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
+    val a=m.attachment
+    val isPhoto=isLemmiqImageAttachmentV2102(a)
     var mediaError by remember(m.id){mutableStateOf<String?>(null)}
-    val mediaId=m.attachment?.media_id
+    val mediaId=a?.media_id
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
-    // Only photo content is fetched for inline display; videos/docs download on tap.
-    LaunchedEffect(mediaId,m.attachment?.kind){
-        if(mediaId!=null && m.attachment?.kind=="PHOTO") {
+    var photoOpen by remember(m.id){mutableStateOf(false)}
+
+    // V2.10.2: recognise image MIME/filename too, not only attachment.kind == PHOTO.
+    LaunchedEffect(mediaId,isPhoto){
+        if(mediaId!=null && isPhoto){
             try{
                 val bytes=withContext(Dispatchers.IO){vm.mediaBytes(mediaId)}
                 val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
                 BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
                 var sample=1
-                while(bounds.outWidth/sample>1400 || bounds.outHeight/sample>1400)sample*=2
+                while(bounds.outWidth/sample>1600 || bounds.outHeight/sample>1600)sample*=2
                 val options=BitmapFactory.Options().apply{inSampleSize=sample}
                 bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size,options)
-            }catch(e:Exception){mediaError=e.message}
+                if(bitmap==null)mediaError="Unable to decode this photo"
+            }catch(e:Exception){mediaError=e.message?:"Unable to load this photo"}
         }
     }
+
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
-        Surface(color=if(mine)Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
-            Column(Modifier.widthIn(max=300.dp).padding(12.dp)){
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                    if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
-                    Spacer(Modifier.weight(1f));Text("⋯",color=if(mine)Color.White else Muted,modifier=Modifier.clickable(onClick=onActions).padding(horizontal=4.dp))
+        Surface(
+            color=if(mine)Purple else Color.White,
+            shape=RoundedCornerShape(18.dp),
+            shadowElevation=if(mine)0.dp else 1.dp
+        ){
+            Column(
+                Modifier
+                    .widthIn(max=330.dp)
+                    .padding(if(isPhoto)4.dp else 12.dp)
+            ){
+                if(!isPhoto){
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                        if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
+                        Spacer(Modifier.weight(1f))
+                        Text("⋯",color=if(mine)Color.White else Muted,modifier=Modifier.clickable(onClick=onActions).padding(horizontal=4.dp))
+                    }
                 }
-                m.reply_to?.let{q->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(8.dp)){Text(q.text,Modifier.padding(7.dp),fontSize=10.sp,color=if(mine)Color.White else Ink,maxLines=2,overflow=TextOverflow.Ellipsis)}}
-                val a=m.attachment
+
+                m.reply_to?.let{q->
+                    Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(8.dp),modifier=Modifier.padding(if(isPhoto)4.dp else 0.dp)){
+                        Text(q.text,Modifier.padding(7.dp),fontSize=10.sp,color=if(mine)Color.White else Ink,maxLines=2,overflow=TextOverflow.Ellipsis)
+                    }
+                }
+
                 if(a!=null){
-                    when(a.kind){
-                        "VOICE" -> V24VoiceContent(a,m.id,false,vm,mine)
-                        "PHOTO" -> {
+                    when{
+                        a.kind=="VOICE" -> V24VoiceContent(a,m.id,false,vm,mine)
+
+                        isPhoto -> {
                             bitmap?.let{bmp->
-                                Image(bmp.asImageBitmap(),contentDescription="Shared photo",
-                                    modifier=Modifier.fillMaxWidth().heightIn(max=300.dp).clip(RoundedCornerShape(14.dp)),
-                                    contentScale=ContentScale.Fit)
+                                Box(Modifier.fillMaxWidth()){
+                                    Image(
+                                        bmp.asImageBitmap(),
+                                        contentDescription="Shared photo",
+                                        modifier=Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min=150.dp,max=360.dp)
+                                            .clip(RoundedCornerShape(15.dp))
+                                            .clickable{photoOpen=true},
+                                        contentScale=ContentScale.Fit
+                                    )
+                                    Surface(
+                                        color=Color.Black.copy(alpha=.36f),
+                                        shape=CircleShape,
+                                        modifier=Modifier.align(Alignment.TopEnd).padding(6.dp).clickable(onClick=onActions)
+                                    ){
+                                        Text("⋯",color=Color.White,fontSize=18.sp,modifier=Modifier.padding(horizontal=9.dp,vertical=2.dp))
+                                    }
+                                    if(m.ai_generated){
+                                        Surface(
+                                            color=Color.Black.copy(alpha=.38f),
+                                            shape=RoundedCornerShape(99.dp),
+                                            modifier=Modifier.align(Alignment.TopStart).padding(7.dp)
+                                        ){
+                                            Text("✨ AI AUTO",color=Color.White,fontSize=8.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=7.dp,vertical=3.dp))
+                                        }
+                                    }
+                                }
                             } ?: Surface(
-                                color=if(mine)Color.White.copy(alpha=.10f) else Soft,shape=RoundedCornerShape(14.dp),
-                                modifier=Modifier.fillMaxWidth().height(170.dp)
-                            ){Box(contentAlignment=Alignment.Center){
-                                Text(if(mediaError==null)"Loading photo…" else "Unable to load this photo",color=if(mine)Color.White else Muted)
-                            }}
-                            if(m.text.isNotBlank())Text(m.text,Modifier.padding(top=8.dp),color=if(mine)Color.White else Ink)
+                                color=if(mine)Color.White.copy(alpha=.10f) else Soft,
+                                shape=RoundedCornerShape(14.dp),
+                                modifier=Modifier.fillMaxWidth().height(190.dp)
+                            ){
+                                Box(contentAlignment=Alignment.Center){
+                                    if(mediaError==null)CircularProgressIndicator(modifier=Modifier.size(30.dp),strokeWidth=3.dp)
+                                    else Text("Unable to load this photo",color=if(mine)Color.White else Muted,fontSize=11.sp)
+                                }
+                            }
+
+                            if(m.text.isNotBlank())Text(
+                                m.text,
+                                Modifier.padding(horizontal=7.dp,vertical=6.dp),
+                                color=if(mine)Color.White else Ink
+                            )
+
                             if(mediaId!=null)TextButton(
                                 enabled=!(vm.visionBusy&&vm.visionSourceMessageId==m.id),
                                 onClick={scope.launch{
@@ -818,10 +951,20 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                         val bytes=vm.mediaBytes(mediaId)
                                         vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.",m.id)
                                     }catch(e:Exception){mediaError="Unable to load this photo"}
-                                }}
-                            ){Text(if(vm.visionBusy&&vm.visionSourceMessageId==m.id)"Analysing…" else if(vm.error?.startsWith("Q Vision")==true)"↻ Retry Q Vision" else "📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
+                                }},
+                                contentPadding=PaddingValues(horizontal=7.dp,vertical=2.dp)
+                            ){
+                                Text(
+                                    if(vm.visionBusy&&vm.visionSourceMessageId==m.id)"Analysing…"
+                                    else if(vm.error?.startsWith("Q Vision")==true)"↻ Retry Q Vision"
+                                    else "📷 Ask Q Vision",
+                                    color=if(mine)Color.White else Purple,
+                                    fontSize=11.sp
+                                )
+                            }
                         }
-                        "VIDEO" -> {
+
+                        a.kind=="VIDEO" -> {
                             Surface(color=if(mine)Color.White.copy(alpha=.10f) else Soft,shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth().height(170.dp).clickable{
                                 if(a.media_id!=null)scope.launch{
                                     try{
@@ -834,31 +977,47 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                             }){Box(contentAlignment=Alignment.Center){Text("▶",fontSize=42.sp,color=if(mine)Color.White else Purple)}}
                             if(m.text.isNotBlank())Text(m.text,Modifier.padding(top=8.dp),color=if(mine)Color.White else Ink)
                         }
-                        "CONTACT" -> {
+
+                        a.kind=="CONTACT" -> {
                             Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
                             Text(a.contact_phone.orEmpty(),color=if(mine)Color.White else Ink)
                         }
-                        else -> if(a.media_id!=null){
+
+                        a.media_id!=null -> {
                             Text("📄 ${a.name.orEmpty()}",color=if(mine)Color.White else Ink,fontSize=12.sp)
                             TextButton(onClick={scope.launch{
                                 mediaError=null
-                                try{val bytes=vm.mediaBytes(a.media_id);val safeName=(a.name?:"attachment").replace(Regex("[^A-Za-z0-9._-]"),"_");val dir=File(ctx.cacheDir,"share").apply{mkdirs()};val file=File(dir,"${m.id}_$safeName");withContext(Dispatchers.IO){file.writeBytes(bytes)};val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file);val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"application/octet-stream");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)};ctx.startActivity(Intent.createChooser(intent,"Open attachment"))}catch(e:Exception){mediaError="Unable to open this file"}
+                                try{
+                                    val bytes=vm.mediaBytes(a.media_id)
+                                    val safeName=(a.name?:"attachment").replace(Regex("[^A-Za-z0-9._-]"),"_")
+                                    val dir=File(ctx.cacheDir,"share").apply{mkdirs()};val file=File(dir,"${m.id}_$safeName")
+                                    withContext(Dispatchers.IO){file.writeBytes(bytes)}
+                                    val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
+                                    val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"application/octet-stream");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+                                    ctx.startActivity(Intent.createChooser(intent,"Open attachment"))
+                                }catch(e:Exception){mediaError="Unable to open this file"}
                             }}){Text("Open / share",color=if(mine)Color.White else Purple)}
                         }
                     }
                 }else Text(m.text,color=if(mine)Color.White else Ink)
-                if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}}
-                if(mediaError!=null && a?.kind!="PHOTO")Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
-                Row(Modifier.align(Alignment.End),verticalAlignment=Alignment.CenterVertically){
+
+                if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp),modifier=Modifier.padding(horizontal=if(isPhoto)7.dp else 0.dp)){
+                    m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}
+                }
+                if(mediaError!=null && !isPhoto)Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
+                Row(Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp),verticalAlignment=Alignment.CenterVertically){
                     Text(v24Time(m.created_at)+(if(m.edited_at!=null)" · edited" else ""),color=if(mine)Color(0xFFDCD6FF) else Muted,fontSize=9.sp)
                     if(mine)Text(if(m.read_at!=null)"  ✓✓" else "  ✓",color=Color(0xFFDCD6FF),fontSize=10.sp)
                 }
-                if(!mine && a==null && !m.deleted_for_everyone) TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),
-                    contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)){
+                if(!mine && a==null && !m.deleted_for_everyone)TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)){
                     Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)
                 }
             }
         }
+    }
+
+    if(photoOpen){
+        bitmap?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
     }
 }
 

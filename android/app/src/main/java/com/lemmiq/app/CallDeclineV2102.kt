@@ -2,6 +2,7 @@ package com.lemmiq.app
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -19,6 +20,11 @@ object CallDeclineV2102 {
     private fun isTerminalState(state: State) = state in setOf(
         State.DECLINED, State.ENDED, State.MISSED, State.FAILED
     )
+
+    fun markDeclined(callId: String?) {
+        val id = callId?.trim().orEmpty()
+        if (id.isNotEmpty()) terminalCalls += id
+    }
 
     fun isTerminal(callId: String?): Boolean {
         val id = callId?.trim().orEmpty()
@@ -58,7 +64,11 @@ object CallDeclineV2102 {
             stopRingingImmediately()
 
             if (firstDecline) {
-                try { backendDecline(id) } catch (t: Throwable) { onBackendFailure(t) }
+                try {
+                    // Never let a slow network make the Decline button appear frozen.
+                    val completed = withTimeoutOrNull(1500L) { backendDecline(id); true } ?: false
+                    if (!completed) onBackendFailure(IllegalStateException("Decline request timed out"))
+                } catch (t: Throwable) { onBackendFailure(t) }
             }
 
             try { disconnectRoomAndTracks() } catch (_: Throwable) {}
