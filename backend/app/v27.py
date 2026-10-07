@@ -256,7 +256,13 @@ def register_v27(app, current_user, get_db, push):
             analysis_json=json.dumps(analysis, ensure_ascii=False),
             history_json=json.dumps(history, ensure_ascii=False), saved=save,
         )
-        db.add(row); db.commit(); db.refresh(row)
+        db.add(row)
+        try:
+            from .v29 import track_shadow_event
+            track_shadow_event(db,u.id,"Q_VISION",success=True)
+        except Exception:
+            pass
+        db.commit(); db.refresh(row)
         return _vision_json(row)
 
     @router.get("/v27/vision")
@@ -309,6 +315,11 @@ def register_v27(app, current_user, get_db, push):
         row.analysis_json = json.dumps(result, ensure_ascii=False)
         row.history_json = json.dumps(history[-40:], ensure_ascii=False)
         row.updated_at = datetime.now(timezone.utc)
+        try:
+            from .v29 import track_shadow_event
+            track_shadow_event(db,u.id,"Q_VISION",success=True,note="follow-up")
+        except Exception:
+            pass
         db.commit()
         return _vision_json(row)
 
@@ -357,6 +368,11 @@ def register_v27(app, current_user, get_db, push):
                 status="PENDING", created_at=now, updated_at=now, expires_at=now + timedelta(days=7),
             )
             db.add(row); rows.append(row)
+        try:
+            from .v29 import track_shadow_event
+            track_shadow_event(db,u.id,"Q_TO_Q",success=True,note=f"{len(rows)} participant(s)")
+        except Exception:
+            pass
         db.commit()
         for row in rows:
             db.refresh(row)

@@ -699,6 +699,35 @@ class Api(private val store:SessionStore){
         return gson.fromJson(req(b("$base/v28/market/orders/$id/dispute").post(rb).build()),QMarketOrderDto::class.java)
     }
 
+    // ---------- LEMMIQ V2.9 Q Predict ----------
+    suspend fun predictHome(category:String="TRENDING"):PredictHomeDto =
+        gson.fromJson(req(b("$base/v29/predict/home?category=${URLEncoder.encode(category,"UTF-8")}").get().build()),PredictHomeDto::class.java)
+
+    suspend fun predictMarket(id:Int):PredictMarketDto =
+        gson.fromJson(req(b("$base/v29/predict/markets/$id").get().build()),PredictMarketDto::class.java)
+
+    suspend fun predictStake(id:Int,outcome:String,amountPc:Double):PredictStakeResponseDto{
+        val rb=gson.toJson(mapOf("outcome" to outcome,"amount_pc" to amountPc)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v29/predict/markets/$id/stake").post(rb).build()),PredictStakeResponseDto::class.java)
+    }
+
+    suspend fun predictWatch(id:Int){req(b("$base/v29/predict/markets/$id/watch").post("{}".toRequestBody(json)).build())}
+
+    suspend fun predictComment(id:Int,text:String){
+        val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)
+        req(b("$base/v29/predict/markets/$id/comments").post(rb).build())
+    }
+
+    suspend fun predictMine():List<PredictMyDto>{
+        val t=req(b("$base/v29/predict/my").get().build())
+        return gson.fromJson(t,object:TypeToken<List<PredictMyDto>>(){}.type)
+    }
+
+    suspend fun predictLeaderboard():List<PredictLeaderDto>{
+        val t=req(b("$base/v29/predict/leaderboard").get().build())
+        return gson.fromJson(t,object:TypeToken<List<PredictLeaderDto>>(){}.type)
+    }
+
     fun socket(listener:WebSocketListener):WebSocket{
         val u="$base/ws?token=${store.token.orEmpty()}".replace("http://","ws://").replace("https://","wss://")
         return client.newWebSocket(Request.Builder().url(u).build(),listener)

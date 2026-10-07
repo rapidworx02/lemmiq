@@ -108,6 +108,30 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
         else->Home(vm)
     }
     if(vm.authenticated)V27VisionDialog(vm)
+    if(vm.authenticated && (vm.active!=null || vm.activeGroup!=null))V29ConversationQOrb(vm)
+}
+
+@Composable
+private fun V29ConversationQOrb(vm:LemmiqViewModel){
+    var open by remember{mutableStateOf(false)}
+    var prompt by remember{mutableStateOf("")}
+    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
+        FloatingActionButton(onClick={open=true},containerColor=Purple,contentColor=Color.White,shape=CircleShape,modifier=Modifier.padding(end=18.dp,bottom=92.dp)){
+            Text("Q",fontSize=23.sp,fontWeight=FontWeight.Black)
+        }
+    }
+    if(open){
+        ModalBottomSheet(onDismissRequest={open=false}){
+            Column(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+                Text("Q · Personal Assistant",fontSize=22.sp,fontWeight=FontWeight.Black)
+                Text(if(vm.active!=null)"Ask Q about this conversation or anything in LEMMIQ." else "Ask Q while you are in this group.",fontSize=11.sp,color=Muted)
+                OutlinedTextField(prompt,{prompt=it},modifier=Modifier.fillMaxWidth(),placeholder={Text("Ask Q…")},minLines=2)
+                Button(onClick={if(prompt.isNotBlank()){vm.askAgent(prompt.trim());prompt=""}},enabled=prompt.isNotBlank()&&!vm.agentBusy,modifier=Modifier.fillMaxWidth()){Text(if(vm.agentBusy)"Q is thinking…" else "Ask Q")}
+                vm.agentAnswer?.answer?.takeIf{it.isNotBlank()}?.let{Surface(color=Soft,shape=RoundedCornerShape(16.dp)){Text(it,Modifier.padding(14.dp),fontSize=12.sp,color=Ink)}}
+                Spacer(Modifier.height(18.dp))
+            }
+        }
+    }
 }
 
 @Composable
@@ -160,13 +184,16 @@ private fun Auth(vm:LemmiqViewModel){
 private fun Home(vm:LemmiqViewModel){
     var tab by remember{mutableIntStateOf(0)}
     var morePage by remember{mutableStateOf<String?>(null)}
+    var showMore by remember{mutableStateOf(false)}
     var newChat by remember{mutableStateOf(false)}
     var newGroup by remember{mutableStateOf(false)}
+    var qSheet by remember{mutableStateOf(false)}
+    var qFullScreen by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){
-        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls()
+        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict()
     }
     val nav=listOf(
-        "💬" to "Chats","⭕" to "Updates","Q" to "Q","Q+" to "Q Economy","📞" to "Calls","☰" to "More"
+        "💬" to "Chats","⭕" to "Updates","Q+" to "Q Economy","◈" to "Q Predict","📞" to "Calls"
     )
     Scaffold(
         containerColor=Bg,
@@ -174,7 +201,8 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=tab==i,onClick={tab=i;if(i!=5)morePage=null},
+                        selected=!showMore&&!qFullScreen&&tab==i,
+                        onClick={tab=i;showMore=false;morePage=null;qFullScreen=false},
                         icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=17.sp)},
                         label={Text(x.second,fontSize=9.sp,maxLines=1)},
                         alwaysShowLabel=true
@@ -183,32 +211,49 @@ private fun Home(vm:LemmiqViewModel){
             }
         },
         floatingActionButton={
-            if(tab==0)Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
-                SmallFloatingActionButton({newGroup=true},containerColor=Soft,contentColor=Purple){Text("👥")}
-                FloatingActionButton({newChat=true},containerColor=Purple,contentColor=Color.White){Text("+",fontSize=28.sp)}
+            Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
+                if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
+                if(!qFullScreen)FloatingActionButton({qSheet=true},containerColor=Purple,contentColor=Color.White,shape=CircleShape){Text("Q",fontSize=24.sp,fontWeight=FontWeight.Black)}
             }
         }
     ){pad->
         Box(Modifier.padding(pad)){
-            when(tab){
-                0->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
-                    tab=2
-                    if(prompt.isNotBlank())vm.askAgent(prompt)
-                })
-                1->V24Updates(vm)
-                2->ChatAgent(vm)
-                3->V28QEconomyScreen(vm)
-                4->V241CallsScreen(vm)
-                else->{
-                    when(morePage){
-                        "trust"->V241MoreSubPage("Trust / Fact Check",{morePage=null}){V24Trust(vm)}
-                        "business"->V241MoreSubPage("Business Agent",{morePage=null}){BusinessScreen(vm)}
-                        "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
-                        "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
-                        "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
-                        else->V241MoreMenu{morePage=it}
-                    }
+            when{
+                qFullScreen->Column(Modifier.fillMaxSize()){
+                    Surface(shadowElevation=1.dp){Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){TextButton({qFullScreen=false}){Text("‹ Back")};Text("Q · Personal Assistant",fontWeight=FontWeight.Bold)}}
+                    Box(Modifier.weight(1f)){ChatAgent(vm)}
                 }
+                showMore->when(morePage){
+                    "trust"->V241MoreSubPage("Trust / Fact Check",{morePage=null}){V24Trust(vm)}
+                    "business"->V241MoreSubPage("Business Agent",{morePage=null}){BusinessScreen(vm)}
+                    "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
+                    "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
+                    "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
+                    else->V241MoreMenu{morePage=it}
+                }
+                else->when(tab){
+                    0->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
+                        qFullScreen=true
+                        if(prompt.isNotBlank())vm.askAgent(prompt)
+                    })
+                    1->V24Updates(vm)
+                    2->V28QEconomyScreen(vm)
+                    3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
+                    else->V241CallsScreen(vm)
+                }
+            }
+        }
+    }
+    if(qSheet){
+        ModalBottomSheet(onDismissRequest={qSheet=false}){
+            Column(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+                Row(verticalAlignment=Alignment.CenterVertically){Surface(color=Purple,shape=CircleShape){Text("Q",Modifier.padding(horizontal=15.dp,vertical=10.dp),color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black)};Spacer(Modifier.width(12.dp));Column{Text("Your LEMMIQ assistant",fontSize=21.sp,fontWeight=FontWeight.Black);Text("Available wherever you are in LEMMIQ.",fontSize=11.sp,color=Muted)}}
+                listOf("Catch me up","What did I promise?","Which chats need a reply?").forEach{prompt->
+                    OutlinedButton(onClick={qSheet=false;qFullScreen=true;vm.askAgent(prompt)},modifier=Modifier.fillMaxWidth()){Text(prompt)}
+                }
+                Button(onClick={qSheet=false;qFullScreen=true},modifier=Modifier.fillMaxWidth()){Text("Open full Q workspace")}
+                TextButton(onClick={qSheet=false;showMore=true;morePage=null},modifier=Modifier.fillMaxWidth()){Text("Profile, Trust, Business & Settings")}
+                Spacer(Modifier.height(18.dp))
             }
         }
     }
@@ -681,13 +726,15 @@ private fun Chat(vm:LemmiqViewModel){
     }
     if(vm.trustBusy){
         AlertDialog(
-            onDismissRequest={},
+            onDismissRequest={vm.cancelTrust()},
             title={Text("🛡 LEMMIQ Trust")},
             text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
                 LinearProgressIndicator(Modifier.fillMaxWidth(),color=Purple)
                 Text("Checking this message. Searching for evidence may take a little while.")
+                Text("You can cancel if you selected the wrong message.",fontSize=11.sp,color=Muted)
             }},
-            confirmButton={}
+            confirmButton={},
+            dismissButton={TextButton(onClick={vm.cancelTrust()}){Text("Cancel check")}}
         )
     } else {
         vm.trustError?.let{message->
@@ -699,6 +746,19 @@ private fun Chat(vm:LemmiqViewModel){
             )
         }
         vm.trustResult?.let{r->TrustDialog(r){vm.clearTrust()}}
+    }
+    if(vm.visionBusy && vm.visionSourceMessageId!=null){
+        AlertDialog(
+            onDismissRequest={vm.cancelVision()},
+            title={Text("📷 LEMMIQ Q Vision")},
+            text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
+                LinearProgressIndicator(Modifier.fillMaxWidth(),color=Purple)
+                Text("Analysing this image…")
+                Text("Understanding visual details and preparing your Q response.",fontSize=12.sp,color=Muted)
+            }},
+            confirmButton={},
+            dismissButton={TextButton(onClick={vm.cancelVision()}){Text("Cancel")}}
+        )
     }
     vm.chatSummary?.let{s->ChatSummaryDialog(s){vm.clearChatSummary()}}
 }
@@ -735,51 +795,58 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                 m.reply_to?.let{q->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(8.dp)){Text(q.text,Modifier.padding(7.dp),fontSize=10.sp,color=if(mine)Color.White else Ink,maxLines=2,overflow=TextOverflow.Ellipsis)}}
                 val a=m.attachment
                 if(a!=null){
-                    if(a.kind=="VOICE"){
-                        V24VoiceContent(a,m.id,false,vm,mine)
-                    } else if(a.kind=="PHOTO"){
-                        bitmap?.let{bmp->
-                            Image(bmp.asImageBitmap(),contentDescription="Shared photo",
-                                modifier=Modifier.fillMaxWidth().heightIn(max=260.dp).clip(RoundedCornerShape(12.dp)),
-                                contentScale=ContentScale.Fit)
-                        }?:Text(if(mediaError==null)"🖼 Loading photo…" else "🖼 Photo unavailable",color=if(mine)Color.White else Ink)
-                        if(mediaId!=null)TextButton(onClick={
-                            scope.launch{
-                                try{
-                                    val bytes=vm.mediaBytes(mediaId)
-                                    vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.")
-                                }catch(e:Exception){mediaError=e.message}
-                            }
-                        }){Text(if(vm.error?.startsWith("Q Vision") == true)"↻ Retry Q Vision" else "📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
-                    }
-                    if(a.kind=="CONTACT"){
-                        Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
-                        Text(a.contact_phone.orEmpty(),color=if(mine)Color.White else Ink)
-                    }else if(a.kind!="VOICE" && a.media_id!=null){
-                        Text("${if(a.kind=="VIDEO")"🎬" else if(a.kind=="PHOTO")"🖼" else "📄"} ${a.name.orEmpty()}",
-                            color=if(mine)Color.White else Ink,fontSize=12.sp)
-                        TextButton(onClick={
-                            scope.launch {
+                    when(a.kind){
+                        "VOICE" -> V24VoiceContent(a,m.id,false,vm,mine)
+                        "PHOTO" -> {
+                            bitmap?.let{bmp->
+                                Image(bmp.asImageBitmap(),contentDescription="Shared photo",
+                                    modifier=Modifier.fillMaxWidth().heightIn(max=300.dp).clip(RoundedCornerShape(14.dp)),
+                                    contentScale=ContentScale.Fit)
+                            } ?: Surface(
+                                color=if(mine)Color.White.copy(alpha=.10f) else Soft,shape=RoundedCornerShape(14.dp),
+                                modifier=Modifier.fillMaxWidth().height(170.dp)
+                            ){Box(contentAlignment=Alignment.Center){
+                                Text(if(mediaError==null)"Loading photo…" else "Unable to load this photo",color=if(mine)Color.White else Muted)
+                            }}
+                            if(m.text.isNotBlank())Text(m.text,Modifier.padding(top=8.dp),color=if(mine)Color.White else Ink)
+                            if(mediaId!=null)TextButton(
+                                enabled=!(vm.visionBusy&&vm.visionSourceMessageId==m.id),
+                                onClick={scope.launch{
+                                    try{
+                                        val bytes=vm.mediaBytes(mediaId)
+                                        vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.",m.id)
+                                    }catch(e:Exception){mediaError="Unable to load this photo"}
+                                }}
+                            ){Text(if(vm.visionBusy&&vm.visionSourceMessageId==m.id)"Analysing…" else if(vm.error?.startsWith("Q Vision")==true)"↻ Retry Q Vision" else "📷 Ask Q Vision",color=if(mine)Color.White else Purple,fontSize=11.sp)}
+                        }
+                        "VIDEO" -> {
+                            Surface(color=if(mine)Color.White.copy(alpha=.10f) else Soft,shape=RoundedCornerShape(14.dp),modifier=Modifier.fillMaxWidth().height(170.dp).clickable{
+                                if(a.media_id!=null)scope.launch{
+                                    try{
+                                        val bytes=vm.mediaBytes(a.media_id);val dir=File(ctx.cacheDir,"share").apply{mkdirs()};val file=File(dir,"${m.id}_video.mp4")
+                                        withContext(Dispatchers.IO){file.writeBytes(bytes)};val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
+                                        val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"video/mp4");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
+                                        ctx.startActivity(Intent.createChooser(intent,"Play video"))
+                                    }catch(e:Exception){mediaError="Unable to open this video"}
+                                }
+                            }){Box(contentAlignment=Alignment.Center){Text("▶",fontSize=42.sp,color=if(mine)Color.White else Purple)}}
+                            if(m.text.isNotBlank())Text(m.text,Modifier.padding(top=8.dp),color=if(mine)Color.White else Ink)
+                        }
+                        "CONTACT" -> {
+                            Text("👤 ${a.contact_name.orEmpty()}",fontWeight=FontWeight.Bold,color=if(mine)Color.White else Ink)
+                            Text(a.contact_phone.orEmpty(),color=if(mine)Color.White else Ink)
+                        }
+                        else -> if(a.media_id!=null){
+                            Text("📄 ${a.name.orEmpty()}",color=if(mine)Color.White else Ink,fontSize=12.sp)
+                            TextButton(onClick={scope.launch{
                                 mediaError=null
-                                try{
-                                    val bytes=vm.mediaBytes(a.media_id)
-                                    val safeName=(a.name?:"attachment").replace(Regex("[^A-Za-z0-9._-]"),"_")
-                                    val dir=File(ctx.cacheDir,"share").apply{mkdirs()}
-                                    val file=File(dir,"${m.id}_$safeName")
-                                    withContext(Dispatchers.IO){file.writeBytes(bytes)}
-                                    val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
-                                    val intent=Intent(Intent.ACTION_VIEW).apply{
-                                        setDataAndType(uri,a.mime_type?:"application/octet-stream")
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    ctx.startActivity(Intent.createChooser(intent,"Open attachment"))
-                                }catch(e:Exception){mediaError=e.message?:"Cannot open media"}
-                            }
-                        }){Text("Open / share",color=if(mine)Color.White else Purple)}
+                                try{val bytes=vm.mediaBytes(a.media_id);val safeName=(a.name?:"attachment").replace(Regex("[^A-Za-z0-9._-]"),"_");val dir=File(ctx.cacheDir,"share").apply{mkdirs()};val file=File(dir,"${m.id}_$safeName");withContext(Dispatchers.IO){file.writeBytes(bytes)};val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file);val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"application/octet-stream");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)};ctx.startActivity(Intent.createChooser(intent,"Open attachment"))}catch(e:Exception){mediaError="Unable to open this file"}
+                            }}){Text("Open / share",color=if(mine)Color.White else Purple)}
+                        }
                     }
                 }else Text(m.text,color=if(mine)Color.White else Ink)
                 if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}}
-                if(mediaError!=null)Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
+                if(mediaError!=null && a?.kind!="PHOTO")Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
                 Row(Modifier.align(Alignment.End),verticalAlignment=Alignment.CenterVertically){
                     Text(v24Time(m.created_at)+(if(m.edited_at!=null)" · edited" else ""),color=if(mine)Color(0xFFDCD6FF) else Muted,fontSize=9.sp)
                     if(mine)Text(if(m.read_at!=null)"  ✓✓" else "  ✓",color=Color(0xFFDCD6FF),fontSize=10.sp)

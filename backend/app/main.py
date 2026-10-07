@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
 import jwt
-from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, UploadFile, File, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel, Field
 from fastapi.responses import StreamingResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.8.3")
+app = FastAPI(title="LEMMIQ Server", version="2.9")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -209,7 +209,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.8.3"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.9"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -421,9 +421,16 @@ def trust_check(body: TrustIn, refresh: bool=False, u: User = Depends(current_us
         cached=db.scalar(select(TrustHistory).where(TrustHistory.user_id==u.id,TrustHistory.content_hash==digest,TrustHistory.checked_at>=cutoff).order_by(TrustHistory.checked_at.desc()).limit(1))
         if cached:
             out=trust_history_json(cached);out["cached"]=True;return out
+    trust_success=True
     try:result=check_text(body.text)
     except Exception:
+        trust_success=False
         logging.getLogger("lemmiq.trust").exception("Trust endpoint failed");result=unavailable_result()
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db,u.id,"TRUST",success=trust_success)
+    except Exception:
+        logging.getLogger("lemmiq.v29").exception("Shadow Trust tracking failed")
     h=TrustHistory(user_id=u.id,content_hash=digest,checked_text=body.text[:12000],status=str(result.get("status","UNVERIFIED")),confidence=int(result.get("confidence",0) or 0),summary=str(result.get("summary","") or ""),reasons_json=json.dumps(result.get("reasons",[]) or []),sources_json=json.dumps(result.get("sources",[]) or []),advice=str(result.get("advice","") or ""));db.add(h);db.commit();db.refresh(h);out=trust_history_json(h);out["cached"]=False;return out
 
 @app.get("/trust/history")
@@ -468,7 +475,14 @@ def agent_search(q: str, u: User = Depends(current_user), db: Session = Depends(
 @app.get("/agent/chats/{cid}/summary")
 def agent_chat_summary(cid: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
     try:
-        return summarize_chat(db, u.id, cid)
+        result = summarize_chat(db, u.id, cid)
+        try:
+            from .v29 import track_shadow_event
+            track_shadow_event(db, u.id, "CHAT_SUMMARY", note=f"chat:{cid}")
+            db.commit()
+        except Exception:
+            db.rollback()
+        return result
     except ValueError:
         raise HTTPException(404, "Chat not found")
 
@@ -479,7 +493,14 @@ def agent_ask(body: AgentAskIn, u: User = Depends(current_user), db: Session = D
         if isinstance(x,dict) and x.get("source") in {"WhatsApp","SMS"}:
             clean.append({"source":x["source"],"contact":str(x.get("contact",""))[:80],
                           "text":str(x.get("text",""))[:500]})
-    return ask_agent(db, u.id, body.question, body.days, clean)
+    result = ask_agent(db, u.id, body.question, body.days, clean)
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db, u.id, "Q_AGENT")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return result
 
 
 class InsightIn(BaseModel):
@@ -610,6 +631,7 @@ MAX_FILE_BYTES = 20 * 1024 * 1024
 
 @app.post("/chats/{cid}/attachments")
 async def upload_attachment(cid: int, background: BackgroundTasks, file: UploadFile = File(...),
+                            caption: str = Form(default=""),
                             u: User = Depends(current_user), db: Session = Depends(get_db)):
     c = ensure_member(db,cid,u.id)
     mime=(file.content_type or "").split(";")[0].lower().strip()
@@ -631,7 +653,11 @@ async def upload_attachment(cid: int, background: BackgroundTasks, file: UploadF
     object_key=media_store.store(payload)
     original=(file.filename or "Attachment").replace("\\","/").split("/")[-1]
     original=re.sub(r"[^A-Za-z0-9 .()\-]", "_", original)[:190] or "Attachment"
-    m=Message(chat_id=cid,sender_id=u.id,text="[" + kind.title() + "] " + original)
+    # Premium media UX: photos/videos show only a user-supplied caption.
+    # The original filename remains available in attachment metadata / Media info.
+    clean_caption=" ".join((caption or "").strip().split())[:1000]
+    message_text=clean_caption if kind in {"PHOTO","VIDEO"} else (clean_caption or ("[File] " + original))
+    m=Message(chat_id=cid,sender_id=u.id,text=message_text)
     c.updated_at=datetime.now(timezone.utc)
     db.add(m);db.flush()
     db.add(MessageAttachment(message_id=m.id,kind=kind,object_key=object_key,original_name=original,
@@ -640,7 +666,8 @@ async def upload_attachment(cid: int, background: BackgroundTasks, file: UploadF
     data=msg_json(m,db)
     oid=c.user2_id if c.user1_id==u.id else c.user1_id
     await push(oid,{"type":"message","data":data});await push(u.id,{"type":"message","data":data})
-    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid,m.text,unread_count_for_user(db,oid))
+    notify_text = m.text or ("📷 Photo" if kind == "PHOTO" else "🎬 Video" if kind == "VIDEO" else "📎 Attachment")
+    background.add_task(push_service.notify,push_tokens(db,oid),u.display_name,cid,notify_text,unread_count_for_user(db,oid))
     return data
 
 class ContactShare(BaseModel):
@@ -836,7 +863,14 @@ def business_suggest(cid:int,u:User=Depends(current_user),db:Session=Depends(get
     rows=db.scalars(select(Message).where(Message.chat_id==cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
     incoming=next((x.text for x in reversed(rows) if x.sender_id!=u.id),None)
     if not incoming: raise HTTPException(400,"No incoming customer message")
-    return business_reply(db,u.id,cid,incoming)
+    result = business_reply(db,u.id,cid,incoming)
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db, u.id, "BUSINESS_AGENT", note=f"chat:{cid}")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return result
 
 @app.post("/business/chats/{cid}/learn")
 def business_learn(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -878,7 +912,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.8.3",
+        "version": "2.9",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -905,6 +939,10 @@ register_v27(app,current_user,get_db,push)
 # ---------------- LEMMIQ V2.8 Q Economy + Marketplace ----------------
 from .v28 import register_v28
 register_v28(app,current_user,get_db)
+
+# ---------------- LEMMIQ V2.9 Q Predict + passive analytics ----------------
+from .v29 import register_v29
+register_v29(app,current_user,get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

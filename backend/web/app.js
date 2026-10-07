@@ -104,6 +104,7 @@ function showApp(){
   const requested=(location.hash||"").replace(/^#/,"");
   if(requested==="admin"||requested==="q-admin") setView("q-admin");
   else if(requested==="q-economy") setView("q-economy");
+  else if(requested==="q-predict") setView("q-predict");
   else refreshCurrent();
   if(window.refreshV28Access) window.refreshV28Access();
 }
@@ -139,7 +140,8 @@ function setView(name){
     money:["Money","Review and correct notification-derived payment insights."],
     me:["Me","Your profile photo, account and LEMMIQ access."],
     "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
-    "q-admin":["Q Admin","Treasury, USDT payments, marketplace and economy controls."]
+    "q-predict":["Q Predict","Test prediction markets using isolated Predict Credits."],
+    "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -156,7 +158,8 @@ async function refreshView(name){
     if(name==="money") await loadMoney();
     if(name==="me") renderMeAvatar();
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
-    if(name==="q-admin" && window.loadQAdmin) await window.loadQAdmin();
+    if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
+    if(name==="q-admin" && window.loadQAdmin) { await window.loadQAdmin(); if(window.loadV29Admin) await window.loadV29Admin(); }
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -1312,6 +1315,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("moreAndroidDownloadBtn").onclick=installAndroidApp;
   $("refreshCallsBtn").onclick=loadCalls;
   $("refreshBtn").onclick=refreshCurrent;$("logoutBtn").onclick=logout;
+  if($("profileMenuBtn"))$("profileMenuBtn").onclick=()=>setView("more");
+  if($("globalQOrb"))$("globalQOrb").onclick=()=>setView("agent");
 
   $("newChatBtn").onclick=showNewChat;$("newGroupBtn").onclick=showNewGroup;$("chatFilter").oninput=renderChats;$("chatAskQBtn").onclick=askQFromChatSearch;
   qsa("[data-chat-filter]").forEach(b=>b.onclick=()=>{state.chatFilterMode=b.dataset.chatFilter;qsa("[data-chat-filter]").forEach(x=>x.classList.toggle("active",x===b));renderChats()});
@@ -1358,7 +1363,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.8.3").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.9").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

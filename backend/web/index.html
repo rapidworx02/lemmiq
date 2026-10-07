@@ -10,9 +10,10 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.8.3">
+  <link rel="stylesheet" href="/web/styles.css?v=2.9">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.8.3">
+  <link rel="stylesheet" href="/web/v28.css?v=2.9">
+  <link rel="stylesheet" href="/web/v29.css?v=2.9">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -61,10 +62,9 @@
       <nav id="nav">
         <button data-view="chats" class="active"><span>💬</span>Chats</button>
         <button data-view="updates"><span>⭕</span>Updates</button>
-        <button data-view="agent"><span>Q</span>Q</button>
         <button data-view="q-economy"><span>Q+</span>Q Economy</button>
+        <button data-view="q-predict"><span>◈</span>Q Predict</button>
         <button data-view="calls"><span>📞</span>Calls</button>
-        <button data-view="more"><span>☰</span>More</button>
       </nav>
       <div class="sidebar-foot">
         <span id="socketDot" class="dot"></span><span id="socketText">offline</span>
@@ -80,7 +80,7 @@
         <div class="top-actions">
           <button id="androidBtnTop" class="ghost hidden">📱 Android app</button>
           <button id="installBtn" class="ghost hidden">🌐 Install web app</button>
-          <button id="refreshBtn" class="ghost">↻</button>
+          <button id="profileMenuBtn" class="ghost" title="Profile and more">☰</button><button id="refreshBtn" class="ghost">↻</button>
         </div>
       </header>
 
@@ -301,6 +301,19 @@
         </article>
       </section>
 
+      <section id="view-q-predict" class="view">
+        <div class="v29-predict-hero glass">
+          <div><span class="eyebrow">LEMMIQ Q PREDICT</span><h2>Predict what happens next.</h2><p>Test prediction markets using isolated Predict Credits. No Q or cash conversion is enabled.</p></div>
+          <div class="v29-pc-balance"><small>Predict Credits</small><strong id="v29PcBalance">— PC</strong><span>TEST MODE</span></div>
+        </div>
+        <div class="v29-predict-toolbar glass">
+          <div id="v29PredictCategories" class="v29-category-chips"></div>
+          <div class="v29-predict-actions"><button id="v29MyPredictionsBtn" class="ghost">My predictions</button><button id="v29LeaderboardBtn" class="ghost">Leaderboard</button></div>
+        </div>
+        <div id="v29PredictNotice" class="v29-test-notice"></div>
+        <div id="v29PredictMarkets" class="v29-market-list"></div>
+      </section>
+
       <section id="view-calls" class="view">
         <article class="hero-card purple glass">
           <span class="eyebrow">LEMMIQ CALLS</span>
@@ -357,11 +370,8 @@
         </div>
 
         <div id="q28Tab-market" class="q28-tab">
-          <div class="grid two">
-            <article class="card glass"><span class="eyebrow">SELL FOR Q</span><h3>Create listing</h3><input id="q28ListingTitle" placeholder="Product or service"><textarea id="q28ListingDescription" placeholder="Description"></textarea><label class="q28-upload-box">Photos, videos or files<input id="q28ListingMedia" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/csv,.docx,.xlsx" hidden><span>+ Add media / files</span><small>Up to 10 attachments · images/files up to 20 MB · videos up to 100 MB</small></label><div id="q28ListingMediaPreview" class="q28-selected-media"></div><div class="q28-inline"><input id="q28ListingPrice" type="number" min="0.01" step="0.01" placeholder="Price in Q"><input id="q28ListingInventory" type="number" min="1" value="1"><button id="q28CreateListing" class="primary">List</button></div></article>
-            <article class="card glass"><span class="eyebrow">Q MARKET</span><h3>Explore</h3><div class="q28-inline"><input id="q28MarketSearch" placeholder="Search Q Market"><button id="q28MarketSearchBtn" class="ghost">Search</button></div><p class="micro">Marketplace purchases settle in Q and use escrow.</p></article>
-          </div>
-          <div id="q28MarketListings" class="q28-market-grid"></div>
+          <article class="card glass q29-market-toolbar"><div class="section-head"><div><span class="eyebrow">Q MARKET</span><h3>Explore</h3><p class="micro">Discover products and services. Chat with sellers before buying with Q.</p></div><details class="q29-sell-details"><summary class="primary">+ Sell</summary><div class="q29-sell-form"><input id="q28ListingTitle" placeholder="Product or service"><textarea id="q28ListingDescription" placeholder="Description"></textarea><label class="q28-upload-box">Photos, videos or files<input id="q28ListingMedia" type="file" multiple accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime,application/pdf,text/plain,text/csv,.docx,.xlsx" hidden><span>+ Add media / files</span><small>Up to 10 attachments</small></label><div id="q28ListingMediaPreview" class="q28-selected-media"></div><div class="q28-inline"><input id="q28ListingPrice" type="number" min="0.01" step="0.01" placeholder="Price in Q"><input id="q28ListingInventory" type="number" min="1" value="1"><button id="q28CreateListing" class="primary">Publish</button></div></div></details></div><div class="q28-inline"><input id="q28MarketSearch" placeholder="Search Q Market"><button id="q28MarketSearchBtn" class="ghost">Search</button></div></article>
+          <div id="q28MarketListings" class="q29-market-grid"></div>
           <article class="card glass"><h3>My listings</h3><p class="micro">Edit price, stock, description or pause a listing.</p><div id="q28MyListings" class="q28-list"></div></article>
           <article class="card glass"><h3>My marketplace orders</h3><div id="q28MarketOrders" class="q28-list"></div></article>
         </div>
@@ -381,6 +391,21 @@
           <div class="q28-balance"><small>Role</small><strong id="q28AdminRole">—</strong><span>All actions are auditable</span></div>
         </article>
         <div id="q28AdminOverview" class="q28-admin-stats"></div>
+        <article class="card glass v29-admin-card">
+          <div class="section-head"><div><span class="eyebrow">Q PREDICT</span><h3>Prediction operations</h3><p class="micro">Predict Credits only · real-Q staking remains disabled.</p></div><button id="v29RunPredictAgent" class="primary">Generate drafts</button></div>
+          <div id="v29PredictAdminStats" class="q28-admin-stats"></div>
+          <div class="v29-admin-controls"><button id="v29CreatePredictMarket" class="ghost">+ Create market</button><button id="v29SettlePredictDue" class="ghost">Settle due markets</button><button id="v29OpenPredictReview" class="ghost">Review market drafts</button></div>
+          <div id="v29PredictAutomation" class="v29-automation-strip"></div>
+          <div id="v29PredictReview" class="v29-review-list"></div>
+        </article>
+        <article class="card glass v29-admin-card">
+          <div class="section-head"><div><span class="eyebrow">ADMIN INSIGHTS</span><h3>Daily operations</h3></div><select id="v29AnalyticsPeriod"><option value="today">Today</option><option value="7d" selected>7 Days</option><option value="30d">Month</option><option value="90d">Quarter</option><option value="365d">Year</option></select></div>
+          <div id="v29OperationsStats" class="q28-admin-stats"></div>
+        </article>
+        <div class="grid two">
+          <article class="card glass v29-admin-card"><span class="eyebrow">MONETISATION</span><h3>Shadow billing analytics</h3><div class="v29-mode-banner">TRACKING ONLY · NO Q IS BEING CHARGED</div><div id="v29MonetisationStats"></div></article>
+          <article class="card glass v29-admin-card"><span class="eyebrow">Q SUPPLY & DEMAND</span><h3>Reference simulation</h3><div class="v29-mode-banner">SIMULATION ONLY · ACTUAL Q PRICE IS NOT CHANGED</div><div id="v29QSimulation"></div></article>
+        </div>
         <article class="card glass" id="q28AdminTeamCard">
           <div class="section-head"><div><h3>Admin Team & Roles</h3><p class="micro">Master Admin can grant limited access without sharing the Master Admin login.</p></div></div>
           <div class="q28-inline">
@@ -436,6 +461,7 @@
         </div>
       </section>
     </section>
+    <button id="globalQOrb" class="v29-q-orb" aria-label="Open Q personal assistant" title="Ask Q">Q</button>
   </main>
 
   <div id="statusViewer" class="status-viewer hidden" aria-hidden="true">
@@ -465,7 +491,8 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.8.3" defer></script>
-  <script src="/web/v28.js?v=2.8.3" defer></script>
+  <script src="/web/app.js?v=2.9" defer></script>
+  <script src="/web/v28.js?v=2.9" defer></script>
+  <script src="/web/v29.js?v=2.9" defer></script>
 </body>
 </html>

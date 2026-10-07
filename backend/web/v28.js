@@ -94,14 +94,16 @@
   }
 
   function renderMarket(){
-    $("q28MarketListings").innerHTML=v28.listings.length?v28.listings.map(x=>`<article class="q28-listing">
-      <small>${escapeHtml(x.category)} · ${escapeHtml(x.condition)}</small>
-      <h4>${escapeHtml(x.title)}</h4>${marketMediaHtml(x.media)}<p>${escapeHtml(x.description||"")}</p>
-      <div class="seller">@${escapeHtml(x.seller?.username||"seller")} · ${x.inventory} available · ${(x.media||[]).length} attachment(s)</div>
-      <div class="q-price">${fmtQ(x.price_q)} Q</div><div class="q-usd">≈ ${fmtUsd(x.price_usd_reference)} reference</div>
-      ${x.seller?.id===state.user?.id?'<button class="ghost" disabled>Your listing</button>':`<button class="primary" data-q28-market-buy="${x.id}">Buy with Q</button>`}
-    </article>`).join(""):`<article class="card glass"><p>No active listings found.</p></article>`;
-    qsa("[data-q28-market-buy]").forEach(b=>b.onclick=()=>buyMarket(Number(b.dataset.q28MarketBuy)));
+    const cover=x=>(x.media||[]).find(m=>m.kind==="PHOTO"&&m.is_cover)||(x.media||[]).find(m=>m.kind==="PHOTO");
+    $("q28MarketListings").className="q29-market-grid";
+    $("q28MarketListings").innerHTML=v28.listings.length?v28.listings.map(x=>{const c=cover(x);return `<article class="q29-market-card" data-q29-open-listing="${x.id}">
+      <div class="q29-market-cover">${c?`<img src="${escapeHtml(c.media_url)}" alt="${escapeHtml(x.title)}">`:'<span class="no-photo">Q+</span>'}</div>
+      <div class="q29-market-body"><strong>${fmtQ(x.price_q)} Q</strong><h4>${escapeHtml(x.title)}</h4><small>${x.inventory} available · @${escapeHtml(x.seller?.username||"seller")}</small>
+      <div class="q29-market-actions">${x.seller?.id===state.user?.id?'<button class="ghost" disabled>Your listing</button>':`<button class="ghost" data-q29-chat-seller="${x.id}">Chat</button><button class="primary" data-q28-market-buy="${x.id}">Buy</button>`}</div></div>
+    </article>`}).join(""):`<article class="card glass"><p>No active listings found.</p></article>`;
+    qsa("[data-q29-open-listing]").forEach(card=>card.onclick=e=>{if(e.target.closest("button"))return;openQMarketListing(Number(card.dataset.q29OpenListing))});
+    qsa("[data-q29-chat-seller]").forEach(b=>b.onclick=e=>{e.stopPropagation();chatQMarketSeller(Number(b.dataset.q29ChatSeller))});
+    qsa("[data-q28-market-buy]").forEach(b=>b.onclick=e=>{e.stopPropagation();buyMarket(Number(b.dataset.q28MarketBuy))});
     if($("q28MyListings")){
       $("q28MyListings").innerHTML=v28.myListings.length?v28.myListings.map(x=>qRow(
         `${escapeHtml(x.title)} · ${x.active?"Active":"Paused"}`,
@@ -201,6 +203,21 @@
       })});
       toast("Listing updated");await loadQEconomy();
     }catch(e){toast(e.message,true)}
+  }
+
+  function openQMarketListing(id){
+    const x=v28.listings.find(y=>y.id===id)||v28.myListings.find(y=>y.id===id);if(!x)return;
+    const photos=(x.media||[]).filter(m=>m.kind==="PHOTO");const hero=photos.find(m=>m.is_cover)||photos[0];
+    $("modalContent").innerHTML=`<div class="q29-listing-detail">${hero?`<img class="q29-listing-hero" src="${escapeHtml(hero.media_url)}" alt="${escapeHtml(x.title)}">`:''}<h2>${escapeHtml(x.title)}</h2><div class="q29-listing-price">${fmtQ(x.price_q)} Q <small>≈ ${fmtUsd(x.price_usd_reference)} reference</small></div><div class="q29-listing-actions">${x.seller?.id===state.user?.id?'<button class="ghost" disabled>Your listing</button>':`<button id="q29DetailChat" class="primary">💬 Chat seller</button><button id="q29DetailBuy" class="ghost">Buy with Q</button>`}<button id="q29DetailShare" class="ghost">Share</button></div><h3>Description</h3><p>${escapeHtml(x.description||"No description provided.")}</p>${photos.length>1?`<div class="q28-media-strip">${photos.map(m=>`<a href="${escapeHtml(m.media_url)}" target="_blank"><img src="${escapeHtml(m.media_url)}" alt="Listing photo"></a>`).join("")}</div>`:""}<p class="micro">Seller @${escapeHtml(x.seller?.username||"seller")} · ${x.inventory} available · Q Market purchases use escrow.</p></div>`;
+    $("modal").showModal();
+    if($("q29DetailChat"))$("q29DetailChat").onclick=()=>{closeModal();chatQMarketSeller(id)};
+    if($("q29DetailBuy"))$("q29DetailBuy").onclick=()=>{closeModal();buyMarket(id)};
+    $("q29DetailShare").onclick=async()=>{const text=`${x.title} · ${fmtQ(x.price_q)} Q on LEMMIQ Q Market`;try{if(navigator.share)await navigator.share({title:x.title,text});else await navigator.clipboard.writeText(text);toast("Listing shared") }catch{}};
+  }
+
+  async function chatQMarketSeller(id){
+    const x=v28.listings.find(y=>y.id===id)||v28.myListings.find(y=>y.id===id);if(!x?.seller?.id||x.seller.id===state.user?.id)return;
+    try{const c=await api("/chats/direct",{method:"POST",body:JSON.stringify({user_id:x.seller.id})});setView("chats");await loadChats();await openChat(c.id);toast(`Chat opened for ${x.title}`)}catch(e){toast(e.message,true)}
   }
 
   async function buyMarket(id){

@@ -21,6 +21,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -45,6 +46,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var trustResult by mutableStateOf<TrustResult?>(null)
     var trustError by mutableStateOf<String?>(null)
     var trustBusy by mutableStateOf(false)
+    private var trustJob:Job?=null
+    private var trustGeneration=0
     var socketStatus by mutableStateOf("offline")
     var agentBrief by mutableStateOf<AgentBrief?>(null)
     var styleProfile by mutableStateOf<StyleProfile?>(null)
@@ -69,6 +72,13 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var visionHistory by mutableStateOf<List<VisionMemoryDto>>(emptyList())
     var activeVision by mutableStateOf<VisionMemoryDto?>(null)
     var visionBusy by mutableStateOf(false)
+    var visionSourceMessageId by mutableStateOf<Int?>(null)
+    private var visionJob:Job?=null
+    private var visionGeneration=0
+    var predictHome by mutableStateOf<PredictHomeDto?>(null)
+    var predictCategory by mutableStateOf("TRENDING")
+    var predictSelected by mutableStateOf<PredictMarketDto?>(null)
+    var predictBusy by mutableStateOf(false)
     private var autoSocialScanned=false
     var notificationCapture by mutableStateOf(NotificationControl.enabled(appCtx))
     var insightSync by mutableStateOf(NotificationControl.sync(appCtx))
@@ -144,7 +154,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -174,20 +184,23 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             refreshChats()
         }.onFailure{error=it.message}
     }
-    fun trustCheck(text:String)=viewModelScope.launch{
-        if(text.isBlank()||trustBusy)return@launch
-        trustResult=null;trustError=null;trustBusy=true
-        try {
-            val result=api.trustCheck(text)
-            trustResult=result
-            runCatching{trustHistory=api.trustHistory()}
-        } catch(e:Exception) {
-            trustError=when(e){
-                is java.net.SocketTimeoutException -> "Fact Check timed out. Render may be waking up, or the AI/web search took too long. Retry in a moment."
-                else -> e.message ?: "Could not complete the Trust check. Please try again."
-            }
-        } finally { trustBusy=false }
+    fun trustCheck(text:String){
+        if(text.isBlank()||trustBusy)return
+        trustJob?.cancel();val generation=++trustGeneration
+        trustJob=viewModelScope.launch{
+            trustResult=null;trustError=null;trustBusy=true
+            try {
+                val result=api.trustCheck(text)
+                if(generation==trustGeneration){trustResult=result;runCatching{trustHistory=api.trustHistory()}}
+            } catch(e:Exception) {
+                if(generation==trustGeneration){trustError=when(e){
+                    is java.net.SocketTimeoutException -> "Fact Check timed out. Retry in a moment."
+                    else -> e.message ?: "Could not complete the Trust check. Please try again."
+                }}
+            } finally {if(generation==trustGeneration)trustBusy=false}
+        }
     }
+    fun cancelTrust(){trustGeneration++;trustJob?.cancel();trustJob=null;trustBusy=false;trustResult=null;trustError=null}
     fun clearTrust(){trustResult=null;trustError=null}
     fun discardSuggestion(){suggestion=null}
     fun suggest()=viewModelScope.launch{
@@ -656,15 +669,21 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }catch(e:Exception){error=qVisionFriendlyError()}finally{visionBusy=false}
     }
 
-    fun scanVisionBytes(bytes:ByteArray,question:String="What is in this image? Give me the useful details.")=viewModelScope.launch{
-        visionBusy=true;error=null
-        try{
-            if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
-            val detected=detectedVisionType("q-vision",null,bytes)
-            activeVision=api.visionScan(detected.first,detected.second,bytes,question)
-            visionHistory=api.visionList();qHome=api.qHome()
-        }catch(e:Exception){error=qVisionFriendlyError()}finally{visionBusy=false}
+    fun scanVisionBytes(bytes:ByteArray,question:String="What is in this image? Give me the useful details.",sourceMessageId:Int?=null){
+        if(visionBusy&&visionSourceMessageId==sourceMessageId&&sourceMessageId!=null)return
+        visionJob?.cancel();val generation=++visionGeneration
+        visionSourceMessageId=sourceMessageId
+        visionJob=viewModelScope.launch{
+            visionBusy=true;error=null
+            try{
+                if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
+                val detected=detectedVisionType("q-vision",null,bytes)
+                val result=api.visionScan(detected.first,detected.second,bytes,question)
+                if(generation==visionGeneration){activeVision=result;visionHistory=api.visionList();qHome=api.qHome()}
+            }catch(e:Exception){if(generation==visionGeneration)error=qVisionFriendlyError()}finally{if(generation==visionGeneration){visionBusy=false;visionSourceMessageId=null}}
+        }
     }
+    fun cancelVision(){visionGeneration++;visionJob?.cancel();visionJob=null;visionBusy=false;visionSourceMessageId=null}
 
     fun askVision(question:String)=viewModelScope.launch{
         val v=activeVision?:return@launch
@@ -682,6 +701,30 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         runCatching{api.deleteVision(id);if(activeVision?.id==id)activeVision=null;visionHistory=api.visionList();qHome=api.qHome()}
             .onFailure{error=it.message}
     }
+
+    fun qMarketChat(listing:QMarketListingDto)=viewModelScope.launch{
+        val uid=listing.seller?.id?:return@launch
+        if(uid==store.userId)return@launch
+        runCatching{
+            val c=api.direct(uid)
+            val existingDraft=c.draft_text.trim()
+            val marketDraft=if(existingDraft.isNotBlank()) existingDraft else "Hi, is this available? Q Market · ${listing.title} · ${listing.price_q} Q"
+            if(existingDraft.isBlank())runCatching{api.updateChatPreferences(c.id,mapOf("draft_text" to marketDraft))}
+            activeGroup=null;active=c.copy(draft_text=marketDraft);replyTo=null;suggestion=null
+            messages=api.messages(c.id);api.read(c.id);refreshChats()
+        }.onFailure{error=it.message}
+    }
+
+    fun refreshPredict(category:String=predictCategory)=viewModelScope.launch{
+        predictBusy=true;predictCategory=category
+        runCatching{api.predictHome(category)}.onSuccess{predictHome=it}.onFailure{error=it.message}
+        predictBusy=false
+    }
+    fun openPredictMarket(id:Int)=viewModelScope.launch{predictBusy=true;runCatching{api.predictMarket(id)}.onSuccess{predictSelected=it}.onFailure{error=it.message};predictBusy=false}
+    fun closePredictMarket(){predictSelected=null}
+    fun stakePredict(id:Int,outcome:String,amount:Double)=viewModelScope.launch{predictBusy=true;runCatching{api.predictStake(id,outcome,amount)}.onSuccess{predictSelected=it.market;predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message};predictBusy=false}
+    fun watchPredict(id:Int)=viewModelScope.launch{runCatching{api.predictWatch(id);predictSelected=api.predictMarket(id);predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message}}
+    fun commentPredict(id:Int,text:String)=viewModelScope.launch{if(text.isBlank())return@launch;runCatching{api.predictComment(id,text);predictSelected=api.predictMarket(id)}.onFailure{error=it.message}}
 
     fun cancelQCoordination(requestKey:String)=viewModelScope.launch{
         agentBusy=true;error=null

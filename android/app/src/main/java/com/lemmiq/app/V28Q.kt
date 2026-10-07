@@ -50,7 +50,7 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 Spacer(Modifier.height(8.dp))
                 Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)
-                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled in V2.8.2",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled in V2.9",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
             }
         }
         Row(Modifier.fillMaxWidth().padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
@@ -243,6 +243,7 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
     var price by remember{mutableStateOf("")}
     var showSell by remember{mutableStateOf(false)}
     var editListing by remember{mutableStateOf<QMarketListingDto?>(null)}
+    var selectedListing by remember{mutableStateOf<QMarketListingDto?>(null)}
     var selectedMedia by remember{mutableStateOf<List<Uri>>(emptyList())}
     val context=LocalContext.current
     val uriHandler=LocalUriHandler.current
@@ -276,23 +277,19 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
             }}
         }
         items(vm.qMarketListings,key={"market-${it.id}"}){x->
-            Card(shape=RoundedCornerShape(18.dp)){
-                Column(Modifier.padding(15.dp)){
+            Card(Modifier.fillMaxWidth().clickable{selectedListing=x},shape=RoundedCornerShape(20.dp)){
+                Column{
                     x.media.firstOrNull{it.kind=="PHOTO"}?.let{m->
-                        AsyncImage(model=vm.serverUrl+m.media_url,contentDescription=x.title,modifier=Modifier.fillMaxWidth().height(170.dp).clickable{uriHandler.openUri(vm.serverUrl+m.media_url)})
-                        Spacer(Modifier.height(8.dp))
+                        AsyncImage(model=vm.serverUrl+m.media_url,contentDescription=x.title,modifier=Modifier.fillMaxWidth().height(210.dp),contentScale=androidx.compose.ui.layout.ContentScale.Crop)
                     }
-                    Text(x.title,fontWeight=FontWeight.Black,fontSize=17.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                    if(x.description.isNotBlank())Text(x.description,color=Q28Muted,fontSize=11.sp,maxLines=3,overflow=TextOverflow.Ellipsis)
-                    if(x.media.isNotEmpty()){
-                        LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp),modifier=Modifier.padding(top=6.dp)){
-                            items(x.media,key={it.id}){m->AssistChip(onClick={uriHandler.openUri(vm.serverUrl+(if(m.kind=="FILE")m.download_url else m.media_url))},label={Text(if(m.kind=="PHOTO")"Photo" else if(m.kind=="VIDEO")"Video" else m.name.take(18),fontSize=9.sp)})}
+                    Column(Modifier.padding(13.dp)){
+                        Text("${q28Q(x.price_q)} Q",fontWeight=FontWeight.Black,fontSize=22.sp)
+                        Text(x.title,fontWeight=FontWeight.Bold,fontSize=15.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                        Text("@${x.seller?.username?:"seller"} · ${x.inventory} available",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=3.dp))
+                        if(x.seller?.id!=vm.store.userId)Row(Modifier.fillMaxWidth().padding(top=9.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            OutlinedButton(onClick={vm.qMarketChat(x)},modifier=Modifier.weight(1f)){Text("Chat seller")}
+                            Button(onClick={vm.qBuyListing(x.id)},modifier=Modifier.weight(1f)){Text("Buy with Q")}
                         }
-                    }
-                    Text("@${x.seller?.username?:"seller"} · ${x.inventory} available · ${x.media.size} attachment(s)",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=5.dp))
-                    Row(Modifier.fillMaxWidth().padding(top=8.dp),verticalAlignment=Alignment.CenterVertically){
-                        Column(Modifier.weight(1f)){Text("${q28Q(x.price_q)} Q",fontWeight=FontWeight.Black,fontSize=20.sp);Text("≈ ${q28Usd(x.price_usd_reference)} reference",fontSize=10.sp,color=Q28Muted)}
-                        if(x.seller?.id!=vm.store.userId)Button(onClick={vm.qBuyListing(x.id)}){Text("Buy")}
                     }
                 }
             }
@@ -321,6 +318,20 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
                 }
             }}
         }
+    }
+    selectedListing?.let{x->
+        AlertDialog(
+            onDismissRequest={selectedListing=null},
+            title={Text(x.title)},
+            text={LazyColumn(verticalArrangement=Arrangement.spacedBy(9.dp)){
+                x.media.firstOrNull{it.kind=="PHOTO"}?.let{m->item{AsyncImage(model=vm.serverUrl+m.media_url,contentDescription=x.title,modifier=Modifier.fillMaxWidth().height(240.dp),contentScale=androidx.compose.ui.layout.ContentScale.Crop)}}
+                item{Text("${q28Q(x.price_q)} Q",fontSize=25.sp,fontWeight=FontWeight.Black);Text("≈ ${q28Usd(x.price_usd_reference)} reference",fontSize=10.sp,color=Q28Muted)}
+                if(x.description.isNotBlank())item{Text("Description",fontWeight=FontWeight.Bold);Text(x.description,fontSize=12.sp)}
+                item{Text("Seller @${x.seller?.username?:"seller"} · ${x.inventory} available",fontSize=10.sp,color=Q28Muted)}
+            }},
+            confirmButton={if(x.seller?.id!=vm.store.userId)Button(onClick={selectedListing=null;vm.qMarketChat(x)}){Text("Chat seller")}else TextButton(onClick={selectedListing=null}){Text("Close")}},
+            dismissButton={if(x.seller?.id!=vm.store.userId){TextButton(onClick={selectedListing=null;vm.qBuyListing(x.id)}){Text("Buy with Q")}}}
+        )
     }
     editListing?.let{x->
         var etitle by remember(x.id){mutableStateOf(x.title)}
