@@ -1,0 +1,27 @@
+/* LEMMIQ V2.10.3 browser/PWA UX hotfix */
+
+/* More should open directly into useful tools; remove the oversized explanatory hero. */
+#view-more > .hero-card:first-child {
+  display: none !important;
+}
+#view-more .more-grid {
+  margin-top: 6px !important;
+}
+
+/* In an active chat, messaging controls win. The global Q orb must never cover Send. */
+body:has(.chat-layout.open-chat) .v29-q-orb {
+  display: none !important;
+}
+
+/* If :has() is unavailable, keep the orb above composer/nav instead of over the send control. */
+@supports not selector(body:has(*)) {
+  @media (max-width: 900px) {
+    .v29-q-orb {
+      right: 18px !important;
+      bottom: calc(154px + env(safe-area-inset-bottom, 0px)) !important;
+      width: 54px !important;
+      height: 54px !important;
+      opacity: .78 !important;
+    }
+  }
+}

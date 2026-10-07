@@ -79,6 +79,10 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var predictCategory by mutableStateOf("TRENDING")
     var predictSelected by mutableStateOf<PredictMarketDto?>(null)
     var predictBusy by mutableStateOf(false)
+    var predictAnalysis by mutableStateOf<AgentAnswer?>(null)
+    var predictAnalysisBusy by mutableStateOf(false)
+    var predictAnalysisMarketId by mutableStateOf<Int?>(null)
+    var predictLeaderboard by mutableStateOf<List<PredictLeaderDto>>(emptyList())
     private var autoSocialScanned=false
     var notificationCapture by mutableStateOf(NotificationControl.enabled(appCtx))
     var insightSync by mutableStateOf(NotificationControl.sync(appCtx))
@@ -154,7 +158,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -725,6 +729,29 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun stakePredict(id:Int,outcome:String,amount:Double)=viewModelScope.launch{predictBusy=true;runCatching{api.predictStake(id,outcome,amount)}.onSuccess{predictSelected=it.market;predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message};predictBusy=false}
     fun watchPredict(id:Int)=viewModelScope.launch{runCatching{api.predictWatch(id);predictSelected=api.predictMarket(id);predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message}}
     fun commentPredict(id:Int,text:String)=viewModelScope.launch{if(text.isBlank())return@launch;runCatching{api.predictComment(id,text);predictSelected=api.predictMarket(id)}.onFailure{error=it.message}}
+
+    fun analysePredictMarket(m:PredictMarketDto,followUp:String="")=viewModelScope.launch{
+        predictAnalysisBusy=true;predictAnalysisMarketId=m.id;error=null
+        try{
+            val mine=m.my_positions.joinToString("; "){"${it.outcome} ${it.stake_pc} PC (${it.status})"}.ifBlank{"No position"}
+            val prompt=buildString{
+                append("You are Q Predict market analyst inside LEMMIQ. Analyse this specific market independently from the crowd. ")
+                append("Do not treat pool percentages as true probabilities. Clearly separate crowd position from your independent analysis. ")
+                append("Return a concise structured answer with: Q lean, independent YES probability, independent NO probability, confidence, summary, factors supporting YES, factors supporting NO, watch factors, current data/evidence available to you, and sources if available. ")
+                append("State clearly that Q analysis does not control settlement. ")
+                append("Market question: ${m.question}. ")
+                append("Crowd: YES ${m.yes_percent}%, NO ${m.no_percent}%, ${m.participants} predictors, ${m.pool_pc} PC pool. ")
+                append("User position: $mine. Prediction closes: ${m.close_at}. Resolution: ${m.resolve_after}. ")
+                append("Resolution rule: ${m.resolution_rule}. Settlement source: ${m.resolution_source_name} ${m.resolution_source_url}. ")
+                if(followUp.isNotBlank()) append("Follow-up question about this same market: ${followUp.trim()}")
+            }
+            val external=if(externalQ && externalEnabled)externalMessages.take(30).reversed() else emptyList()
+            predictAnalysis=api.askAgent(prompt,7,external)
+        }catch(e:Exception){error=e.message}finally{predictAnalysisBusy=false}
+    }
+
+    fun clearPredictAnalysis(){predictAnalysis=null;predictAnalysisMarketId=null;predictAnalysisBusy=false}
+    fun loadPredictLeaderboard()=viewModelScope.launch{runCatching{api.predictLeaderboard()}.onSuccess{predictLeaderboard=it}.onFailure{error=it.message}}
 
     fun cancelQCoordination(requestKey:String)=viewModelScope.launch{
         agentBusy=true;error=null

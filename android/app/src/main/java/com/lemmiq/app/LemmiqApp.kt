@@ -194,6 +194,18 @@ private fun Home(vm:LemmiqViewModel){
     LaunchedEffect(Unit){
         vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict()
     }
+    val launchRoute=LemmiqLaunchRouterV2103.route.value
+    LaunchedEffect(launchRoute,vm.chats,vm.groups){
+        val r=launchRoute?:return@LaunchedEffect
+        when(r.type){
+            "chat"->r.id?.let{id->vm.chats.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.open(it);LemmiqLaunchRouterV2103.consume()}}
+            "group"->r.id?.let{id->vm.groups.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.openGroup(it);LemmiqLaunchRouterV2103.consume()}}
+            "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=3;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
+            "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
+            "q_assistant","q_to_q","q_analysis"->{qFullScreen=true;showMore=false;LemmiqLaunchRouterV2103.consume()}
+            else->{if(r.type.isNotBlank()){showMore=true;morePage="notifications";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}}
+        }
+    }
     val nav=listOf(
         "💬" to "Chats",
         "⭕" to "Updates",
@@ -202,6 +214,7 @@ private fun Home(vm:LemmiqViewModel){
         "📞" to "Calls",
         "☰" to "More"
     )
+    val totalUnread=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}
     Scaffold(
         containerColor=Bg,
         bottomBar={
@@ -219,7 +232,13 @@ private fun Home(vm:LemmiqViewModel){
                                 showMore=false
                             }
                         },
-                        icon={Text(x.first,fontWeight=FontWeight.Bold,fontSize=if(i==2)15.sp else 17.sp)},
+                        icon={
+                            if(i==0 && totalUnread>0){
+                                BadgedBox(badge={Badge{Text(if(totalUnread>99)"99+" else totalUnread.toString())}}){
+                                    Text(x.first,fontWeight=FontWeight.Bold,fontSize=17.sp)
+                                }
+                            }else Text(x.first,fontWeight=FontWeight.Bold,fontSize=if(i==2)15.sp else 17.sp)
+                        },
                         label={Text(x.second,fontSize=8.sp,maxLines=1)},
                         alwaysShowLabel=true
                     )
@@ -229,7 +248,7 @@ private fun Home(vm:LemmiqViewModel){
         floatingActionButton={
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
-                if(!qFullScreen)FloatingActionButton(
+                if(!qFullScreen && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,
@@ -252,6 +271,7 @@ private fun Home(vm:LemmiqViewModel){
                     "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
                     "settings"->V241MoreSubPage("Settings",{morePage=null}){V2102SettingsScreen(vm)}
                     "privacy"->V241MoreSubPage("Privacy & Security",{morePage=null}){V2102PrivacyScreen(vm)}
+                    "notifications"->V241MoreSubPage("Notifications",{morePage=null}){LemmiqNotificationCenterV2103()}
                     else->V241MoreMenu{morePage=it}
                 }
                 else->when(tab){
@@ -353,6 +373,7 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
 @Composable
 private fun V241MoreMenu(onOpen:(String)->Unit){
     val menuItems=listOf(
+        Triple("🔔","Notifications","Unread alerts and recent LEMMIQ activity") to "notifications",
         Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
@@ -361,8 +382,8 @@ private fun V241MoreMenu(onOpen:(String)->Unit){
         Triple("⚙","Settings","Notifications, app version and controls") to "settings",
         Triple("🔒","Privacy & Security","Profile, last-seen and status privacy") to "privacy"
     )
-    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
-        item{Header("More","Tools, privacy and account")}
+    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(top=8.dp,bottom=24.dp)){
+        item{Text("More",fontSize=28.sp,fontWeight=FontWeight.Black,color=Ink,modifier=Modifier.padding(horizontal=20.dp,vertical=10.dp))}
         items(menuItems){entry->
             val info=entry.first
             Card(

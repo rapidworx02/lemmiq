@@ -68,6 +68,7 @@ fun V24GroupAvatar(g:GroupDto,size:Int=50){
 fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
     var search by remember{mutableStateOf("")}
     var mode by remember{mutableStateOf("ALL")}
+    val unreadTotal=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}
     val conversations=remember(vm.chats,vm.groups,search,mode){
         buildList<Pair<String,Any>>{
             vm.chats.forEach{add("chat" to it)}
@@ -92,7 +93,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
                 FilledTonalButton(onClick={onAskQ(search.trim())},contentPadding=PaddingValues(horizontal=14.dp,vertical=12.dp)){Text("Q",fontWeight=FontWeight.Black,color=V24Purple)}
             }
             Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                listOf("ALL" to "All","UNREAD" to "Unread","GROUPS" to "Groups").forEach{(value,label)->
+                listOf("ALL" to "All","UNREAD" to "Unread ${if(unreadTotal>0)unreadTotal else ""}".trim(),"GROUPS" to "Groups").forEach{(value,label)->
                     FilterChip(mode==value,{mode=value},{Text(label)})
                 }
                 Spacer(Modifier.weight(1f))
@@ -111,7 +112,13 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
                             Text("${if(c.pinned)"📌 " else ""}${if(c.favourite)"⭐ " else ""}${c.other_user.display_name}",fontWeight=FontWeight.Bold)
                             Text(if(c.draft_text.isNotBlank())"Draft: ${c.draft_text}" else c.last_message?:"Start chatting",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
-                        if(c.unread>0)Badge{Text("${c.unread}")}
+                        Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            if(!c.updated_at.isNullOrBlank())Text(v24Time(c.updated_at),fontSize=10.sp,color=if(c.unread>0)V24Purple else V24Muted)
+                            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                                if(!c.muted_until.isNullOrBlank())Text("🔕",fontSize=10.sp)
+                                if(c.unread>0)Badge{Text("${c.unread}")}
+                            }
+                        }
                     }
                 }else{
                     val g=data as GroupDto
@@ -119,7 +126,10 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
                         V24GroupAvatar(g,50)
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)){Text(g.name,fontWeight=FontWeight.Bold);Text("${g.member_count} members · ${g.last_message?:"New group"}",color=V24Muted,fontSize=12.sp,maxLines=1)}
-                        if(g.unread>0)Badge{Text("${g.unread}")}
+                        Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
+                            if(!g.updated_at.isNullOrBlank())Text(v24Time(g.updated_at),fontSize=10.sp,color=if(g.unread>0)V24Purple else V24Muted)
+                            if(g.unread>0)Badge{Text("${g.unread}")}
+                        }
                     }
                 }
             }
