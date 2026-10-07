@@ -111,6 +111,7 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
     if(vm.authenticated && (vm.active!=null || vm.activeGroup!=null))V29ConversationQOrb(vm)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun V29ConversationQOrb(vm:LemmiqViewModel){
     var open by remember{mutableStateOf(false)}
@@ -180,6 +181,7 @@ private fun Auth(vm:LemmiqViewModel){
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Home(vm:LemmiqViewModel){
     var tab by remember{mutableIntStateOf(0)}

@@ -1,0 +1,125 @@
+LEMMIQ V2.10 — MANUAL GITHUB UPLOAD STEPS
+==========================================
+
+BASELINE
+- Current: V2.9
+- Update: V2.10.0
+- Android versionName: 2.10
+- Android versionCode: 50
+
+1) DOWNLOAD / OPEN THE V2.10 PACK
+- LEMMIQ_V2.10_UPDATE_PACK.zip
+- Read README_FIRST.md first.
+
+2) GITHUB — ADD NEW FILES FIRST
+Upload these to the matching paths:
+
+backend/app/v210.py
+backend/app/call_state_guard_v210.py
+backend/web/v210.css
+backend/web/v210.js
+android/app/src/main/java/com/lemmiq/app/CallDeclineV210.kt
+android/app/src/main/java/com/lemmiq/app/LemmiqMediaViewerActivity.kt
+
+Commit:
+Add LEMMIQ v2.10 support files
+
+3) BACKEND MAIN.PY
+Add:
+from .v210 import router as v210_router
+
+Then after app = FastAPI(...):
+app.include_router(v210_router)
+
+4) WEB INDEX.HTML
+Make viewport:
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+After existing styles.css:
+<link rel="stylesheet" href="/web/v210.css?v=2100">
+
+After existing app.js:
+<script src="/web/v210.js?v=2100"></script>
+
+Use relative paths instead if your existing index.html uses relative static paths.
+
+5) WEB SW.JS
+- Change cache name to a new V2.10 value such as lemmiq-v210.
+- Add v210.css and v210.js to cached assets if your service worker uses an explicit asset list.
+- Keep/delete old caches during activate.
+
+6) Q PREDICT ANALYSE
+Render env should already have the same Q/Trust provider keys. Confirm:
+ANTHROPIC_API_KEY
+ANTHROPIC_MODEL
+TAVILY_API_KEY (optional but recommended)
+
+After deploy test:
+https://lemmiq-api.onrender.com/v210/version
+Expected: 2.10.0
+
+7) CALL DECLINE — CRITICAL
+Follow MERGE_GUIDES/03_CALL_DECLINE_MERGE.md.
+Do not only close the incoming screen.
+Backend must persist DECLINED first, notify caller, and block any later CONNECTING/CONNECTED transition.
+Android must stop ringer, disconnect room/tracks, release audio, remove listeners/timers/service, then close UI.
+
+8) ANDROID MEDIA VIEWER
+Add LemmiqMediaViewerActivity to AndroidManifest.xml inside <application>.
+On chat photo tap, start LemmiqMediaViewerActivity with the existing HTTPS or content:// URI.
+Do not pass raw /data/data/... paths.
+Reduce photo-bubble padding to about 3dp.
+
+9) ANDROID NAVIGATION
+Bottom tabs must be exactly:
+Chats | Updates | Q Economy | Q Predict | Calls | More
+
+More contains:
+Profile
+Trust / Fact Check
+Business Agent
+Activity
+Money
+Settings
+Privacy & Security
+Get LEMMIQ for Android / app info
+
+Remove the hidden Profile, Trust, Business & Settings link from the Q assistant sheet.
+
+10) Q FLOATING ICON
+Make its purple container semi-transparent (around alpha 0.68) but keep Q glyph fully visible.
+Keep it above the bottom nav + safe inset.
+
+11) ANDROID VERSION
+android/app/build.gradle.kts:
+versionCode = 50
+versionName = "2.10"
+
+12) SECOND GITHUB COMMIT
+After all merges:
+LEMMIQ v2.10 Q Predict call media and responsive fixes
+
+13) RENDER
+Wait for Render deploy.
+Check /v210/version.
+Open browser/PWA and verify the new service worker replaces the old cached layout.
+
+14) ANDROID BUILD
+PowerShell:
+cd C:\Users\pc\LEMMIQ\android
+.\gradlew clean
+.\gradlew assembleDebug
+
+Test debug APK.
+Then build release with your existing signing setup:
+.\build-play-bundle.cmd
+
+15) DO NOT SHIP UNTIL THESE PASS
+- Decline stops call on both phones.
+- Stale connected event cannot resurrect declined call.
+- Q Predict Analyse works and returns a response.
+- Q Predict PWA uses full mobile width.
+- Six bottom tabs are visible/reachable.
+- More opens secondary sections.
+- Chat photos open full screen.
+- Q floating icon is transparent enough to see content behind it.
