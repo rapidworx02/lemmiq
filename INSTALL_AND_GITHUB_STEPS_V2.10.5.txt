@@ -1,0 +1,127 @@
+LEMMIQ V2.10.5 INSTALL / DEPLOY STEPS
+=====================================
+
+IMPORTANT FIRST STEP
+--------------------
+Back up the production database before deploying V2.10.5. This release performs an additive Q Predict schema migration and retires active legacy PC markets.
+
+1. EXTRACT THE UPDATE
+---------------------
+Extract LEMMIQ_V2.10.5_UPDATE.zip.
+
+2. COPY THE BACKEND
+-------------------
+The supplied backend/app is based on the backend ZIP you uploaded.
+
+Copy/overwrite:
+  LEMMIQ_V2.10.5_READY\backend\app\*
+into:
+  C:\Users\pc\LEMMIQ\backend\app\
+
+Important changed/new backend files include:
+  main.py
+  migrations.py
+  v28.py
+  v29.py
+  v2104_predict_router.py
+  v2105_q_features.py
+
+Do NOT add the old V2.10.4 manual adapter wiring to main.py. V2.10.5 already contains the real integration.
+
+3. COPY WEB/PWA CHANGES
+-----------------------
+Copy these files into C:\Users\pc\LEMMIQ\backend\web\
+  index.html
+  app.js
+  sw.js
+  v2105.css
+  v2105.js
+
+Keep your existing v28.js, v29.js, v28.css and v29.css files in the repo. V2.10.5 intentionally patches them additively rather than replacing them.
+
+4. COPY ANDROID CHANGES
+-----------------------
+Overwrite:
+  android\app\build.gradle.kts
+  android\app\src\main\java\com\lemmiq\app\Api.kt
+  android\app\src\main\java\com\lemmiq\app\Models.kt
+
+The rest of the V2.10.4 Android source remains unchanged.
+
+5. CHECK VERSION
+----------------
+cd /d C:\Users\pc\LEMMIQ
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+
+Expected:
+  versionCode=55
+  versionName="2.10.5"
+
+6. GIT / GITHUB
+---------------
+cd /d C:\Users\pc\LEMMIQ
+git status
+git add .
+git commit -m "LEMMIQ V2.10.5 connect Q Predict to main Q wallet"
+git push origin main
+
+If Render is connected to GitHub, wait for the deployment to complete successfully.
+
+7. WHAT HAPPENS ON FIRST SERVER START
+-------------------------------------
+V2.10.5 automatically:
+  - adds wallet_unit to Q Predict markets;
+  - marks old markets as PC;
+  - enables Q-wallet mode for Q Predict;
+  - adds Q stake/exposure control columns;
+  - creates PREDICT_ESCROW if missing;
+  - VOIDs active legacy PC markets and returns their PC test stakes;
+  - cancels legacy PC drafts/review markets;
+  - DOES NOT convert 10,000 PC into Q;
+  - creates/initialises Q feature pricing tables at 0 Q.
+
+8. VERIFY WEB / PWA
+-------------------
+Open:
+  https://lemmiq-api.onrender.com/web/#q-predict
+
+Expected:
+  - Q Wallet card shows the same balance as Q Economy;
+  - balance ends in Q, not PC;
+  - no 10,000 PC test wallet;
+  - notice says Q Predict uses the LEMMIQ Q wallet;
+  - new stakes deduct Q and appear in Q Activity.
+
+If the old PC UI still appears, it is usually the installed service-worker cache.
+Close all LEMMIQ browser tabs and reopen the site. If still stale, clear site data/cache for lemmiq-api.onrender.com and reopen it.
+
+9. TEST WITH A SMALL Q STAKE
+----------------------------
+Use a small live Q market and stake the minimum amount.
+Then check Q Economy > Activity.
+You should see:
+  Q_PREDICT_STAKE   -<amount> Q
+
+On settlement:
+  Q_PREDICT_PAYOUT  +<amount> Q
+or
+  Q_PREDICT_REFUND  +<amount> Q
+
+10. BUILD ANDROID
+-----------------
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+APK:
+  C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+Install:
+  adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+Profile should show:
+  LEMMIQ V2.10.5-debug
+
+11. ROLLBACK NOTE
+-----------------
+Do not downgrade the database blindly after users have placed real Q prediction stakes. If a deployment issue occurs after Q stakes exist, pause Q Predict through Admin and restore using the database backup / a controlled rollback.

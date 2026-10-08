@@ -1,16 +1,10 @@
-"""LEMMIQ V2.9 — Q Predict test markets + analytics tracking.
+"""LEMMIQ V2.10.5 — Q Predict on the main LEMMIQ Q wallet.
 
-Q Predict uses isolated Predict Credits (PC) only. Predict Credits cannot be
-bought, sold, transferred, converted to Q, used in Q Market, or withdrawn.
-Real-Q staking is deliberately disabled in this build.
-
-The market engine supports:
-- pooled YES / NO test-credit markets
-- admin-reviewed AI/automation drafts
-- deterministic automatic resolution for supported source adapters
-- user discussion, watchlist, history and leaderboard
-- simulated platform fee on winning *profit* only
-- passive monetisation tracking and Q supply/demand simulation dashboards
+New prediction markets use the authoritative V2.8 Q wallet and Q ledger.
+Legacy Predict Credit (PC) markets remain historical only and are never
+converted 1:1 into Q. Q Predict supports pooled YES/NO markets, admin-reviewed
+drafts, deterministic settlement, discussion/watchlists and configurable
+Q stake/exposure controls.
 """
 from __future__ import annotations
 
@@ -39,13 +33,24 @@ from .v28 import (
     QSystemWallet,
     QUserWallet,
     QEconomyConfig,
+    Q_MICROS,
+    _raw_user_wallet,
+    _ensure_user_wallet,
+    _user_to_system,
+    _system_to_user,
+    _system_to_system,
 )
 
 log = logging.getLogger("lemmiq.v29")
 
 PC_MICROS = 1_000_000
-DEFAULT_STARTING_PC = 10_000
+DEFAULT_STARTING_PC = 10_000  # legacy PC history only
 DEFAULT_FEE_BPS = 500  # 5% of winner profit, not stake
+DEFAULT_MIN_STAKE_Q = 1
+DEFAULT_MAX_STAKE_Q = 100
+DEFAULT_PER_MARKET_Q = 250
+DEFAULT_DAILY_Q = 500
+DEFAULT_WEEKLY_Q = 1500
 ALLOWED_OUTCOMES = {"YES", "NO"}
 PREDICT_ADMIN_ROLES = {"MASTER_ADMIN", "RISK_ADMIN", "FINANCE_ADMIN", "READ_ONLY"}
 PREDICT_WRITE_ROLES = {"MASTER_ADMIN", "RISK_ADMIN"}
@@ -63,6 +68,14 @@ def _pc_micros(v: float) -> int:
     return int(round(float(v) * PC_MICROS))
 
 
+def _q(v: int) -> float:
+    return round(v / Q_MICROS, 6)
+
+
+def _q_micros(v: float) -> int:
+    return int(round(float(v) * Q_MICROS))
+
+
 def _txid(prefix: str) -> str:
     return f"{prefix}-{utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(5).upper()}"
 
@@ -71,11 +84,17 @@ class PredictConfig(Base):
     __tablename__ = "q_predict_config"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    test_mode: Mapped[bool] = mapped_column(Boolean, default=True)
-    real_q_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    test_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    real_q_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Legacy PC fields remain so old test history can be read safely.
     starting_credits_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_STARTING_PC * PC_MICROS)
     fee_bps: Mapped[int] = mapped_column(Integer, default=DEFAULT_FEE_BPS)
     test_treasury_micros: Mapped[int] = mapped_column(BigInteger, default=0)
+    minimum_stake_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_MIN_STAKE_Q * Q_MICROS)
+    maximum_stake_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_MAX_STAKE_Q * Q_MICROS)
+    per_market_limit_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_PER_MARKET_Q * Q_MICROS)
+    daily_exposure_limit_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_DAILY_Q * Q_MICROS)
+    weekly_exposure_limit_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_WEEKLY_Q * Q_MICROS)
     discovery_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_drafting: Mapped[bool] = mapped_column(Boolean, default=True)
     auto_publish: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -117,6 +136,7 @@ class PredictMarket(Base):
     category: Mapped[str] = mapped_column(String(40), default="TRENDING", index=True)
     template_code: Mapped[str] = mapped_column(String(60), default="MANUAL", index=True)
     status: Mapped[str] = mapped_column(String(24), default="REVIEW", index=True)
+    wallet_unit: Mapped[str] = mapped_column(String(8), default="Q", index=True)
     resolution_source_name: Mapped[str] = mapped_column(String(120), default="Admin")
     resolution_source_url: Mapped[str] = mapped_column(String(500), default="")
     resolution_rule: Mapped[str] = mapped_column(Text, default="")
@@ -226,7 +246,10 @@ class QSimulationSnapshot(Base):
 
 class PredictStakeIn(BaseModel):
     outcome: str
-    amount_pc: float = Field(gt=0, le=10_000_000)
+    amount_q: float | None = Field(default=None, gt=0, le=10_000_000)
+    # Compatibility for older browser clients. On a Q market this value is
+    # interpreted as Q, not as Predict Credits.
+    amount_pc: float | None = Field(default=None, gt=0, le=10_000_000)
 
 
 class PredictCommentIn(BaseModel):
@@ -256,8 +279,15 @@ class PredictResolveIn(BaseModel):
 
 
 class PredictConfigIn(BaseModel):
-    starting_credits_pc: float | None = Field(default=None, ge=100, le=1_000_000)
+    # Legacy field accepted for old Admin clients but no longer controls the live Q wallet.
+    starting_credits_pc: float | None = Field(default=None, ge=0, le=1_000_000)
+    real_q_enabled: bool | None = None
     fee_percent: float | None = Field(default=None, ge=0, le=20)
+    minimum_stake_q: float | None = Field(default=None, ge=0.000001, le=1_000_000)
+    maximum_stake_q: float | None = Field(default=None, ge=0.000001, le=1_000_000)
+    per_market_limit_q: float | None = Field(default=None, ge=0.000001, le=10_000_000)
+    daily_exposure_limit_q: float | None = Field(default=None, ge=0.000001, le=10_000_000)
+    weekly_exposure_limit_q: float | None = Field(default=None, ge=0.000001, le=50_000_000)
     discovery_enabled: bool | None = None
     auto_drafting: bool | None = None
     auto_publish: bool | None = None
@@ -277,7 +307,7 @@ FEATURE_ESTIMATES = {
 
 
 def track_shadow_event(db: Session, user_id: int | None, feature: str, *, success: bool = True, note: str = ""):
-    """Record analysis-only monetisation data. Never debits Q."""
+    """Record analytics plus the 0-Q feature-use ledger event used in V2.10.5."""
     feature = (feature or "OTHER").upper()[:60]
     cost, fee_q = FEATURE_ESTIMATES.get(feature, (10_000, 0.25))
     db.add(ShadowMonetisationEvent(
@@ -288,6 +318,18 @@ def track_shadow_event(db: Session, user_id: int | None, feature: str, *, succes
         success=bool(success),
         note=(note or "")[:240],
     ))
+    if user_id:
+        feature_map = {
+            "Q_AGENT": "Q_CHAT", "TRUST": "TRUST_CHECK", "CHAT_SUMMARY": "CHAT_SUMMARY",
+            "Q_VISION": "Q_VISION", "Q_TO_Q": "Q_TO_Q", "BUSINESS_AGENT": "BUSINESS_AGENT",
+        }
+        key = feature_map.get(feature)
+        if key:
+            try:
+                from .v2105_q_features import record_feature_usage
+                record_feature_usage(db, user_id, key, status="SUCCESS" if success else "FAILED", reference=(note or feature)[:180], charge=False)
+            except Exception:
+                log.exception("Q feature usage logging failed for %s", feature)
 
 
 def _config(db: Session) -> PredictConfig:
@@ -342,12 +384,21 @@ def _market_json(db: Session, m: PredictMarket, viewer_id: int | None = None, in
     if viewer_id:
         pos = db.scalars(select(PredictPosition).where(PredictPosition.market_id == m.id, PredictPosition.user_id == viewer_id)).all()
         watched = bool(db.scalar(select(func.count()).select_from(PredictWatch).where(PredictWatch.market_id == m.id, PredictWatch.user_id == viewer_id)))
+    unit = (getattr(m, "wallet_unit", None) or "PC").upper()
+    is_q = unit == "Q"
+    yes_value = _q(m.yes_pool_micros) if is_q else _pc(m.yes_pool_micros)
+    no_value = _q(m.no_pool_micros) if is_q else _pc(m.no_pool_micros)
+    pool_value = yes_value + no_value
     out = {
         "id": m.id, "market_key": m.market_key, "question": m.question,
         "category": m.category, "template_code": m.template_code, "status": m.status,
+        "wallet_unit": unit, "legacy_pc": not is_q,
         "yes_percent": yes, "no_percent": no,
-        "yes_pool_pc": _pc(m.yes_pool_micros), "no_pool_pc": _pc(m.no_pool_micros),
-        "pool_pc": _pc(m.yes_pool_micros + m.no_pool_micros),
+        "yes_pool_q": yes_value if is_q else 0.0, "no_pool_q": no_value if is_q else 0.0,
+        "pool_q": pool_value if is_q else 0.0,
+        # Compatibility aliases for older V2.9 browser code. On a Q market these
+        # numeric aliases contain Q values; V2.10.5 UI relabels the unit as Q.
+        "yes_pool_pc": yes_value, "no_pool_pc": no_value, "pool_pc": pool_value,
         "participants": m.participant_count, "comments": m.comment_count,
         "trend_score": m.trend_score, "resolution_confidence": m.resolution_confidence,
         "resolution_source_name": m.resolution_source_name,
@@ -358,8 +409,14 @@ def _market_json(db: Session, m: PredictMarket, viewer_id: int | None = None, in
         "generated_by": m.generated_by, "agent_reason": m.agent_reason,
         "watched": watched,
         "my_positions": [{
-            "outcome": p.outcome, "stake_pc": _pc(p.stake_micros), "payout_pc": _pc(p.payout_micros),
-            "fee_pc": _pc(p.fee_micros), "status": p.status,
+            "outcome": p.outcome,
+            "stake_q": _q(p.stake_micros) if is_q else 0.0,
+            "payout_q": _q(p.payout_micros) if is_q else 0.0,
+            "fee_q": _q(p.fee_micros) if is_q else 0.0,
+            "stake_pc": _pc(p.stake_micros),
+            "payout_pc": _pc(p.payout_micros),
+            "fee_pc": _pc(p.fee_micros),
+            "status": p.status,
         } for p in pos],
         "created_at": m.created_at.isoformat(), "updated_at": m.updated_at.isoformat(),
     }
@@ -403,7 +460,7 @@ def _create_market(db: Session, body: PredictMarketIn, *, creator_id: int | None
         return existing
     m = PredictMarket(
         market_key=key, question=body.question.strip(), category=body.category.upper().strip()[:40],
-        template_code=body.template_code.upper().strip()[:60], status=status,
+        template_code=body.template_code.upper().strip()[:60], status=status, wallet_unit="Q",
         resolution_source_name=body.resolution_source_name.strip(), resolution_source_url=body.resolution_source_url.strip(),
         resolution_rule=body.resolution_rule.strip(), source_type=body.source_type.upper().strip()[:40],
         source_config_json=json.dumps(body.source_config, ensure_ascii=False), close_at=close_at, resolve_after=resolve_after,
@@ -415,39 +472,85 @@ def _create_market(db: Session, body: PredictMarketIn, *, creator_id: int | None
     return m
 
 
-def _stake(db: Session, u: User, m: PredictMarket, outcome: str, amount_micros: int):
+def _stake_q(db: Session, u: User, m: PredictMarket, outcome: str, amount_micros: int):
     cfg = _config(db)
-    if not cfg.enabled or not cfg.test_mode or cfg.real_q_enabled:
-        raise HTTPException(409, "Q Predict test-credit mode is not available")
+    if not cfg.enabled or not cfg.real_q_enabled:
+        raise HTTPException(409, "Q Predict Q staking is disabled")
+    if (getattr(m, "wallet_unit", "PC") or "PC").upper() != "Q":
+        raise HTTPException(409, "This is a legacy Predict Credit market and no longer accepts new stakes")
     if m.status != "LIVE" or utcnow() >= m.close_at:
         raise HTTPException(409, "This market is closed")
     outcome = outcome.upper()
     if outcome not in ALLOWED_OUTCOMES:
         raise HTTPException(422, "Outcome must be YES or NO")
-    w = _wallet(db, u.id)
-    if amount_micros <= 0 or w.balance_micros < amount_micros:
-        raise HTTPException(409, "Not enough Predict Credits")
-    before_yes, _ = _probabilities(m)
-    existing_positions = db.scalars(select(PredictPosition).where(PredictPosition.user_id == u.id, PredictPosition.market_id == m.id)).all()
-    had_any = bool(existing_positions)
+    if amount_micros < max(1, cfg.minimum_stake_micros):
+        raise HTTPException(409, f"Minimum stake is {_q(cfg.minimum_stake_micros)} Q")
+    if amount_micros > cfg.maximum_stake_micros:
+        raise HTTPException(409, f"Maximum stake per prediction is {_q(cfg.maximum_stake_micros)} Q")
+
+    # Lock the authoritative Q wallet on databases that support row locking.
+    w = db.scalar(select(QUserWallet).where(QUserWallet.user_id == u.id).with_for_update())
+    if not w:
+        _ensure_user_wallet(db, u.id)
+        w = db.scalar(select(QUserWallet).where(QUserWallet.user_id == u.id).with_for_update())
+    if not w or w.balance_micros < amount_micros:
+        raise HTTPException(409, "Not enough Q")
+
+    existing_positions = db.scalars(select(PredictPosition).where(
+        PredictPosition.user_id == u.id, PredictPosition.market_id == m.id
+    )).all()
     if any(x.outcome != outcome and x.stake_micros > 0 for x in existing_positions):
-        raise HTTPException(409, "You already predicted the other side of this market. Test mode keeps one outcome per user per market.")
+        raise HTTPException(409, "You already predicted the other side of this market")
+
+    current_market = sum(x.stake_micros for x in existing_positions)
+    if current_market + amount_micros > cfg.per_market_limit_micros:
+        raise HTTPException(409, f"Per-market limit is {_q(cfg.per_market_limit_micros)} Q")
+
+    now = utcnow()
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
+    daily = int(db.scalar(
+        select(func.coalesce(func.sum(PredictTrade.amount_micros), 0))
+        .join(PredictMarket, PredictTrade.market_id == PredictMarket.id)
+        .where(PredictTrade.user_id == u.id, PredictTrade.created_at >= day_start, PredictMarket.wallet_unit == "Q")
+    ) or 0)
+    weekly = int(db.scalar(
+        select(func.coalesce(func.sum(PredictTrade.amount_micros), 0))
+        .join(PredictMarket, PredictTrade.market_id == PredictMarket.id)
+        .where(PredictTrade.user_id == u.id, PredictTrade.created_at >= week_start, PredictMarket.wallet_unit == "Q")
+    ) or 0)
+    if daily + amount_micros > cfg.daily_exposure_limit_micros:
+        raise HTTPException(409, f"Daily Q Predict limit is {_q(cfg.daily_exposure_limit_micros)} Q")
+    if weekly + amount_micros > cfg.weekly_exposure_limit_micros:
+        raise HTTPException(409, f"Weekly Q Predict limit is {_q(cfg.weekly_exposure_limit_micros)} Q")
+
+    before_yes, _ = _probabilities(m)
+    had_any = bool(existing_positions)
     p = next((x for x in existing_positions if x.outcome == outcome), None)
     if not p:
         p = PredictPosition(user_id=u.id, market_id=m.id, outcome=outcome)
         db.add(p); db.flush()
-    p.stake_micros += amount_micros; p.updated_at = utcnow()
-    w.balance_micros -= amount_micros; w.lifetime_staked_micros += amount_micros; w.updated_at = utcnow()
+
+    # Q is moved into a dedicated system escrow wallet. All of this occurs in
+    # the same SQLAlchemy transaction as the position/pool update.
+    _user_to_system(
+        db, u.id, "PREDICT_ESCROW", amount_micros, "Q_PREDICT_STAKE",
+        reference=f"predict:{m.id}", note=f"{outcome} · {m.question[:150]}"
+    )
+    p.stake_micros += amount_micros; p.updated_at = now
     if outcome == "YES": m.yes_pool_micros += amount_micros
     else: m.no_pool_micros += amount_micros
     if not had_any: m.participant_count += 1
-    m.updated_at = utcnow()
+    m.updated_at = now
     after_yes, _ = _probabilities(m)
-    db.add(PredictTrade(user_id=u.id, market_id=m.id, outcome=outcome, amount_micros=amount_micros, probability_before=before_yes, probability_after=after_yes))
-    _ledger(db, u.id, "MARKET_STAKE", -amount_micros, m.id, f"{outcome} on {m.question[:120]}")
+    db.add(PredictTrade(
+        user_id=u.id, market_id=m.id, outcome=outcome, amount_micros=amount_micros,
+        probability_before=before_yes, probability_after=after_yes
+    ))
 
 
-def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: str = "", note: str = "", resolver_id: int | None = None, evidence: dict | None = None):
+def _settle_market_pc(db: Session, m: PredictMarket, outcome: str, source_value: str = "", note: str = "", resolver_id: int | None = None, evidence: dict | None = None):
+    """Legacy PC settlement. Used only to close/refund historical test markets."""
     if m.status in {"RESOLVED", "VOID", "CANCELLED"}:
         return
     outcome = outcome.upper()
@@ -460,12 +563,11 @@ def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: st
             w = _wallet(db, p.user_id)
             w.balance_micros += p.stake_micros; w.updated_at = utcnow()
             p.payout_micros = p.stake_micros; p.status = "VOID"; p.updated_at = utcnow()
-            _ledger(db, p.user_id, "MARKET_VOID_REFUND", p.stake_micros, m.id, "Market voided; stake returned")
+            _ledger(db, p.user_id, "MARKET_VOID_REFUND", p.stake_micros, m.id, "Legacy PC market retired; test stake returned")
         m.status = "VOID"; m.result = "VOID"
     else:
         winning_pool = m.yes_pool_micros if outcome == "YES" else m.no_pool_micros
         losing_pool = m.no_pool_micros if outcome == "YES" else m.yes_pool_micros
-        # If nobody backed the eventual winner, all stakes are returned. This avoids orphaned test-credit pools.
         if winning_pool <= 0:
             for p in positions:
                 w = _wallet(db, p.user_id); w.balance_micros += p.stake_micros; w.updated_at = utcnow()
@@ -473,8 +575,7 @@ def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: st
                 _ledger(db, p.user_id, "MARKET_NO_WINNER_REFUND", p.stake_micros, m.id, "No winning-side participants")
             outcome = "VOID"; m.status = "VOID"; m.result = "VOID"
         else:
-            winners_by_user: set[int] = set()
-            resolved_users: set[int] = set()
+            winners_by_user: set[int] = set(); resolved_users: set[int] = set()
             for p in positions:
                 resolved_users.add(p.user_id)
                 if p.outcome == outcome:
@@ -484,9 +585,8 @@ def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: st
                     w = _wallet(db, p.user_id)
                     w.balance_micros += payout; w.lifetime_won_micros += gross_profit - fee; w.updated_at = utcnow()
                     p.payout_micros = payout; p.fee_micros = fee; p.status = "WON"; p.updated_at = utcnow()
-                    cfg.test_treasury_micros += fee
-                    winners_by_user.add(p.user_id)
-                    _ledger(db, p.user_id, "MARKET_PAYOUT", payout, m.id, f"{outcome} resolved; simulated fee {_pc(fee)} PC")
+                    cfg.test_treasury_micros += fee; winners_by_user.add(p.user_id)
+                    _ledger(db, p.user_id, "MARKET_PAYOUT", payout, m.id, f"{outcome} resolved; legacy simulated fee {_pc(fee)} PC")
                 else:
                     p.status = "LOST"; p.payout_micros = 0; p.updated_at = utcnow()
             for uid in resolved_users:
@@ -494,7 +594,59 @@ def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: st
                 if uid in winners_by_user: w.markets_won += 1
             m.status = "RESOLVED"; m.result = outcome
     m.resolved_at = utcnow(); m.resolved_by_user_id = resolver_id; m.updated_at = utcnow()
-    db.add(PredictResolution(market_id=m.id, outcome=m.result or outcome, source_value=source_value[:400], evidence_json=json.dumps(evidence or {}, ensure_ascii=False)[:16000], note=note[:500]))
+    if not db.scalar(select(PredictResolution).where(PredictResolution.market_id == m.id)):
+        db.add(PredictResolution(market_id=m.id, outcome=m.result or outcome, source_value=source_value[:400], evidence_json=json.dumps(evidence or {}, ensure_ascii=False)[:16000], note=note[:500]))
+
+
+def _settle_market_q(db: Session, m: PredictMarket, outcome: str, source_value: str = "", note: str = "", resolver_id: int | None = None, evidence: dict | None = None):
+    if m.status in {"RESOLVED", "VOID", "CANCELLED"}:
+        return
+    outcome = outcome.upper()
+    if outcome not in {"YES", "NO", "VOID"}:
+        raise HTTPException(422, "Outcome must be YES, NO or VOID")
+    cfg = _config(db)
+    positions = db.scalars(select(PredictPosition).where(PredictPosition.market_id == m.id)).all()
+    if outcome == "VOID":
+        for p in positions:
+            _system_to_user(db, "PREDICT_ESCROW", p.user_id, p.stake_micros, "Q_PREDICT_REFUND", reference=f"predict:{m.id}", note="Q Predict market voided; stake returned")
+            p.payout_micros = p.stake_micros; p.fee_micros = 0; p.status = "VOID"; p.updated_at = utcnow()
+        m.status = "VOID"; m.result = "VOID"
+    else:
+        winning_pool = m.yes_pool_micros if outcome == "YES" else m.no_pool_micros
+        losing_pool = m.no_pool_micros if outcome == "YES" else m.yes_pool_micros
+        if winning_pool <= 0:
+            for p in positions:
+                _system_to_user(db, "PREDICT_ESCROW", p.user_id, p.stake_micros, "Q_PREDICT_REFUND", reference=f"predict:{m.id}", note="No winning-side participants; stake returned")
+                p.payout_micros = p.stake_micros; p.fee_micros = 0; p.status = "VOID"; p.updated_at = utcnow()
+            outcome = "VOID"; m.status = "VOID"; m.result = "VOID"
+        else:
+            payout_total = 0; fee_total = 0
+            for p in positions:
+                if p.outcome == outcome:
+                    gross_profit = (losing_pool * p.stake_micros) // winning_pool
+                    fee = (gross_profit * cfg.fee_bps) // 10_000
+                    payout = p.stake_micros + gross_profit - fee
+                    _system_to_user(db, "PREDICT_ESCROW", p.user_id, payout, "Q_PREDICT_PAYOUT", reference=f"predict:{m.id}", note=f"{outcome} market payout")
+                    p.payout_micros = payout; p.fee_micros = fee; p.status = "WON"; p.updated_at = utcnow()
+                    payout_total += payout; fee_total += fee
+                else:
+                    p.status = "LOST"; p.payout_micros = 0; p.fee_micros = 0; p.updated_at = utcnow()
+            if fee_total > 0:
+                _system_to_system(db, "PREDICT_ESCROW", "PROFIT", fee_total, "Q_PREDICT_FEE", reference=f"predict:{m.id}", note="Q Predict fee on winning profit")
+            pool_total = winning_pool + losing_pool
+            dust = max(0, pool_total - payout_total - fee_total)
+            if dust > 0:
+                _system_to_system(db, "PREDICT_ESCROW", "PROFIT", dust, "Q_PREDICT_ROUNDING", reference=f"predict:{m.id}", note="Q Predict proportional payout rounding")
+            m.status = "RESOLVED"; m.result = outcome
+    m.resolved_at = utcnow(); m.resolved_by_user_id = resolver_id; m.updated_at = utcnow()
+    if not db.scalar(select(PredictResolution).where(PredictResolution.market_id == m.id)):
+        db.add(PredictResolution(market_id=m.id, outcome=m.result or outcome, source_value=source_value[:400], evidence_json=json.dumps(evidence or {}, ensure_ascii=False)[:16000], note=note[:500]))
+
+
+def _settle_market(db: Session, m: PredictMarket, outcome: str, source_value: str = "", note: str = "", resolver_id: int | None = None, evidence: dict | None = None):
+    if (getattr(m, "wallet_unit", "PC") or "PC").upper() == "Q":
+        return _settle_market_q(db, m, outcome, source_value, note, resolver_id, evidence)
+    return _settle_market_pc(db, m, outcome, source_value, note, resolver_id, evidence)
 
 
 def _coingecko_price(coin_id: str, currency: str = "usd") -> float:
@@ -539,6 +691,7 @@ def _round_market_target(value: float) -> float:
 def _has_open_candidate(db: Session, template_code: str, signature: dict[str, Any]) -> bool:
     rows = db.scalars(select(PredictMarket).where(
         PredictMarket.template_code == template_code,
+        PredictMarket.wallet_unit == "Q",
         PredictMarket.status.in_(["REVIEW", "LIVE", "CLOSED", "RESOLVING"]),
     )).all()
     for row in rows:
@@ -555,7 +708,7 @@ def _has_open_candidate(db: Session, template_code: str, signature: dict[str, An
 
 def _auto_candidates(db: Session) -> list[PredictMarket]:
     cfg = _config(db)
-    if not (cfg.enabled and cfg.test_mode and cfg.discovery_enabled and cfg.auto_drafting): return []
+    if not (cfg.enabled and cfg.real_q_enabled and cfg.discovery_enabled and cfg.auto_drafting): return []
     today_count = int(db.scalar(select(func.count()).select_from(PredictMarket).where(PredictMarket.created_at >= datetime.combine(utcnow().date(), datetime.min.time(), tzinfo=timezone.utc))) or 0)
     slots = max(0, cfg.max_new_markets_per_day - today_count)
     if slots <= 0: return []
@@ -569,7 +722,7 @@ def _auto_candidates(db: Session) -> list[PredictMarket]:
             current = _coingecko_price(coin_id)
             target = _round_market_target(current * 1.01)
             body = PredictMarketIn(
-                question=f"Will {label} be at or above US${target:,.0f} at the Q Predict resolution time?",
+                question=f"Will {label} be at or above US${target:,.0f} at {close.strftime('%d %b %Y %H:%M UTC')}?",
                 category=category, template_code="CRYPTO_PRICE_ABOVE_24H", close_at=close,
                 resolve_after=close, resolution_source_name="CoinGecko", resolution_source_url="https://www.coingecko.com/",
                 resolution_rule=f"YES if CoinGecko reports {label} USD price >= US${target:,.0f} when the market resolves; otherwise NO.",
@@ -646,9 +799,9 @@ def _supply_demand_snapshot(db: Session, persist: bool = True):
     rows = db.scalars(select(QLedgerEntry).where(QLedgerEntry.created_at >= start)).all()
     issuance_kinds={"SIGNUP_BONUS","BASIC_DAILY","PACKAGE_ACCRUAL","REFERRAL_REWARD","REFERRAL_WELCOME","REFERRAL_PACKAGE_REWARD","PROMOTION"}
     issued=sum(x.amount_micros for x in rows if x.kind in issuance_kinds and x.to_user_id)
-    market_spend=sum(x.amount_micros for x in rows if x.kind.startswith("MARKET_") and x.from_user_id)
+    market_spend=sum(x.amount_micros for x in rows if (x.kind.startswith("MARKET_") or x.kind.startswith("Q_PREDICT_")) and x.from_user_id)
     profit_in=sum(x.amount_micros for x in rows if x.to_system_key=="PROFIT")
-    unique_spenders=len({x.from_user_id for x in rows if x.from_user_id and (x.to_system_key=="PROFIT" or x.kind.startswith("MARKET_"))})
+    unique_spenders=len({x.from_user_id for x in rows if x.from_user_id and (x.to_system_key=="PROFIT" or x.kind.startswith("MARKET_") or x.kind.startswith("Q_PREDICT_"))})
     circulation=float(db.scalar(select(func.coalesce(func.sum(QUserWallet.balance_micros),0))) or 0)
     # Normalised weekly pressure: demand uses spend/profit/unique spender signals; supply uses issuance relative to circulation.
     demand_score=(market_spend+profit_in)/max(1,circulation)*100 + min(5.0,unique_spenders/100)
@@ -666,6 +819,23 @@ def _supply_demand_snapshot(db: Session, persist: bool = True):
             db.add(snap)
         snap.actual_price_microusd=cfgq.q_price_microusd;snap.simulated_price_microusd=simulated;snap.demand_score=demand_score;snap.supply_score=supply_score;snap.raw_change_percent=raw;snap.applied_change_percent=applied;snap.details_json=json.dumps(details)
     return {"mode":"SIMULATION_ONLY","actual_price_usd":cfgq.q_price_microusd/1_000_000,"simulated_price_usd":simulated/1_000_000,"demand_score":round(demand_score,4),"supply_score":round(supply_score,4),"raw_change_percent":round(raw,4),"applied_change_percent":round(applied,4),"details":details}
+
+
+def _retire_legacy_pc_markets(db: Session) -> dict[str, int]:
+    """Close legacy Predict Credit markets without converting PC into Q."""
+    refunded = cancelled = 0
+    rows = db.scalars(select(PredictMarket).where(PredictMarket.wallet_unit == "PC")).all()
+    for m in rows:
+        if m.status in {"LIVE", "CLOSED", "RESOLVING"}:
+            _settle_market_pc(
+                db, m, "VOID", "", "Legacy Predict Credit market retired during Q-wallet migration.", None,
+                {"migration": "V2.10.5", "legacy_unit": "PC"},
+            )
+            refunded += 1
+        elif m.status in {"REVIEW", "DRAFT"}:
+            m.status = "CANCELLED"; m.result = None; m.updated_at = utcnow()
+            cancelled += 1
+    return {"refunded": refunded, "cancelled": cancelled}
 
 
 _scheduler_task: asyncio.Task | None = None
@@ -693,6 +863,14 @@ def register_v29(app, current_user, get_db):
     router = APIRouter(prefix="/v29", tags=["LEMMIQ V2.9 Q Predict"])
 
     @app.on_event("startup")
+    def _v2105_predict_q_wallet_startup():
+        with SessionLocal() as db:
+            summary = _retire_legacy_pc_markets(db)
+            db.commit()
+            if summary["refunded"] or summary["cancelled"]:
+                log.info("Q Predict V2.10.5 retired legacy PC markets: %s", summary)
+
+    @app.on_event("startup")
     async def _start_predict_scheduler():
         global _scheduler_task
         if _scheduler_task is None or _scheduler_task.done():
@@ -701,21 +879,48 @@ def register_v29(app, current_user, get_db):
     @router.get("/predict/home")
     def home(category: str = "", u: User = Depends(current_user), db: Session = Depends(get_db)):
         _settle_due(db)
-        w=_wallet(db,u.id);cfg=_config(db)
-        stmt=select(PredictMarket).where(PredictMarket.status.in_(["LIVE","CLOSED","RESOLVING","RESOLVED"]))
-        if category.strip() and category.upper() not in {"ALL","TRENDING"}: stmt=stmt.where(PredictMarket.category==category.upper().strip())
-        rows=db.scalars(stmt.order_by(PredictMarket.trend_score.desc(),PredictMarket.created_at.desc()).limit(80)).all()
-        live=[x for x in rows if x.status=="LIVE" and x.close_at>utcnow()]
-        resolved=[x for x in rows if x.status in {"RESOLVED","VOID"}]
+        _ensure_user_wallet(db, u.id)
+        qw = _raw_user_wallet(db, u.id); cfg = _config(db)
+        stmt = select(PredictMarket).where(
+            PredictMarket.wallet_unit == "Q",
+            PredictMarket.status.in_(["LIVE", "CLOSED", "RESOLVING", "RESOLVED", "VOID"]),
+        )
+        if category.strip() and category.upper() not in {"ALL", "TRENDING"}:
+            stmt = stmt.where(PredictMarket.category == category.upper().strip())
+        rows = db.scalars(stmt.order_by(PredictMarket.trend_score.desc(), PredictMarket.created_at.desc()).limit(100)).all()
+        live = [x for x in rows if x.status == "LIVE" and x.close_at > utcnow()]
+        resolved = [x for x in rows if x.status in {"RESOLVED", "VOID"}]
+
+        user_positions = db.scalars(
+            select(PredictPosition).join(PredictMarket, PredictPosition.market_id == PredictMarket.id).where(
+                PredictPosition.user_id == u.id, PredictMarket.wallet_unit == "Q"
+            )
+        ).all()
+        lifetime_staked = sum(x.stake_micros for x in user_positions)
+        lifetime_won = sum(max(0, x.payout_micros - x.stake_micros) for x in user_positions if x.status == "WON")
+        markets_won = sum(1 for x in user_positions if x.status == "WON")
+        markets_resolved = sum(1 for x in user_positions if x.status in {"WON", "LOST", "VOID"})
+        balance_q = _q(qw.balance_micros)
         db.commit()
         return {
-            "mode":"TEST_CREDITS_ONLY","real_q_enabled":False,
-            "wallet":{"balance_pc":_pc(w.balance_micros),"starting_pc":_pc(cfg.starting_credits_micros),"lifetime_won_pc":_pc(w.lifetime_won_micros),"lifetime_staked_pc":_pc(w.lifetime_staked_micros),"markets_won":w.markets_won,"markets_resolved":w.markets_resolved},
-            "fee_percent":cfg.fee_bps/100,
-            "notice":"Predict Credits are test-only and cannot be bought, transferred, converted to Q, used in Q Market or withdrawn.",
-            "live":[_market_json(db,x,u.id) for x in live],
-            "resolved":[_market_json(db,x,u.id) for x in resolved[:20]],
-            "categories":["TRENDING","CRYPTO","ECONOMY","TECH_AI","SPORTS","ENTERTAINMENT","WEATHER","LEMMIQ"],
+            "mode": "Q_WALLET", "real_q_enabled": bool(cfg.enabled and cfg.real_q_enabled),
+            "wallet": {
+                "balance_q": balance_q,
+                "lifetime_won_q": _q(lifetime_won), "lifetime_staked_q": _q(lifetime_staked),
+                "markets_won": markets_won, "markets_resolved": markets_resolved,
+                # Compatibility alias for older browser code. V2.10.5 relabels it Q.
+                "balance_pc": balance_q, "starting_pc": 0, "lifetime_won_pc": _q(lifetime_won), "lifetime_staked_pc": _q(lifetime_staked),
+            },
+            "fee_percent": cfg.fee_bps / 100,
+            "minimum_stake_q": _q(cfg.minimum_stake_micros),
+            "maximum_stake_q": _q(cfg.maximum_stake_micros),
+            "per_market_limit_q": _q(cfg.per_market_limit_micros),
+            "daily_exposure_limit_q": _q(cfg.daily_exposure_limit_micros),
+            "weekly_exposure_limit_q": _q(cfg.weekly_exposure_limit_micros),
+            "notice": ("Q Predict uses your LEMMIQ Q wallet. Stakes, payouts and refunds appear in Q Activity." if cfg.real_q_enabled else "Q Predict staking is currently paused by the server."),
+            "live": [_market_json(db, x, u.id) for x in live],
+            "resolved": [_market_json(db, x, u.id) for x in resolved[:30]],
+            "categories": ["TRENDING", "CRYPTO", "ECONOMY", "TECH_AI", "SPORTS", "ENTERTAINMENT", "WEATHER", "LEMMIQ"],
         }
 
     @router.get("/predict/markets/{market_id}")
@@ -725,11 +930,15 @@ def register_v29(app, current_user, get_db):
         return _market_json(db,m,u.id,True)
 
     @router.post("/predict/markets/{market_id}/stake")
-    def stake(market_id:int,body:PredictStakeIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        m=db.get(PredictMarket,market_id)
-        if not m:raise HTTPException(404,"Prediction market not found")
-        _stake(db,u,m,body.outcome,_pc_micros(body.amount_pc));db.commit();db.refresh(m)
-        return {"market":_market_json(db,m,u.id),"wallet_balance_pc":_pc(_wallet(db,u.id).balance_micros)}
+    def stake(market_id:int, body:PredictStakeIn, u:User=Depends(current_user), db:Session=Depends(get_db)):
+        m = db.get(PredictMarket, market_id)
+        if not m: raise HTTPException(404, "Prediction market not found")
+        raw_amount = body.amount_q if body.amount_q is not None else body.amount_pc
+        if raw_amount is None: raise HTTPException(422, "amount_q is required")
+        _stake_q(db, u, m, body.outcome, _q_micros(raw_amount))
+        db.commit(); db.refresh(m)
+        balance_q = _q(_raw_user_wallet(db, u.id).balance_micros)
+        return {"market": _market_json(db, m, u.id), "wallet_balance_q": balance_q, "wallet_balance_pc": balance_q}
 
     @router.post("/predict/markets/{market_id}/watch")
     def toggle_watch(market_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -747,36 +956,60 @@ def register_v29(app, current_user, get_db):
         return {"id":row.id,"text":row.text,"created_at":row.created_at.isoformat(),"user":{"id":u.id,"username":u.username,"display_name":u.display_name}}
 
     @router.get("/predict/my")
-    def my_predictions(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        ps=db.scalars(select(PredictPosition).where(PredictPosition.user_id==u.id).order_by(PredictPosition.updated_at.desc()).limit(200)).all()
-        return [{"market":_market_json(db,db.get(PredictMarket,p.market_id),u.id),"outcome":p.outcome,"stake_pc":_pc(p.stake_micros),"payout_pc":_pc(p.payout_micros),"status":p.status} for p in ps if db.get(PredictMarket,p.market_id)]
+    def my_predictions(u:User=Depends(current_user), db:Session=Depends(get_db)):
+        ps = db.scalars(select(PredictPosition).where(PredictPosition.user_id == u.id).order_by(PredictPosition.updated_at.desc()).limit(200)).all()
+        out = []
+        for p in ps:
+            m = db.get(PredictMarket, p.market_id)
+            if not m: continue
+            is_q = (getattr(m, "wallet_unit", "PC") or "PC").upper() == "Q"
+            out.append({
+                "market": _market_json(db, m, u.id), "outcome": p.outcome,
+                "stake_q": _q(p.stake_micros) if is_q else 0.0,
+                "payout_q": _q(p.payout_micros) if is_q else 0.0,
+                "stake_pc": _pc(p.stake_micros), "payout_pc": _pc(p.payout_micros),
+                "status": p.status, "wallet_unit": "Q" if is_q else "PC",
+            })
+        return out
 
     @router.get("/predict/leaderboard")
-    def leaderboard(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        rows=db.scalars(select(PredictWallet).where(PredictWallet.markets_resolved>0).order_by(PredictWallet.lifetime_won_micros.desc()).limit(100)).all()
-        out=[]
-        for i,w in enumerate(rows,1):
-            user=db.get(User,w.user_id);acc=(w.markets_won*100/w.markets_resolved) if w.markets_resolved else 0
-            out.append({"rank":i,"user":{"id":w.user_id,"username":user.username if user else "","display_name":user.display_name if user else f"User #{w.user_id}"},"accuracy_percent":round(acc,1),"net_won_pc":_pc(w.lifetime_won_micros),"resolved":w.markets_resolved})
+    def leaderboard(u:User=Depends(current_user), db:Session=Depends(get_db)):
+        rows = db.execute(
+            select(PredictPosition, PredictMarket)
+            .join(PredictMarket, PredictPosition.market_id == PredictMarket.id)
+            .where(PredictMarket.wallet_unit == "Q", PredictPosition.status.in_(["WON", "LOST", "VOID"]))
+            .order_by(PredictPosition.updated_at.desc())
+            .limit(5000)
+        ).all()
+        agg: dict[int, dict[str, int]] = {}
+        for p, _m in rows:
+            a = agg.setdefault(p.user_id, {"won": 0, "resolved": 0, "net": 0})
+            a["resolved"] += 1
+            if p.status == "WON":
+                a["won"] += 1; a["net"] += max(0, p.payout_micros - p.stake_micros)
+        ranked = sorted(agg.items(), key=lambda kv: (kv[1]["net"], kv[1]["won"]), reverse=True)[:100]
+        out = []
+        for i, (uid, a) in enumerate(ranked, 1):
+            user = db.get(User, uid); acc = (a["won"] * 100 / a["resolved"]) if a["resolved"] else 0
+            out.append({
+                "rank": i, "user": {"id": uid, "username": user.username if user else "", "display_name": user.display_name if user else f"User #{uid}"},
+                "accuracy_percent": round(acc, 1), "net_won_q": _q(a["net"]), "net_won_pc": _q(a["net"]), "resolved": a["resolved"],
+            })
         return out
 
     @router.post("/predict/wallet/reset")
-    def reset_wallet(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        cfg=_config(db);w=_wallet(db,u.id)
-        open_count=int(db.scalar(select(func.count()).select_from(PredictPosition).join(PredictMarket,PredictPosition.market_id==PredictMarket.id).where(PredictPosition.user_id==u.id,PredictMarket.status.in_(["LIVE","CLOSED","RESOLVING"]))) or 0)
-        if open_count:raise HTTPException(409,"Resolve your open test positions before resetting Predict Credits")
-        if w.balance_micros>=cfg.starting_credits_micros:raise HTTPException(409,"Your Predict Credits are already at or above the test starting balance")
-        delta=cfg.starting_credits_micros-w.balance_micros;w.balance_micros=cfg.starting_credits_micros;w.updated_at=utcnow();_ledger(db,u.id,"TEST_BALANCE_RESET",delta,None,"Testing refill")
-        db.commit();return {"balance_pc":_pc(w.balance_micros)}
+    def reset_wallet(u:User=Depends(current_user), db:Session=Depends(get_db)):
+        raise HTTPException(410, "Predict Credits have been retired. Q Predict now uses your main Q wallet.")
 
     @router.get("/predict/admin/overview")
-    def admin_overview(period:str="7d",u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);start=_range_start(period);cfg=_config(db)
-        counts={s:int(db.scalar(select(func.count()).select_from(PredictMarket).where(PredictMarket.status==s)) or 0) for s in ["REVIEW","LIVE","CLOSED","RESOLVING","RESOLVED","VOID"]}
-        volume=int(db.scalar(select(func.coalesce(func.sum(PredictTrade.amount_micros),0)).where(PredictTrade.created_at>=start)) or 0)
-        predictors=int(db.scalar(select(func.count(func.distinct(PredictTrade.user_id))).where(PredictTrade.created_at>=start)) or 0)
-        comments=int(db.scalar(select(func.count()).select_from(PredictComment).where(PredictComment.created_at>=start)) or 0)
-        return {"period":period,"counts":counts,"volume_pc":_pc(volume),"active_predictors":predictors,"comments":comments,"test_treasury_pc":_pc(cfg.test_treasury_micros),"fee_percent":cfg.fee_bps/100,"real_q_enabled":False,"mode":"TEST_CREDITS_ONLY"}
+    def admin_overview(period:str="7d", u:User=Depends(current_user), db:Session=Depends(get_db)):
+        _require_admin(db, u); start = _range_start(period); cfg = _config(db)
+        counts = {st:int(db.scalar(select(func.count()).select_from(PredictMarket).where(PredictMarket.wallet_unit=="Q", PredictMarket.status==st)) or 0) for st in ["REVIEW","LIVE","CLOSED","RESOLVING","RESOLVED","VOID"]}
+        volume = int(db.scalar(select(func.coalesce(func.sum(PredictTrade.amount_micros),0)).join(PredictMarket, PredictTrade.market_id==PredictMarket.id).where(PredictTrade.created_at>=start, PredictMarket.wallet_unit=="Q")) or 0)
+        predictors = int(db.scalar(select(func.count(func.distinct(PredictTrade.user_id))).join(PredictMarket, PredictTrade.market_id==PredictMarket.id).where(PredictTrade.created_at>=start, PredictMarket.wallet_unit=="Q")) or 0)
+        comments = int(db.scalar(select(func.count()).select_from(PredictComment).join(PredictMarket, PredictComment.market_id==PredictMarket.id).where(PredictComment.created_at>=start, PredictMarket.wallet_unit=="Q")) or 0)
+        escrow = db.get(QSystemWallet, "PREDICT_ESCROW")
+        return {"period":period,"counts":counts,"volume_q":_q(volume),"volume_pc":_q(volume),"active_predictors":predictors,"comments":comments,"predict_escrow_q":_q(escrow.balance_micros if escrow else 0),"test_treasury_pc":_q(escrow.balance_micros if escrow else 0),"fee_percent":cfg.fee_bps/100,"real_q_enabled":bool(cfg.real_q_enabled),"mode":"Q_WALLET"}
 
     @router.get("/predict/admin/markets")
     def admin_markets(status:str="",u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -818,18 +1051,36 @@ def register_v29(app, current_user, get_db):
         _require_admin(db,u,True);out=_settle_due(db);db.commit();return out
 
     @router.get("/predict/admin/config")
-    def admin_config(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);c=_config(db);return {"starting_credits_pc":_pc(c.starting_credits_micros),"fee_percent":c.fee_bps/100,"discovery_enabled":c.discovery_enabled,"auto_drafting":c.auto_drafting,"auto_publish":c.auto_publish,"auto_settlement":c.auto_settlement,"max_live_markets":c.max_live_markets,"max_new_markets_per_day":c.max_new_markets_per_day,"test_treasury_pc":_pc(c.test_treasury_micros),"test_mode":c.test_mode,"real_q_enabled":False}
+    def admin_config(u:User=Depends(current_user), db:Session=Depends(get_db)):
+        _require_admin(db,u); c=_config(db)
+        return {
+            "fee_percent": c.fee_bps/100, "discovery_enabled": c.discovery_enabled,
+            "auto_drafting": c.auto_drafting, "auto_publish": c.auto_publish,
+            "auto_settlement": c.auto_settlement, "max_live_markets": c.max_live_markets,
+            "max_new_markets_per_day": c.max_new_markets_per_day,
+            "test_mode": False, "real_q_enabled": bool(c.real_q_enabled), "mode":"Q_WALLET",
+            "starting_credits_pc": 0, "test_treasury_pc": _q((db.get(QSystemWallet, "PREDICT_ESCROW").balance_micros if db.get(QSystemWallet, "PREDICT_ESCROW") else 0)),
+            "minimum_stake_q": _q(c.minimum_stake_micros), "maximum_stake_q": _q(c.maximum_stake_micros),
+            "per_market_limit_q": _q(c.per_market_limit_micros), "daily_exposure_limit_q": _q(c.daily_exposure_limit_micros),
+            "weekly_exposure_limit_q": _q(c.weekly_exposure_limit_micros),
+        }
 
     @router.put("/predict/admin/config")
-    def admin_save_config(body:PredictConfigIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);c=_config(db)
-        if body.starting_credits_pc is not None:c.starting_credits_micros=_pc_micros(body.starting_credits_pc)
-        if body.fee_percent is not None:c.fee_bps=int(round(body.fee_percent*100))
+    def admin_save_config(body:PredictConfigIn, u:User=Depends(current_user), db:Session=Depends(get_db)):
+        _require_admin(db,u,True); c=_config(db)
+        if body.real_q_enabled is not None: c.real_q_enabled = bool(body.real_q_enabled)
+        if body.fee_percent is not None: c.fee_bps = int(round(body.fee_percent*100))
+        if body.minimum_stake_q is not None: c.minimum_stake_micros = _q_micros(body.minimum_stake_q)
+        if body.maximum_stake_q is not None: c.maximum_stake_micros = _q_micros(body.maximum_stake_q)
+        if body.per_market_limit_q is not None: c.per_market_limit_micros = _q_micros(body.per_market_limit_q)
+        if body.daily_exposure_limit_q is not None: c.daily_exposure_limit_micros = _q_micros(body.daily_exposure_limit_q)
+        if body.weekly_exposure_limit_q is not None: c.weekly_exposure_limit_micros = _q_micros(body.weekly_exposure_limit_q)
         for k in ["discovery_enabled","auto_drafting","auto_publish","auto_settlement","max_live_markets","max_new_markets_per_day"]:
             v=getattr(body,k)
             if v is not None:setattr(c,k,v)
-        c.test_mode=True;c.real_q_enabled=False;c.updated_at=utcnow();db.commit();return admin_config(u,db)
+        if c.maximum_stake_micros < c.minimum_stake_micros: raise HTTPException(422,"Maximum stake must be at least the minimum stake")
+        if c.per_market_limit_micros < c.minimum_stake_micros: raise HTTPException(422,"Per-market limit must be at least the minimum stake")
+        c.test_mode=False; c.updated_at=utcnow(); db.commit(); return admin_config(u,db)
 
     @router.get("/admin/operations")
     def operations(period:str="7d",u:User=Depends(current_user),db:Session=Depends(get_db)):

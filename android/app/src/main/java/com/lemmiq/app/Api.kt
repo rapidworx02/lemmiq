@@ -708,11 +708,11 @@ class Api(private val store:SessionStore){
 
     suspend fun predictStake(id:Int,outcome:String,amountQ:Double):PredictStakeResponseDto{
         val rb=gson.toJson(mapOf("outcome" to outcome,"amount_q" to amountQ)).toRequestBody(json)
-        return gson.fromJson(req(b("$base/v2104/predict/markets/$id/stake").post(rb).build()),PredictStakeResponseDto::class.java)
+        return gson.fromJson(req(b("$base/v29/predict/markets/$id/stake").post(rb).build()),PredictStakeResponseDto::class.java)
     }
 
     suspend fun qFeatureCatalog():List<QFeatureTierRuleDto>{
-        val t=req(b("$base/v2104/q-features/catalog").get().build())
+        val t=req(b("$base/v2105/q-features/catalog").get().build())
         return gson.fromJson(t,object:TypeToken<List<QFeatureTierRuleDto>>(){}.type)
     }
 

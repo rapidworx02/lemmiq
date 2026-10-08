@@ -290,7 +290,7 @@ data class QMarketOrderDto(
 )
 
 
-// LEMMIQ V2.10.4 Q Predict — main Q wallet staking. Legacy PC fields remain read-only for old test records.
+// LEMMIQ V2.10.5 Q Predict — main Q wallet staking. Legacy PC fields remain read-only for old test records.
 data class PredictPositionDto(
     val outcome:String="",
     val stake_q:Double=0.0,val payout_q:Double=0.0,val fee_q:Double=0.0,
@@ -301,7 +301,7 @@ data class PredictResolutionDto(val outcome:String="",val source_value:String=""
 data class PredictCommentDto(val id:Int=0,val text:String="",val created_at:String="",val user:UserDto?=null)
 data class PredictMarketDto(
     val id:Int=0,val market_key:String="",val question:String="",val category:String="TRENDING",val template_code:String="",
-    val status:String="REVIEW",val yes_percent:Double=50.0,val no_percent:Double=50.0,
+    val status:String="REVIEW",val wallet_unit:String="Q",val legacy_pc:Boolean=false,val yes_percent:Double=50.0,val no_percent:Double=50.0,
     val yes_pool_q:Double=0.0,val no_pool_q:Double=0.0,val pool_q:Double=0.0,
     val yes_pool_pc:Double=0.0,val no_pool_pc:Double=0.0,val pool_pc:Double=0.0,
     val participants:Int=0,val comments:Int=0,val trend_score:Int=0,val resolution_confidence:Int=0,

@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.9")
+app = FastAPI(title="LEMMIQ Server", version="2.10.5")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -912,7 +912,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.9",
+        "version": "2.10.5",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -940,9 +940,23 @@ register_v27(app,current_user,get_db,push)
 from .v28 import register_v28
 register_v28(app,current_user,get_db)
 
-# ---------------- LEMMIQ V2.9 Q Predict + passive analytics ----------------
+# ---------------- LEMMIQ V2.9/V2.10.5 Q Predict ----------------
 from .v29 import register_v29
 register_v29(app,current_user,get_db)
+
+# Keep the V2.10.4 Android stake endpoint working while V2.10.5 clients move
+# to the canonical /v29/predict Q-wallet route.
+from .v2104_predict_router import register_v2104_predict_compat
+register_v2104_predict_compat(app,current_user,get_db)
+
+# V2.10.5 server-authoritative Q feature pricing by active subscription tier.
+from .v2105_q_features import register_v2105_q_features
+register_v2105_q_features(app,current_user,get_db)
+
+# Compatibility catalog for V2.10.4 clients. Prices remain 0 Q there; V2.10.5
+# clients use the authenticated /v2105/q-features/catalog endpoint.
+from .v2104_q_features import router as v2104_q_features_router
+app.include_router(v2104_q_features_router)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

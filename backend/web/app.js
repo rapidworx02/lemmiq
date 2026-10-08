@@ -133,7 +133,7 @@ function setView(name){
     updates:["Updates","LEMMIQ Status — text, photo and video for 24 hours."],
     agent:["Q","Ask across chats, groups, voice-note transcripts and Social IQ memory."],
     calls:["Calls","Missed, no-answer and completed LEMMIQ voice calls."],
-    more:["More","Tools, privacy, account and Android app download."],
+    more:["More","Account and utilities."],
     trust:["LEMMIQ Trust","Fact / Scam Check with saved history."],
     business:["Business Agent","Teach LEMMIQ how your business operates."],
     activity:["Activity","Detected phone activity synced by your Android companion."],
@@ -1368,7 +1368,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.4").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.5").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
