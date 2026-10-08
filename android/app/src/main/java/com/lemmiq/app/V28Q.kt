@@ -54,7 +54,7 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
             }
         }
         Row(Modifier.fillMaxWidth().padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
-            listOf("Wallet","Packages","Market","Refer").forEachIndexed{i,label->
+            listOf("Wallet","Packages","Market","Refer","Activity").forEachIndexed{i,label->
                 FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp)},modifier=Modifier.weight(1f))
             }
         }
@@ -63,7 +63,8 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 0->Q28WalletTab(vm)
                 1->Q28PackagesTab(vm){buyPlan=it}
                 2->Q28MarketTab(vm){disputeOrder=it}
-                else->Q28ReferralTab(vm)
+                3->Q28ReferralTab(vm)
+                else->Q28ActivityTab(vm)
             }
         }
     }
@@ -139,6 +140,65 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
                         Text(x.note.ifBlank{x.created_at.take(16).replace("T"," ")},color=Q28Muted,fontSize=10.sp)
                     }
                     Text("${if(x.direction=="IN") "+" else "−"}${q28Q(x.amount_q)} Q",fontWeight=FontWeight.Black,color=if(x.direction=="IN")Q28Mint else Color(0xFFD94B63))
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun Q28ActivityTab(vm:LemmiqViewModel){
+    var filter by remember{mutableStateOf("ALL")}
+    val rows=when(filter){
+        "IN"->vm.qLedger.filter{it.direction.equals("IN",true)}
+        "OUT"->vm.qLedger.filter{it.direction.equals("OUT",true)}
+        else->vm.qLedger
+    }
+    val incoming=vm.qLedger.filter{it.direction.equals("IN",true)}.sumOf{it.amount_q}
+    val outgoing=vm.qLedger.filter{it.direction.equals("OUT",true)}.sumOf{it.amount_q}
+    val featureUses=vm.qLedger.count{it.kind.contains("FEATURE",true)||!it.feature_key.isNullOrBlank()}
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding=PaddingValues(14.dp,8.dp,14.dp,100.dp),
+        verticalArrangement=Arrangement.spacedBy(10.dp)
+    ){
+        item{
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                Card(Modifier.weight(1f),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(12.dp)){Text("Incoming",fontSize=10.sp,color=Q28Muted);Text("+${q28Q(incoming)} Q",fontWeight=FontWeight.Black,color=Q28Mint)}}
+                Card(Modifier.weight(1f),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(12.dp)){Text("Outgoing",fontSize=10.sp,color=Q28Muted);Text("−${q28Q(outgoing)} Q",fontWeight=FontWeight.Black,color=Color(0xFFD94B63))}}
+            }
+        }
+        item{
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                listOf("ALL" to "All","IN" to "Incoming","OUT" to "Outgoing").forEach{(key,label)->
+                    FilterChip(selected=filter==key,onClick={filter=key},label={Text(label,fontSize=10.sp)},modifier=Modifier.weight(1f))
+                }
+            }
+        }
+        item{
+            Text("Q activity",fontWeight=FontWeight.Black,fontSize=19.sp)
+            Text("Mining, rewards, packages, marketplace, transfers, Q Predict and feature usage are tracked here.",fontSize=10.sp,color=Q28Muted)
+            if(featureUses>0)Text("$featureUses feature usage event${if(featureUses==1)"" else "s"}",fontSize=10.sp,color=Q28Purple,modifier=Modifier.padding(top=3.dp))
+        }
+        if(rows.isEmpty())item{Text("No Q activity in this view yet.",color=Q28Muted)}
+        items(rows.take(200),key={it.id}){x->
+            val isIn=x.direction.equals("IN",true)
+            val amount=if(x.amount_q==0.0)"0 Q" else "${if(isIn)"+" else "−"}${q28Q(x.amount_q)} Q"
+            val title=when{
+                !x.feature_key.isNullOrBlank()->x.feature_key.replace("_"," ")
+                x.kind.isNotBlank()->x.kind.replace("_"," ")
+                else->"Q activity"
+            }
+            Card(shape=RoundedCornerShape(16.dp)){
+                Row(Modifier.fillMaxWidth().padding(13.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text(title,fontWeight=FontWeight.Bold)
+                        if(x.note.isNotBlank())Text(x.note,color=Q28Muted,fontSize=10.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                        Text(x.created_at.take(16).replace("T"," "),color=Q28Muted,fontSize=9.sp)
+                    }
+                    Text(amount,fontWeight=FontWeight.Black,color=when{ x.amount_q==0.0->Q28Purple; isIn->Q28Mint; else->Color(0xFFD94B63) })
                 }
             }
         }

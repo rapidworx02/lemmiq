@@ -1,0 +1,84 @@
+LEMMIQ V2.10.4 - COPY / GITHUB / BUILD
+
+1) EXTRACT LEMMIQ_V2.10.4_UPDATE.zip
+
+2) COPY ANDROID APP
+Copy:
+  LEMMIQ_V2.10.4_READY\android\app
+Over:
+  C:\Users\pc\LEMMIQ\android\app
+Choose Replace / overwrite.
+
+3) COPY WEB FILES
+Copy everything from:
+  LEMMIQ_V2.10.4_READY\backend\web
+Into:
+  C:\Users\pc\LEMMIQ\backend\web
+
+4) COPY NEW BACKEND MODULES
+Copy:
+  backend\app\v2104_q_features.py
+  backend\app\v2104_q_predict_contract.py
+  backend\app\v2104_predict_router.py
+Into your real:
+  C:\Users\pc\LEMMIQ\backend\app\
+
+IMPORTANT: read BACKEND_WIRING_V2.10.4.md before enabling Q Predict Q staking.
+Feature pricing can be added immediately. Q Predict Q staking must be wired to your EXISTING Q wallet/repository; do not guess the database table names and do not convert legacy PC to Q.
+
+5) UPDATE backend/app/main.py FOR Q FEATURE PRICING + Q PREDICT ROUTER
+Add imports:
+  from .v2104_q_features import router as v2104_q_features_router
+  from .v2104_predict_router import router as v2104_predict_router
+
+After app = FastAPI(...), add:
+  app.include_router(v2104_q_features_router)
+  app.include_router(v2104_predict_router)
+
+6) RENDER ENVIRONMENT
+Set a long random secret:
+  LEMMIQ_MASTER_ADMIN_KEY=your-long-random-secret
+
+If SQLAlchemy is not already in requirements.txt, add:
+  SQLAlchemy>=2.0
+
+7) VERIFY ANDROID VERSION
+cd /d C:\Users\pc\LEMMIQ
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+
+Expected:
+  versionCode=54
+  versionName="2.10.4"
+
+8) GIT
+cd /d C:\Users\pc\LEMMIQ
+git status
+git add android/app backend/web backend/app/v2104_q_features.py backend/app/v2104_q_predict_contract.py backend/app/v2104_predict_router.py
+git commit -m "LEMMIQ V2.10.4 Q activity tier pricing Q Predict Q wallet and Q history"
+git push origin main
+
+9) BUILD ANDROID
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+APK:
+  C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+10) INSTALL
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+If signature mismatch:
+  adb uninstall com.lemmiq.app
+  adb install app\build\outputs\apk\debug\app-debug.apk
+
+11) TEST FIRST
+- Profile says LEMMIQ V2.10.4-debug
+- Q > Today > View details shows underlying items when available
+- Q Predict analysis either returns a saved result or a visible Retry error; never endless loading
+- Close/reopen a market: saved analysis is restored without rerunning AI
+- Q page shows Q Predict analyses history
+- Q Economy has Activity tab with All / Incoming / Outgoing
+- Q feature catalog endpoint returns 0 Q for every tier
+- Q Predict does NOT allow a new legacy-PC stake
+- Only enable Q Predict Q staking after the backend wallet adapter is wired and tested transactionally

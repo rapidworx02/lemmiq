@@ -140,7 +140,7 @@ function setView(name){
     money:["Money","Review and correct notification-derived payment insights."],
     me:["Me","Your profile photo, account and LEMMIQ access."],
     "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
-    "q-predict":["Q Predict","Test prediction markets using isolated Predict Credits."],
+    "q-predict":["Q Predict","Prediction markets using your LEMMIQ Q wallet."],
     "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
@@ -1368,7 +1368,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.3").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.4").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

@@ -10,12 +10,13 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.10.3">
+  <link rel="stylesheet" href="/web/styles.css?v=2.10.4">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.10.3">
-  <link rel="stylesheet" href="/web/v29.css?v=2.10.3">
-  <link rel="stylesheet" href="/web/v210.css?v=2.10.3">
-  <link rel="stylesheet" href="/web/v2103.css?v=2.10.3">
+  <link rel="stylesheet" href="/web/v28.css?v=2.10.4">
+  <link rel="stylesheet" href="/web/v29.css?v=2.10.4">
+  <link rel="stylesheet" href="/web/v210.css?v=2.10.4">
+  <link rel="stylesheet" href="/web/v2103.css?v=2.10.4">
+  <link rel="stylesheet" href="/web/v2104.css?v=2.10.4">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -306,8 +307,8 @@
 
       <section id="view-q-predict" class="view">
         <div class="v29-predict-hero glass">
-          <div><span class="eyebrow">LEMMIQ Q PREDICT</span><h2>Predict what happens next.</h2><p>Test prediction markets using isolated Predict Credits. No Q or cash conversion is enabled.</p></div>
-          <div class="v29-pc-balance"><small>Predict Credits</small><strong id="v29PcBalance">— PC</strong><span>TEST MODE</span></div>
+          <div><span class="eyebrow">LEMMIQ Q PREDICT</span><h2>Predict what happens next.</h2><p>Prediction markets use your LEMMIQ Q wallet when Q staking is enabled by the server.</p></div>
+          <div class="v29-pc-balance"><small>Q Wallet</small><strong id="v29PcBalance">— Q</strong><span>Q PREDICT</span></div>
         </div>
         <div class="v29-predict-toolbar glass">
           <div id="v29PredictCategories" class="v29-category-chips"></div>
@@ -356,6 +357,7 @@
           <button data-q28-tab="packages">Packages</button>
           <button data-q28-tab="market">Q Market</button>
           <button data-q28-tab="refer">Refer & Earn</button>
+          <button data-q28-tab="activity">Activity</button>
         </div>
 
         <div id="q28Tab-wallet" class="q28-tab active">
@@ -386,6 +388,15 @@
           </div>
           <article class="card glass"><h3>Your referrals</h3><div id="q28ReferralList" class="q28-list"></div></article>
         </div>
+
+        <div id="q28Tab-activity" class="q28-tab">
+          <article class="card glass">
+            <div class="section-head"><div><span class="eyebrow">Q ACTIVITY</span><h3>Q activity ledger</h3><p class="micro">Incoming, outgoing and 0 Q feature usage are shown here.</p></div><button id="q2104RefreshActivity" class="ghost">↻</button></div>
+            <div id="q2104ActivitySummary" class="q28-admin-stats"></div>
+            <div class="q2104-activity-filters"><button class="active" data-q2104-filter="ALL">All</button><button data-q2104-filter="IN">Incoming</button><button data-q2104-filter="OUT">Outgoing</button></div>
+            <div id="q2104ActivityList" class="q28-list"></div>
+          </article>
+        </div>
       </section>
 
       <section id="view-q-admin" class="view">
@@ -395,7 +406,7 @@
         </article>
         <div id="q28AdminOverview" class="q28-admin-stats"></div>
         <article class="card glass v29-admin-card">
-          <div class="section-head"><div><span class="eyebrow">Q PREDICT</span><h3>Prediction operations</h3><p class="micro">Predict Credits only · real-Q staking remains disabled.</p></div><button id="v29RunPredictAgent" class="primary">Generate drafts</button></div>
+          <div class="section-head"><div><span class="eyebrow">Q PREDICT</span><h3>Prediction operations</h3><p class="micro">Q wallet staking · limits and fees are backend controlled.</p></div><button id="v29RunPredictAgent" class="primary">Generate drafts</button></div>
           <div id="v29PredictAdminStats" class="q28-admin-stats"></div>
           <div class="v29-admin-controls"><button id="v29CreatePredictMarket" class="ghost">+ Create market</button><button id="v29SettlePredictDue" class="ghost">Settle due markets</button><button id="v29OpenPredictReview" class="ghost">Review market drafts</button></div>
           <div id="v29PredictAutomation" class="v29-automation-strip"></div>
@@ -494,8 +505,9 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.10.3" defer></script>
-  <script src="/web/v28.js?v=2.10.3" defer></script>
-  <script src="/web/v29.js?v=2.10.3" defer></script>
+  <script src="/web/app.js?v=2.10.4" defer></script>
+  <script src="/web/v28.js?v=2.10.4" defer></script>
+  <script src="/web/v29.js?v=2.10.4" defer></script>
+  <script src="/web/v2104.js?v=2.10.4" defer></script>
 </body>
 </html>

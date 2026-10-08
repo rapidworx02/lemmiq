@@ -1,0 +1,25 @@
+{
+  "charging_enabled": false,
+  "tiers": [
+    "FREE",
+    "STARTER_10",
+    "PLUS_50",
+    "PRO_100",
+    "PREMIUM_500",
+    "ELITE_1000"
+  ],
+  "features": {
+    "SUGGEST_REPLY": 0,
+    "CHAT_SUMMARY": 0,
+    "Q_CHAT": 0,
+    "Q_ADVANCED": 0,
+    "Q_VISION": 0,
+    "Q_PREDICT_ANALYSIS": 0,
+    "TRUST_CHECK": 0,
+    "BUSINESS_AGENT": 0,
+    "DOCUMENT_ANALYSIS": 0,
+    "Q_TO_Q": 0,
+    "VOICE_TRANSCRIPTION": 0,
+    "SMART_MEMORY": 0
+  }
+}

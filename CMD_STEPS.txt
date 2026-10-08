@@ -1,0 +1,66 @@
+LEMMIQ V2.10.2 — COPY, GITHUB AND BUILD
+
+A) BACK UP YOUR CURRENT ANDROID APP FIRST
+
+cd /d C:\Users\pc\LEMMIQ
+powershell -NoProfile -Command "Compress-Archive -Path 'android\app\*' -DestinationPath '.\android_app_before_v2102.zip' -Force"
+
+B) EXTRACT LEMMIQ_V2.10.2_ANDROID_INTEGRATED.zip
+
+Inside the ZIP is an android\app folder.
+Copy that android\app folder over:
+
+C:\Users\pc\LEMMIQ\android\app
+
+Choose Replace / overwrite when Windows asks.
+
+C) CONFIRM VERSION AND REAL UI CHANGES EXIST
+
+cd /d C:\Users\pc\LEMMIQ
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+findstr /n /i /c:"☰" android\app\src\main\java\com\lemmiq\app\LemmiqApp.kt
+findstr /n /i /c:"Privacy & Security" android\app\src\main\java\com\lemmiq\app\LemmiqApp.kt
+findstr /n /i /c:"Profile, Trust, Business & Settings" android\app\src\main\java\com\lemmiq\app\LemmiqApp.kt
+
+Expected:
+- versionCode=52
+- versionName="2.10.2"
+- the More/Privacy lines ARE found
+- "Profile, Trust, Business & Settings" returns NO result
+
+D) COMMIT TO GITHUB
+
+cd /d C:\Users\pc\LEMMIQ
+git status
+git add android/app
+git commit -m "LEMMIQ V2.10.2 integrated native navigation photo viewer and decline fix"
+git push origin main
+
+E) CLEAN BUILD
+
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+APK:
+C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+F) INSTALL THE NEW APK
+
+Recommended via ADB:
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+If Android says UPDATE_INCOMPATIBLE / signature mismatch:
+adb uninstall com.lemmiq.app
+adb install app\build\outputs\apk\debug\app-debug.apk
+
+G) VERIFY IN THIS ORDER
+
+1. Profile says LEMMIQ V2.10.2-debug.
+2. Bottom nav has Chats | Updates | Q Economy | Q Predict | Calls | More.
+3. Open More and confirm Profile, Trust, Business, Activity, Money, Settings, Privacy & Security.
+4. Open Q sheet; old Profile/Trust/Business shortcut must be gone.
+5. Send JPG, PNG and WEBP. Image must display, not filename-only attachment.
+6. Tap photo -> full screen. Test pinch zoom and double tap.
+7. Photo bubble should have only a small coloured edge around the image.
+8. Test Decline between two phones; callee must close and caller must stop ringing/show declined.

@@ -1,0 +1,15 @@
+-- LEMMIQ V2.10.4 reference migration notes.
+-- q_features_v2104 / q_feature_tier_rules_v2104 / q_feature_usage_v2104 are created automatically
+-- by backend/app/v2104_q_features.py using SQLAlchemy.
+--
+-- Q Predict migration rule:
+-- 1. DO NOT convert historical Predict Credits (PC) into Q.
+-- 2. Keep legacy PC positions/results read-only for historical testing.
+-- 3. New stakes use the existing authoritative Q wallet and existing q_ledger.
+-- 4. Recommended q_ledger kinds:
+--      Q_PREDICT_STAKE
+--      Q_PREDICT_PAYOUT
+--      Q_PREDICT_REFUND
+--      Q_PREDICT_FEE
+-- 5. New feature usage should create q_feature_usage_v2104 rows even when q_cost = 0.
+--    User-facing ledger should simply display 0 Q. Do not add beta/free wording.

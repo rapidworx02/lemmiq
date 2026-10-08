@@ -1,0 +1,4 @@
+/* LEMMIQ V2.10.4 */
+.q2104-activity-filters{display:flex;gap:8px;overflow-x:auto;margin:12px 0}.q2104-activity-filters button{border:1px solid var(--line);background:transparent;color:inherit;border-radius:999px;padding:8px 14px;white-space:nowrap}.q2104-activity-filters button.active{background:rgba(108,77,255,.18);border-color:rgba(108,77,255,.45)}
+.q2104-activity-row{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.q2104-activity-row:last-child{border-bottom:0}.q2104-activity-row .body{flex:1;min-width:0}.q2104-activity-row strong,.q2104-activity-row small{display:block}.q2104-activity-row small{color:var(--muted);margin-top:3px}.q2104-q-in{color:#179a65;font-weight:800}.q2104-q-out{color:#d94b63;font-weight:800}.q2104-q-zero{color:#6c4dff;font-weight:800}
+@media(max-width:680px){#view-q-economy .q28-tabs{scroll-snap-type:x proximity}#view-q-economy .q28-tabs>button{scroll-snap-align:start}}

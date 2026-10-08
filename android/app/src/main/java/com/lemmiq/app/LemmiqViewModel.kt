@@ -8,6 +8,8 @@ import android.webkit.MimeTypeMap
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 import androidx.core.app.NotificationManagerCompat
 import java.util.UUID
@@ -25,6 +27,13 @@ import kotlinx.coroutines.Job
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+
+private fun displayPredictQuestionV2104(m:PredictMarketDto):String {
+    val phrase="at the Q Predict resolution time"
+    return if(m.question.contains(phrase,ignoreCase=true)&&m.resolve_after.isNotBlank())
+        m.question.replace(phrase,"at ${m.resolve_after}",ignoreCase=true)
+    else m.question
+}
 
 class LemmiqViewModel(app:Application):AndroidViewModel(app){
     private val appCtx=app.applicationContext
@@ -83,6 +92,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var predictAnalysisBusy by mutableStateOf(false)
     var predictAnalysisMarketId by mutableStateOf<Int?>(null)
     var predictLeaderboard by mutableStateOf<List<PredictLeaderDto>>(emptyList())
+    var predictAnalysisHistory by mutableStateOf(PredictAnalysisHistoryV2104.list(appCtx,store.userId))
     private var autoSocialScanned=false
     var notificationCapture by mutableStateOf(NotificationControl.enabled(appCtx))
     var insightSync by mutableStateOf(NotificationControl.sync(appCtx))
@@ -140,7 +150,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     private fun auth(a:AuthResponse){
         store.token=a.token;store.userId=a.user.id;store.username=a.user.username;store.displayName=a.user.display_name
-        currentUser=a.user;authenticated=true;connect();refreshChats();refreshGroups();refreshStatuses();refreshTrustHistory();refreshSocialIq();refreshInsights();refreshExternal();refreshBusiness();refreshPrivacy();registerPush()
+        currentUser=a.user;predictAnalysisHistory=PredictAnalysisHistoryV2104.list(appCtx,store.userId);authenticated=true;connect();refreshChats();refreshGroups();refreshStatuses();refreshTrustHistory();refreshSocialIq();refreshInsights();refreshExternal();refreshBusiness();refreshPrivacy();registerPush()
     }
     fun register(u:String,n:String,p:String,referralCode:String="")=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p,referralCode.trim()))}}
     fun login(u:String,p:String)=viewModelScope.launch{action{auth(api.login(u.trim().lowercase(),p))}}
@@ -158,7 +168,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList()
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -721,36 +731,75 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     fun refreshPredict(category:String=predictCategory)=viewModelScope.launch{
         predictBusy=true;predictCategory=category
-        runCatching{api.predictHome(category)}.onSuccess{predictHome=it}.onFailure{error=it.message}
+        runCatching{
+            val home=api.predictHome(category)
+            val wallet=api.qWallet()
+            home to wallet
+        }.onSuccess{(home,wallet)->predictHome=home;qWallet=wallet}.onFailure{error=it.message}
         predictBusy=false
     }
-    fun openPredictMarket(id:Int)=viewModelScope.launch{predictBusy=true;runCatching{api.predictMarket(id)}.onSuccess{predictSelected=it}.onFailure{error=it.message};predictBusy=false}
+    fun openPredictMarket(id:Int)=viewModelScope.launch{
+        predictBusy=true
+        runCatching{api.predictMarket(id)}.onSuccess{m->
+            predictSelected=m
+            val saved=PredictAnalysisHistoryV2104.latestForMarket(appCtx,store.userId,m.id)
+            if(saved!=null){
+                predictAnalysisMarketId=m.id
+                predictAnalysis=AgentAnswer(saved.answer,saved.references)
+            }
+        }.onFailure{error=it.message}
+        predictBusy=false
+    }
     fun closePredictMarket(){predictSelected=null}
-    fun stakePredict(id:Int,outcome:String,amount:Double)=viewModelScope.launch{predictBusy=true;runCatching{api.predictStake(id,outcome,amount)}.onSuccess{predictSelected=it.market;predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message};predictBusy=false}
+    fun stakePredict(id:Int,outcome:String,amount:Double)=viewModelScope.launch{
+        if(amount<=0)return@launch
+        predictBusy=true
+        runCatching{api.predictStake(id,outcome,amount)}.onSuccess{
+            predictSelected=it.market
+            qWallet=runCatching{api.qWallet()}.getOrNull()?:qWallet
+            predictHome=api.predictHome(predictCategory)
+            qLedger=runCatching{api.qLedger()}.getOrNull()?:qLedger
+        }.onFailure{error=it.message}
+        predictBusy=false
+    }
     fun watchPredict(id:Int)=viewModelScope.launch{runCatching{api.predictWatch(id);predictSelected=api.predictMarket(id);predictHome=api.predictHome(predictCategory)}.onFailure{error=it.message}}
     fun commentPredict(id:Int,text:String)=viewModelScope.launch{if(text.isBlank())return@launch;runCatching{api.predictComment(id,text);predictSelected=api.predictMarket(id)}.onFailure{error=it.message}}
 
     fun analysePredictMarket(m:PredictMarketDto,followUp:String="")=viewModelScope.launch{
         predictAnalysisBusy=true;predictAnalysisMarketId=m.id;error=null
         try{
-            val mine=m.my_positions.joinToString("; "){"${it.outcome} ${it.stake_pc} PC (${it.status})"}.ifBlank{"No position"}
+            val mine=m.my_positions.joinToString("; "){
+                val stakeText=if(it.stake_q>0)"${it.stake_q} Q" else if(it.stake_pc>0)"${it.stake_pc} legacy PC" else "0 Q"
+                "${it.outcome} $stakeText (${it.status})"
+            }.ifBlank{"No position"}
+            val pool=m.pool_q
             val prompt=buildString{
                 append("You are Q Predict market analyst inside LEMMIQ. Analyse this specific market independently from the crowd. ")
                 append("Do not treat pool percentages as true probabilities. Clearly separate crowd position from your independent analysis. ")
                 append("Return a concise structured answer with: Q lean, independent YES probability, independent NO probability, confidence, summary, factors supporting YES, factors supporting NO, watch factors, current data/evidence available to you, and sources if available. ")
                 append("State clearly that Q analysis does not control settlement. ")
                 append("Market question: ${m.question}. ")
-                append("Crowd: YES ${m.yes_percent}%, NO ${m.no_percent}%, ${m.participants} predictors, ${m.pool_pc} PC pool. ")
+                append("Crowd: YES ${m.yes_percent}%, NO ${m.no_percent}%, ${m.participants} predictors, $pool Q pool. ")
                 append("User position: $mine. Prediction closes: ${m.close_at}. Resolution: ${m.resolve_after}. ")
                 append("Resolution rule: ${m.resolution_rule}. Settlement source: ${m.resolution_source_name} ${m.resolution_source_url}. ")
                 if(followUp.isNotBlank()) append("Follow-up question about this same market: ${followUp.trim()}")
             }
             val external=if(externalQ && externalEnabled)externalMessages.take(30).reversed() else emptyList()
-            predictAnalysis=api.askAgent(prompt,7,external)
-        }catch(e:Exception){error=e.message}finally{predictAnalysisBusy=false}
+            val result=withTimeout(55_000){api.askAgent(prompt,7,external)}
+            if(result.answer.isBlank())throw IllegalStateException("Q returned an empty market analysis")
+            predictAnalysis=result
+            PredictAnalysisHistoryV2104.save(appCtx,store.userId,m.id,displayPredictQuestionV2104(m),result,followUp.trim())
+            predictAnalysisHistory=PredictAnalysisHistoryV2104.list(appCtx,store.userId)
+        }catch(e:TimeoutCancellationException){
+            error="Q analysis timed out. Please retry."
+        }catch(e:Exception){
+            error=e.message?:"Q analysis failed. Please retry."
+        }finally{predictAnalysisBusy=false}
     }
 
     fun clearPredictAnalysis(){predictAnalysis=null;predictAnalysisMarketId=null;predictAnalysisBusy=false}
+    fun latestSavedPredictAnalysis(marketId:Int)=PredictAnalysisHistoryV2104.latestForMarket(appCtx,store.userId,marketId)
+    fun reloadPredictAnalysisHistory(){predictAnalysisHistory=PredictAnalysisHistoryV2104.list(appCtx,store.userId)}
     fun loadPredictLeaderboard()=viewModelScope.launch{runCatching{api.predictLeaderboard()}.onSuccess{predictLeaderboard=it}.onFailure{error=it.message}}
 
     fun cancelQCoordination(requestKey:String)=viewModelScope.launch{

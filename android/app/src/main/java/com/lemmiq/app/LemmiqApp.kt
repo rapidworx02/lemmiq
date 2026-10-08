@@ -1131,6 +1131,8 @@ private fun ChatAgent(vm:LemmiqViewModel){
     var selectedCoordUsers by remember{mutableStateOf<Map<Int,UserDto>>(emptyMap())}
     var visionQuestion by remember{mutableStateOf("")}
     var visionFollowUp by remember{mutableStateOf("")}
+    var todayExpanded by remember{mutableStateOf(false)}
+    var savedPredictAnalysisOpen by remember{mutableStateOf<SavedPredictAnalysisV2104?>(null)}
 
     val gallery=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->
         if(uri!=null)vm.scanVisionUri(uri,visionQuestion.ifBlank{"What is in this image? Give me the useful details."})
@@ -1200,9 +1202,18 @@ private fun ChatAgent(vm:LemmiqViewModel){
 
         item{
             val today=vm.qHome?.today
-            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Ink)){
+            val socialItems=vm.socialBrief?.items.orEmpty().filter{!it.resolved}
+            val followItems=socialItems.filter{it.memory_type.equals("FOLLOW_UP",true)||it.memory_type.equals("FOLLOWUP",true)}
+            val promiseItems=socialItems.filter{it.memory_type.equals("PROMISE",true)||it.memory_type.equals("COMMITMENT",true)}
+            Card(
+                Modifier.fillMaxWidth().padding(horizontal=20.dp).clickable{todayExpanded=!todayExpanded},
+                shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Ink)
+            ){
                 Column(Modifier.padding(18.dp)){
-                    Text("Today",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black)
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                        Text("Today",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black,modifier=Modifier.weight(1f))
+                        Text(if(todayExpanded)"Hide details" else "View details",color=Color(0xFFC9BFFF),fontSize=10.sp)
+                    }
                     if(today==null){
                         Text("Q is checking your conversations…",color=Color.White.copy(alpha=.75f),fontSize=12.sp,modifier=Modifier.padding(top=8.dp))
                     }else if(today.needs_reply_count==0 && today.follow_ups==0 && today.promises==0){
@@ -1211,6 +1222,42 @@ private fun ChatAgent(vm:LemmiqViewModel){
                         if(today.needs_reply_count>0)Text("${today.needs_reply_count} conversation${if(today.needs_reply_count==1)"" else "s"} may need a reply",color=Color.White,modifier=Modifier.padding(top=8.dp))
                         if(today.follow_ups>0)Text("${today.follow_ups} follow-up${if(today.follow_ups==1)"" else "s"} due",color=Color.White.copy(alpha=.82f),fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
                         if(today.promises>0)Text("${today.promises} promise${if(today.promises==1)"" else "s"} remembered",color=Color.White.copy(alpha=.82f),fontSize=12.sp,modifier=Modifier.padding(top=5.dp))
+                    }
+
+                    if(todayExpanded && today!=null){
+                        HorizontalDivider(Modifier.padding(vertical=12.dp),color=Color.White.copy(alpha=.16f))
+                        if(today.needs_reply.isNotEmpty()){
+                            Text("Needs reply",color=Color.White,fontWeight=FontWeight.Bold,fontSize=13.sp)
+                            today.needs_reply.take(8).forEach{item->
+                                Column(Modifier.fillMaxWidth().padding(top=9.dp)){
+                                    Text(item.contact.display_name.ifBlank{"@${item.contact.username}"},color=Color.White,fontWeight=FontWeight.Bold,fontSize=11.sp)
+                                    Text(item.message,color=Color.White.copy(alpha=.78f),fontSize=10.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                    if(item.created_at.isNotBlank())Text("${v24FriendlyDay(item.created_at)} · ${v24Time(item.created_at)}",color=Color.White.copy(alpha=.55f),fontSize=9.sp)
+                                }
+                            }
+                        }
+                        if(followItems.isNotEmpty()){
+                            Text("Follow-ups due",color=Color.White,fontWeight=FontWeight.Bold,fontSize=13.sp,modifier=Modifier.padding(top=14.dp))
+                            followItems.take(8).forEach{x->
+                                Column(Modifier.padding(top=8.dp)){
+                                    Text(x.contact?:x.title,color=Color.White,fontWeight=FontWeight.Bold,fontSize=11.sp)
+                                    Text(x.detail.ifBlank{x.title},color=Color.White.copy(alpha=.78f),fontSize=10.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                    x.due_at?.takeIf{it.isNotBlank()}?.let{Text("Due ${v24FriendlyDay(it)} · ${v24Time(it)}",color=Color(0xFFFFD58A),fontSize=9.sp)}
+                                }
+                            }
+                        }
+                        if(promiseItems.isNotEmpty()){
+                            Text("Promises",color=Color.White,fontWeight=FontWeight.Bold,fontSize=13.sp,modifier=Modifier.padding(top=14.dp))
+                            promiseItems.take(8).forEach{x->
+                                Column(Modifier.padding(top=8.dp)){
+                                    Text(x.contact?:x.title,color=Color.White,fontWeight=FontWeight.Bold,fontSize=11.sp)
+                                    Text(x.detail.ifBlank{x.title},color=Color.White.copy(alpha=.78f),fontSize=10.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                        if(today.needs_reply.isEmpty() && followItems.isEmpty() && promiseItems.isEmpty()){
+                            Text("The server returned summary counts but no detailed items yet. Refresh Q Memory to rebuild Today details.",color=Color.White.copy(alpha=.68f),fontSize=10.sp)
+                        }
                     }
                 }
             }
@@ -1239,6 +1286,29 @@ private fun ChatAgent(vm:LemmiqViewModel){
                     Row(Modifier.fillMaxWidth().padding(top=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         TextButton({vm.scanSocialIq()}){Text("Refresh memory")}
                         TextButton({showVisionHistory=true}){Text("Vision history")}
+                    }
+                }
+            }
+        }
+
+        if(vm.predictAnalysisHistory.isNotEmpty()){
+            item{
+                Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(20.dp)){
+                    Column(Modifier.padding(16.dp)){
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                            Column(Modifier.weight(1f)){
+                                Text("Q Predict analyses",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                                Text("Saved market analysis history",fontSize=11.sp,color=Muted)
+                            }
+                            Text("${vm.predictAnalysisHistory.size}",color=Purple,fontWeight=FontWeight.Bold)
+                        }
+                        vm.predictAnalysisHistory.take(3).forEach{a->
+                            Column(Modifier.fillMaxWidth().clickable{savedPredictAnalysisOpen=a}.padding(top=10.dp)){
+                                Text(a.question,fontWeight=FontWeight.Bold,fontSize=11.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
+                                Text(a.answer,fontSize=10.sp,color=Muted,maxLines=2,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(top=3.dp))
+                                Text("Analysed ${v24FriendlyDay(a.analysedAt)} · ${v24Time(a.analysedAt)}",fontSize=9.sp,color=Purple,modifier=Modifier.padding(top=3.dp))
+                            }
+                        }
                     }
                 }
             }
@@ -1352,6 +1422,26 @@ private fun ChatAgent(vm:LemmiqViewModel){
                 },enabled=selectedCoordUsers.isNotEmpty()&&coordPrompt.isNotBlank()){Text("Send to ${selectedCoordUsers.size}")}
             },
             dismissButton={TextButton({showCoord=false}){Text("Cancel")}}
+        )
+    }
+
+    savedPredictAnalysisOpen?.let{a->
+        AlertDialog(
+            onDismissRequest={savedPredictAnalysisOpen=null},
+            title={Text("Q Predict analysis")},
+            text={
+                Column(Modifier.heightIn(max=500.dp).verticalScroll(rememberScrollState())){
+                    Text(a.question,fontWeight=FontWeight.Black)
+                    Text("Saved ${v24FriendlyDay(a.analysedAt)} · ${v24Time(a.analysedAt)}",fontSize=9.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                    Text(a.answer,modifier=Modifier.padding(top=12.dp),fontSize=12.sp)
+                    if(a.references.isNotEmpty()){
+                        Text("Evidence / references",fontWeight=FontWeight.Bold,fontSize=11.sp,modifier=Modifier.padding(top=12.dp))
+                        a.references.take(5).forEach{r->Text("• ${r.contact}: ${r.text}",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=3.dp))}
+                    }
+                    Text("Q analysis is informational and does not determine market settlement.",fontSize=9.sp,color=Muted,modifier=Modifier.padding(top=12.dp))
+                }
+            },
+            confirmButton={TextButton({savedPredictAnalysisOpen=null}){Text("Close")}}
         )
     }
 

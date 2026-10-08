@@ -1,15 +1,17 @@
-const CACHE = "lemmiq-v2103-shell-1";
+const CACHE = "lemmiq-v2104-shell-1";
 const SHELL = [
   "/web/",
-  "/web/index.html?v=2.10.3",
-  "/web/styles.css?v=2.10.3",
-  "/web/app.js?v=2.10.3",
-  "/web/v28.js?v=2.10.3",
-  "/web/v28.css?v=2.10.3",
-  "/web/v29.js?v=2.10.3",
-  "/web/v29.css?v=2.10.3",
-  "/web/v210.css?v=2.10.3",
-  "/web/v2103.css?v=2.10.3",
+  "/web/index.html?v=2.10.4",
+  "/web/styles.css?v=2.10.4",
+  "/web/app.js?v=2.10.4",
+  "/web/v28.js?v=2.10.4",
+  "/web/v28.css?v=2.10.4",
+  "/web/v29.js?v=2.10.4",
+  "/web/v29.css?v=2.10.4",
+  "/web/v210.css?v=2.10.4",
+  "/web/v2103.css?v=2.10.4",
+  "/web/v2104.css?v=2.10.4",
+  "/web/v2104.js?v=2.10.4",
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",
@@ -33,11 +35,11 @@ self.addEventListener("fetch", event => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  const apiPrefixes = ["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/v24","/v26","/v27","/v28","/v29","/v210","/app-config"];
+  const apiPrefixes = ["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/app-config"];
   if (apiPrefixes.some(x => url.pathname.startsWith(x))) return;
 
   if (url.pathname === "/web/" || url.pathname.endsWith("/index.html") ||
-      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css") || url.pathname.endsWith("/v210.css") || url.pathname.endsWith("/v2103.css")) {
+      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css") || url.pathname.endsWith("/v210.css") || url.pathname.endsWith("/v2103.css") || url.pathname.endsWith("/v2104.css") || url.pathname.endsWith("/v2104.js")) {
     event.respondWith(
       fetch(req).then(res => {
         const copy=res.clone();

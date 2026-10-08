@@ -241,7 +241,14 @@ data class QWalletDto(
 data class QLedgerDto(
     val id:Int=0,val tx_id:String="",val kind:String="",val amount_q:Double=0.0,val direction:String="IN",
     val other_user_id:Int?=null,val system_wallet:String?=null,val usd_cents:Int?=null,
-    val reference:String="",val note:String="",val created_at:String=""
+    val reference:String="",val note:String="",val created_at:String="",
+    val feature_key:String?=null,val tier_key:String?=null,val status:String?=null
+)
+
+data class QFeatureTierRuleDto(
+    val feature_key:String="",val feature_name:String="",val tier_key:String="FREE",
+    val q_cost:Double=0.0,val enabled:Boolean=true,val charging_enabled:Boolean=false,
+    val included_uses_daily:Int?=null,val included_uses_monthly:Int?=null,val updated_at:String=""
 )
 data class QReferralEventDto(
     val type:String="",val label:String="",val package_code:String?=null,val reward_q:Double=0.0,
@@ -283,28 +290,46 @@ data class QMarketOrderDto(
 )
 
 
-// LEMMIQ V2.9 Q Predict — test Predict Credits only
-data class PredictPositionDto(val outcome:String="",val stake_pc:Double=0.0,val payout_pc:Double=0.0,val fee_pc:Double=0.0,val status:String="OPEN")
+// LEMMIQ V2.10.4 Q Predict — main Q wallet staking. Legacy PC fields remain read-only for old test records.
+data class PredictPositionDto(
+    val outcome:String="",
+    val stake_q:Double=0.0,val payout_q:Double=0.0,val fee_q:Double=0.0,
+    val stake_pc:Double=0.0,val payout_pc:Double=0.0,val fee_pc:Double=0.0,
+    val status:String="OPEN"
+)
 data class PredictResolutionDto(val outcome:String="",val source_value:String="",val note:String="",val resolved_at:String="")
 data class PredictCommentDto(val id:Int=0,val text:String="",val created_at:String="",val user:UserDto?=null)
 data class PredictMarketDto(
     val id:Int=0,val market_key:String="",val question:String="",val category:String="TRENDING",val template_code:String="",
-    val status:String="REVIEW",val yes_percent:Double=50.0,val no_percent:Double=50.0,val yes_pool_pc:Double=0.0,val no_pool_pc:Double=0.0,
-    val pool_pc:Double=0.0,val participants:Int=0,val comments:Int=0,val trend_score:Int=0,val resolution_confidence:Int=0,
+    val status:String="REVIEW",val yes_percent:Double=50.0,val no_percent:Double=50.0,
+    val yes_pool_q:Double=0.0,val no_pool_q:Double=0.0,val pool_q:Double=0.0,
+    val yes_pool_pc:Double=0.0,val no_pool_pc:Double=0.0,val pool_pc:Double=0.0,
+    val participants:Int=0,val comments:Int=0,val trend_score:Int=0,val resolution_confidence:Int=0,
     val resolution_source_name:String="",val resolution_source_url:String="",val resolution_rule:String="",val source_type:String="",
     val close_at:String="",val resolve_after:String="",val result:String?=null,val auto_resolve:Boolean=false,val generated_by:String="",
     val agent_reason:String="",val watched:Boolean=false,val my_positions:List<PredictPositionDto> = emptyList(),
     val resolution:PredictResolutionDto?=null,val discussion:List<PredictCommentDto> = emptyList(),val created_at:String="",val updated_at:String=""
 )
+// Legacy wallet is retained only so older V2.9 server payloads deserialize safely. New UI uses QWalletDto.balance_q.
 data class PredictWalletDto(
-    val balance_pc:Double=0.0,val starting_pc:Double=10000.0,val lifetime_won_pc:Double=0.0,val lifetime_staked_pc:Double=0.0,
+    val balance_q:Double=0.0,val lifetime_won_q:Double=0.0,val lifetime_staked_q:Double=0.0,
+    val balance_pc:Double=0.0,val starting_pc:Double=0.0,val lifetime_won_pc:Double=0.0,val lifetime_staked_pc:Double=0.0,
     val markets_won:Int=0,val markets_resolved:Int=0
 )
 data class PredictHomeDto(
-    val mode:String="TEST_CREDITS_ONLY",val real_q_enabled:Boolean=false,val wallet:PredictWalletDto=PredictWalletDto(),
-    val fee_percent:Double=5.0,val notice:String="",val live:List<PredictMarketDto> = emptyList(),
-    val resolved:List<PredictMarketDto> = emptyList(),val categories:List<String> = emptyList()
+    val mode:String="Q_WALLET",val real_q_enabled:Boolean=false,val wallet:PredictWalletDto=PredictWalletDto(),
+    val fee_percent:Double=0.0,val notice:String="",val live:List<PredictMarketDto> = emptyList(),
+    val resolved:List<PredictMarketDto> = emptyList(),val categories:List<String> = emptyList(),
+    val minimum_stake_q:Double=0.0,val maximum_stake_q:Double=0.0
 )
-data class PredictStakeResponseDto(val market:PredictMarketDto=PredictMarketDto(),val wallet_balance_pc:Double=0.0)
-data class PredictMyDto(val market:PredictMarketDto=PredictMarketDto(),val outcome:String="",val stake_pc:Double=0.0,val payout_pc:Double=0.0,val status:String="")
-data class PredictLeaderDto(val rank:Int=0,val user:UserDto?=null,val accuracy_percent:Double=0.0,val net_won_pc:Double=0.0,val resolved:Int=0)
+data class PredictStakeResponseDto(
+    val market:PredictMarketDto=PredictMarketDto(),val wallet_balance_q:Double=0.0,val wallet_balance_pc:Double=0.0
+)
+data class PredictMyDto(
+    val market:PredictMarketDto=PredictMarketDto(),val outcome:String="",
+    val stake_q:Double=0.0,val payout_q:Double=0.0,val stake_pc:Double=0.0,val payout_pc:Double=0.0,val status:String=""
+)
+data class PredictLeaderDto(
+    val rank:Int=0,val user:UserDto?=null,val accuracy_percent:Double=0.0,
+    val net_won_q:Double=0.0,val net_won_pc:Double=0.0,val resolved:Int=0
+)
