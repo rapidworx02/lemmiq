@@ -95,8 +95,12 @@ q_feature_admin_audit = Table(
 
 def _database_url() -> str:
     url = os.getenv("DATABASE_URL", "sqlite:///./lemmiq.db").strip()
+    # Keep the V2.10.4 compatibility router on the same PostgreSQL driver
+    # as the rest of LEMMIQ. Render provides psycopg v3, not psycopg2.
     if url.startswith("postgres://"):
-        url = "postgresql://" + url[len("postgres://"):]
+        url = "postgresql+psycopg://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg://" + url[len("postgresql://"):]
     return url
 
 
