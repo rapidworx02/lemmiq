@@ -209,7 +209,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.1"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.2"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -312,6 +312,12 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 db.add(auto); db.flush()
                 db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
                 db.commit(); db.refresh(auto)
+                try:
+                    from .v29 import track_shadow_event
+                    track_shadow_event(db, oid, "AUTO_MESSAGE", note=f"business-auto chat:{cid}")
+                    db.commit()
+                except Exception:
+                    db.rollback()
                 ad = msg_json(auto, db)
                 await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
                 background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -334,6 +340,12 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
             db.add(auto); db.flush()
             db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
             db.commit(); db.refresh(auto)
+            try:
+                from .v29 import track_shadow_event
+                track_shadow_event(db, oid, "AUTO_MESSAGE", note=f"personal-auto chat:{cid}")
+                db.commit()
+            except Exception:
+                db.rollback()
             ad = msg_json(auto, db)
             await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
             background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -374,7 +386,14 @@ def suggest(cid: int, u: User = Depends(current_user), db: Session = Depends(get
     lines=[]
     for x in rows:
         sender=db.get(User,x.sender_id); lines.append(f"{sender.display_name}: {x.text}")
-    return {"reply": ai_reply(s.category, s.tone, "\n".join(lines), incoming)}
+    reply = ai_reply(s.category, s.tone, "\n".join(lines), incoming)
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db, u.id, "SUGGEST_REPLY", note=f"chat:{cid}")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {"reply": reply}
 
 @app.get("/moments")
 def moments(u: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -744,12 +763,19 @@ class ExternalAsk(BaseModel):
     messages: list[ExternalMessage] = Field(min_length=1,max_length=15)
 
 @app.post("/external/suggest")
-def external_suggest(body:ExternalAsk,u:User=Depends(current_user)):
+def external_suggest(body:ExternalAsk,u:User=Depends(current_user),db:Session=Depends(get_db)):
     rows=[x for x in body.messages if x.source==body.source and x.contact==body.contact][-15:]
     if not rows:
         raise HTTPException(422,"No matching messages")
     hist="\n".join(f"{x.contact}: {x.text}" for x in rows)
-    return {"reply":ai_reply("FRIEND",body.tone,hist,rows[-1].text),
+    reply=ai_reply("FRIEND",body.tone,hist,rows[-1].text)
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db, u.id, "SUGGEST_REPLY", note=f"external:{body.source}")
+        db.commit()
+    except Exception:
+        db.rollback()
+    return {"reply":reply,
             "note":"Draft only. Review and copy into the original app; LEMMIQ never sends it."}
 
 
@@ -912,7 +938,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.10.7.1",
+        "version": "2.10.7.2",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -954,6 +980,9 @@ register_v2104_predict_compat(app,current_user,get_db)
 # V2.10.5 server-authoritative Q feature pricing by active subscription tier.
 from .v2105_q_features import register_v2105_q_features
 register_v2105_q_features(app,current_user,get_db)
+
+from .v21072_q_usage import register_v21072_q_usage
+register_v21072_q_usage(app,current_user,get_db)
 
 # Compatibility catalog for V2.10.4 clients. Prices remain 0 Q there; V2.10.5
 # clients use the authenticated /v2105/q-features/catalog endpoint.

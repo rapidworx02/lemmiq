@@ -35,6 +35,7 @@ FEATURES = {
     "Q_TO_Q": "Q-to-Q Coordination",
     "VOICE_TRANSCRIPTION": "Voice Transcription",
     "SMART_MEMORY": "Smart Memory",
+    "AUTO_MESSAGE": "Auto Message / Auto Reply",
 }
 TIERS = ["FREE", "STARTER_10", "PLUS_50", "PRO_100", "PREMIUM_500", "ELITE_1000"]
 

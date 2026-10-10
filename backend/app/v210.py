@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/v210", tags=["LEMMIQ v2.10"])
 
-VERSION = "2.10.7.1"
+VERSION = "2.10.7.2"
 
 
 class MarketAnalyseRequest(BaseModel):

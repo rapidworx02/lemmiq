@@ -304,6 +304,8 @@ FEATURE_ESTIMATES = {
     "CHAT_SUMMARY": (15_000, 0.25),
     "Q_TO_Q": (10_000, 0.50),
     "BUSINESS_AGENT": (20_000, 2.00),
+    "SUGGEST_REPLY": (8_000, 0.20),
+    "AUTO_MESSAGE": (12_000, 0.35),
 }
 
 
@@ -323,6 +325,7 @@ def track_shadow_event(db: Session, user_id: int | None, feature: str, *, succes
         feature_map = {
             "Q_AGENT": "Q_CHAT", "TRUST": "TRUST_CHECK", "CHAT_SUMMARY": "CHAT_SUMMARY",
             "Q_VISION": "Q_VISION", "Q_TO_Q": "Q_TO_Q", "BUSINESS_AGENT": "BUSINESS_AGENT",
+            "SUGGEST_REPLY": "SUGGEST_REPLY", "AUTO_MESSAGE": "AUTO_MESSAGE",
         }
         key = feature_map.get(feature)
         if key:

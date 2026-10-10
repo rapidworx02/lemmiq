@@ -10,6 +10,7 @@ ADMIN_SECTIONS={
 "OVERVIEW":"Overview & Analytics",
 "USERS":"Users & Packages",
 "Q_ECONOMY":"Q Economy & Treasury",
+"Q_USAGE":"Q Usage Analytics",
 "Q_FEATURE_PRICING":"Q Feature Pricing",
 "Q_PREDICT":"Q Predict",
 "MARKETPLACE":"Q Marketplace",
