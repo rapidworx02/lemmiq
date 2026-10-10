@@ -1,0 +1,56 @@
+LEMMIQ V2.10.8 INSTALL / GITHUB STEPS
+
+1. Backup Render PostgreSQL before deployment.
+
+2. Extract LEMMIQ_V2.10.8_CHANGED_FILES_ONLY.zip and merge into:
+C:\Users\pc\LEMMIQ
+
+Do not delete your existing v28.js / v29.js files.
+
+3. Verify version:
+cd /d C:\Users\pc\LEMMIQ
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+
+Expected:
+versionCode=58
+versionName="2.10.8"
+
+4. Commit:
+git status
+git add .
+git commit -m "LEMMIQ V2.10.8 admin RBAC Q usage QR and call recovery"
+git push origin main
+
+5. Wait for Render deploy.
+Check:
+https://lemmiq-api.onrender.com/app-config
+Expected version: 2.10.8
+
+6. Browser/PWA:
+Open Q Admin and verify:
+- READ_ONLY cannot save/edit anything
+- Master Admin can search @username and assign section permissions
+- Q Usage Analytics loads
+- AUTO_MESSAGE appears after AUTO replies are generated
+- every configured package wallet has QR / Upload QR / Copy
+If old UI remains, Ctrl+Shift+R or clear site data once.
+
+7. Android:
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+8. Call recovery test:
+- start a video call
+- terminate/close the call UI unexpectedly
+- wait ~45 seconds
+- try a new call
+Expected: stale server call is reconciled instead of blocking forever.
+Normal hang-up should clear immediately.
+
+9. Admin security test:
+Create/choose a test user.
+Grant READ on one section only.
+Confirm GET/view works and POST/PUT/DELETE receives HTTP 403.
+Then grant WRITE and verify normal edits work only in that section.

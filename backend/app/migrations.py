@@ -27,6 +27,7 @@ def apply_compat_migrations(engine):
 
     # V2.10.6: distinguish voice and video calls without changing old history.
     _add_column_if_missing(engine, "call_records", "call_type", "VARCHAR(12) DEFAULT 'VOICE'")
+    _add_column_if_missing(engine, "call_records", "last_heartbeat_at", "TIMESTAMP")
 
     # V2.10.5: Q Predict moves new predictions from isolated Predict Credits to
     # the authoritative V2.8 Q wallet. Existing rows are explicitly marked PC

@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.10.7")
+app = FastAPI(title="LEMMIQ Server", version="2.10.8")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -209,7 +209,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.8"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -312,6 +312,12 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 db.add(auto); db.flush()
                 db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
                 db.commit(); db.refresh(auto)
+                try:
+                    from .v29 import track_shadow_event
+                    track_shadow_event(db, oid, "AUTO_MESSAGE", note=f"business-auto chat:{cid}")
+                    db.commit()
+                except Exception:
+                    db.rollback()
                 ad = msg_json(auto, db)
                 await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
                 background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -334,6 +340,12 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
             db.add(auto); db.flush()
             db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
             db.commit(); db.refresh(auto)
+            try:
+                from .v29 import track_shadow_event
+                track_shadow_event(db, oid, "AUTO_MESSAGE", note=f"personal-auto chat:{cid}")
+                db.commit()
+            except Exception:
+                db.rollback()
             ad = msg_json(auto, db)
             await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
             background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
@@ -912,7 +924,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.10.7",
+        "version": "2.10.8",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -959,6 +971,10 @@ register_v2105_q_features(app,current_user,get_db)
 # clients use the authenticated /v2105/q-features/catalog endpoint.
 from .v2104_q_features import router as v2104_q_features_router
 app.include_router(v2104_q_features_router)
+
+# ---------------- LEMMIQ V2.10.8 Admin Analytics / RBAC ----------------
+from .v2108 import register_v2108
+register_v2108(app,current_user,get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

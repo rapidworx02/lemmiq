@@ -10,16 +10,17 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.10.7">
+  <link rel="stylesheet" href="/web/styles.css?v=2.10.8">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v29.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v210.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v2103.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v2104.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v2105.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v2106.css?v=2.10.7">
-  <link rel="stylesheet" href="/web/v2107.css?v=2.10.7">
+  <link rel="stylesheet" href="/web/v28.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v29.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v210.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2103.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2104.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2105.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2106.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2107.css?v=2.10.8">
+  <link rel="stylesheet" href="/web/v2108.css?v=2.10.8">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -423,21 +424,31 @@
           <div class="section-head"><div><span class="eyebrow">ADMIN INSIGHTS</span><h3>Daily operations</h3></div><select id="v29AnalyticsPeriod"><option value="today">Today</option><option value="7d" selected>7 Days</option><option value="30d">Month</option><option value="90d">Quarter</option><option value="365d">Year</option></select></div>
           <div id="v29OperationsStats" class="q28-admin-stats"></div>
         </article>
+        <article class="card glass" id="q2108UsageCard">
+          <div class="section-head"><div><span class="eyebrow">Q USAGE ANALYTICS</span><h3>User & feature usage</h3><p class="micro">Metadata/counts only — no personal chat content. Includes AUTO Message separately.</p></div><button id="q2108UsageCsv" class="ghost">Export CSV</button></div>
+          <div class="q2108-usage-filters"><select id="q2108UsagePeriod"><option value="today">Today</option><option value="7d">7 Days</option><option value="30d" selected>30 Days</option><option value="90d">90 Days</option><option value="365d">Year</option></select><input id="q2108UsageUser" placeholder="@username (optional)"><input id="q2108UsageFeature" placeholder="Feature key (optional)"><button id="q2108UsageLoad" class="primary">Load</button></div>
+          <div id="q2108UsageSummary" class="q28-admin-stats"></div>
+          <div id="q2108FeatureTotals" class="q28-list"></div>
+          <div id="q2108UsageUsers" class="q28-list"></div>
+        </article>
         <div class="grid two">
           <article class="card glass v29-admin-card"><span class="eyebrow">MONETISATION</span><h3>Shadow billing analytics</h3><div class="v29-mode-banner">TRACKING ONLY · NO Q IS BEING CHARGED</div><div id="v29MonetisationStats"></div></article>
           <article class="card glass v29-admin-card"><span class="eyebrow">Q SUPPLY & DEMAND</span><h3>Reference simulation</h3><div class="v29-mode-banner">SIMULATION ONLY · ACTUAL Q PRICE IS NOT CHANGED</div><div id="v29QSimulation"></div></article>
         </div>
         <article class="card glass" id="q28AdminTeamCard">
-          <div class="section-head"><div><h3>Admin Team & Roles</h3><p class="micro">Master Admin can grant limited access without sharing the Master Admin login.</p></div></div>
-          <div class="q28-inline">
-            <input id="q28AdminTeamUser" placeholder="@username">
-            <select id="q28AdminTeamRole">
-              <option>FINANCE_ADMIN</option><option>MARKETPLACE_ADMIN</option><option>SUPPORT_ADMIN</option><option>RISK_ADMIN</option><option>READ_ONLY</option><option>MASTER_ADMIN</option>
-            </select>
-            <button id="q28AdminTeamSave" class="primary">Add / update role</button>
-          </div>
-          <div id="q28AdminTeam" class="q28-list"></div>
-        </article>
+  <div class="section-head"><div><h3>Admin Team & Section Access</h3><p class="micro">Master Admin selects a LEMMIQ user by @username, then grants each section None / Read / Write / Full. Read-only users cannot edit.</p></div></div>
+  <div class="q28-inline">
+    <input id="q2108AdminUser" placeholder="@username">
+    <button id="q2108FindAdminUser" class="ghost">Find user</button>
+  </div>
+  <div id="q2108AdminIdentity" class="micro"></div>
+  <div id="q2108PermissionEditor"></div>
+  <div class="q28-inline">
+    <select id="q2108BaseRole"><option>SUPPORT_ADMIN</option><option>FINANCE_ADMIN</option><option>MARKETPLACE_ADMIN</option><option>RISK_ADMIN</option><option>READ_ONLY</option></select>
+    <button id="q2108SaveAccess" class="primary">Save section access</button>
+  </div>
+  <div id="q2108AccessList" class="q28-list"></div>
+</article>
         <div class="grid two">
           <article class="card glass"><div class="section-head"><div><h3>USDT wallet matrix</h3><p class="micro">10 fixed receiving slots: each subscription has one TRC20 wallet and one BEP20 wallet. Replacing a wallet keeps old payment history intact.</p></div></div>
             <div id="q28WalletMatrix" class="q28-wallet-matrix"></div>
@@ -512,11 +523,12 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.10.7" defer></script>
-  <script src="/web/v28.js?v=2.10.7" defer></script>
-  <script src="/web/v29.js?v=2.10.7" defer></script>
-  <script src="/web/v2104.js?v=2.10.7" defer></script>
-  <script src="/web/v2105.js?v=2.10.7" defer></script>
-  <script src="/web/v2106.js?v=2.10.7" defer></script>
+  <script src="/web/app.js?v=2.10.8" defer></script>
+  <script src="/web/v28.js?v=2.10.8" defer></script>
+  <script src="/web/v29.js?v=2.10.8" defer></script>
+  <script src="/web/v2104.js?v=2.10.8" defer></script>
+  <script src="/web/v2105.js?v=2.10.8" defer></script>
+  <script src="/web/v2106.js?v=2.10.8" defer></script>
+  <script src="/web/v2108.js?v=2.10.8" defer></script>
 </body>
 </html>

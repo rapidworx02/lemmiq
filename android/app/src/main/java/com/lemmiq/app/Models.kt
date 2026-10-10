@@ -132,10 +132,11 @@ data class GroupAskDto(val answer:String="",val references:List<String> = emptyL
 data class VoiceAiDto(val transcript:String="",val summary:String="",val suggested_reply:String="")
 data class CallDto(
     val id:String="",val chat_id:Int=0,val caller_id:Int=0,val callee_id:Int=0,val other_user:UserDto?=null,
-    val status:String="",val call_type:String="VOICE",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
+    val status:String="",val call_type:String="VOICE",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null,val last_heartbeat_at:String?=null
 )
 data class CallJoinDto(val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false)
 data class CallStatusDto(val configured:Boolean=false,val provider:String="LiveKit",val voice:Boolean=true,val video:Boolean=false)
+data class ActiveCallDto(val active:Boolean=false,val call:CallDto?=null)
 
 data class StatusDto(
     val id:Int=0,val user:UserDto=UserDto(0,"",""),val kind:String="TEXT",val text:String="",

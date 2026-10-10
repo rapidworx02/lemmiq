@@ -24,6 +24,7 @@ from sqlalchemy import BigInteger, Boolean, Date, DateTime, ForeignKey, Integer,
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from .database import Base
+from .admin_permissions import permission_level, require_permission, section_for_path
 from .models import User
 from . import media_store
 
@@ -989,10 +990,18 @@ def _validate_payment_address(network: str, address: str):
 def register_v28(app, current_user, get_db):
     router = APIRouter(prefix="/v28", tags=["LEMMIQ V2.8 Q Economy"])
 
-    def require_admin(u: User = Depends(current_user), db: Session = Depends(get_db)):
+    def require_admin(request: Request, u: User = Depends(current_user), db: Session = Depends(get_db)):
         role = _admin_role(db, u.id)
         if not role:
             raise HTTPException(403, "Admin access required")
+        if role.role == "MASTER_ADMIN":
+            return u
+        section = section_for_path(request.url.path)
+        required = "READ" if request.method.upper() == "GET" else ("FULL" if request.method.upper() == "DELETE" else "WRITE")
+        # READ_ONLY is never allowed to mutate anything.
+        if role.role == "READ_ONLY" and required != "READ":
+            raise HTTPException(403, "Read-only admin cannot edit")
+        require_permission(db, u.id, section, required)
         return u
 
     def require_master(u: User = Depends(require_admin), db: Session = Depends(get_db)):
@@ -1743,7 +1752,7 @@ def register_v28(app, current_user, get_db):
         return items
 
     @router.put("/admin/payment-wallet-matrix/{package_code}/{network}")
-    def admin_set_payment_wallet_slot(package_code: str, network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_set_payment_wallet_slot(package_code: str, network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
         code = package_code.strip().upper(); net = network.strip().upper()
         if code not in PACKAGE_PLANS:
             raise HTTPException(404, "Package not found")
@@ -1764,7 +1773,7 @@ def register_v28(app, current_user, get_db):
         return [_payment_wallet_json(x) for x in rows]
 
     @router.post("/admin/payment-wallets")
-    def admin_add_payment_wallet(body: AdminPaymentWalletIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_add_payment_wallet(body: AdminPaymentWalletIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
         network = body.network.strip().upper()
         _validate_payment_address(network, body.address.strip())
         code = body.package_code.strip().upper() if body.package_code else None
@@ -1782,7 +1791,7 @@ def register_v28(app, current_user, get_db):
         return _payment_wallet_json(row)
 
     @router.put("/admin/payment-wallets/{wallet_id}")
-    def admin_update_payment_wallet(wallet_id: int, body: AdminPaymentWalletIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_update_payment_wallet(wallet_id: int, body: AdminPaymentWalletIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
         row = db.get(QPaymentWallet, wallet_id)
         if not row:
             raise HTTPException(404, "Payment wallet not found")
@@ -1795,7 +1804,7 @@ def register_v28(app, current_user, get_db):
         db.commit(); return _payment_wallet_json(row)
 
     @router.post("/admin/payment-wallets/{wallet_id}/qr")
-    async def admin_upload_qr(wallet_id: int, file: UploadFile = File(...), u: User = Depends(require_master), db: Session = Depends(get_db)):
+    async def admin_upload_qr(wallet_id: int, file: UploadFile = File(...), u: User = Depends(require_admin), db: Session = Depends(get_db)):
         row = db.get(QPaymentWallet, wallet_id)
         if not row:
             raise HTTPException(404, "Payment wallet not found")

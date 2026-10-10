@@ -1003,7 +1003,18 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         if(callStarting){error="A call is already starting";return@launch}
         callStarting=true;busy=true;error=null
         try{onReady(api.startCall(cid,type))}
-        catch(e:Exception){error=e.message}
+        catch(e:Exception){
+            if((e.message?:"").contains("Call already active",ignoreCase=true)){
+                runCatching{api.activeCall()}.onSuccess{state->
+                    val c=state.call
+                    val stale=c!=null && c.ended_at==null
+                    if(stale){
+                        runCatching{api.clearStuckCall()}
+                        runCatching{api.startCall(cid,type)}.onSuccess{onReady(it)}.onFailure{error=it.message}
+                    }else error=e.message
+                }.onFailure{error=e.message}
+            }else error=e.message
+        }
         finally{busy=false;callStarting=false}
     }
 

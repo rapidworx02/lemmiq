@@ -324,7 +324,7 @@ class LemmiqCallActivity:ComponentActivity(){
         stateJob?.cancel();stateJob=lifecycleScope.launch{
             val api=Api(SessionStore(this@LemmiqCallActivity))
             while(!closing&&callId.isNotBlank()){
-                delay(900);val current=runCatching{api.callDetail(callId)}.getOrNull()?:continue
+                delay(900);runCatching{api.callHeartbeat(callId)};val current=runCatching{api.callDetail(callId)}.getOrNull()?:continue
                 callType=current.call_type.uppercase()
                 when(current.status.uppercase()){
                     "CONNECTED" -> if(!incoming && status.value!="Connected")onAnswered()

@@ -484,6 +484,10 @@ class Api(private val store:SessionStore){
     suspend fun joinCall(id:String):CallJoinDto =
         gson.fromJson(req(b("$base/v24/calls/$id/join").post("{}".toRequestBody(json)).build()),CallJoinDto::class.java)
     suspend fun declineCall(id:String){req(b("$base/v24/calls/$id/decline").post("{}".toRequestBody(json)).build())}
+    suspend fun callHeartbeat(id:String){req(b("$base/v24/calls/$id/heartbeat").post("{}".toRequestBody(json)).build())}
+    suspend fun activeCall():ActiveCallDto =
+        gson.fromJson(req(b("$base/v24/calls/active/me").get().build()),ActiveCallDto::class.java)
+    suspend fun clearStuckCall(){req(b("$base/v24/calls/active/clear").post("{}".toRequestBody(json)).build())}
     suspend fun endCall(id:String){req(b("$base/v24/calls/$id/end").post("{}".toRequestBody(json)).build())}
     suspend fun chatCalls(cid:Int):List<CallDto>{
         val t=req(b("$base/v24/chats/$cid/calls").get().build())
