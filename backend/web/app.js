@@ -167,7 +167,11 @@ async function refreshView(name){
     if(name==="me") renderMeAvatar();
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
     if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
-    if(name==="q-admin" && window.loadQAdmin) { await window.loadQAdmin(); if(window.loadV29Admin) await window.loadV29Admin(); }
+    if(name==="q-admin") {
+      if(window.loadQAdmin) await window.loadQAdmin();
+      if(window.loadV29Admin) await window.loadV29Admin();
+      if(window.loadV2108Admin) await window.loadV2108Admin();
+    }
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -1411,7 +1415,11 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
     if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
   });
-  qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
+  qsa("[data-more-view]").forEach(b=>b.onclick=()=>{
+    const view=b.dataset.moreView;
+    setView(view);
+    if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
+  });
   qsa("[data-q-prompt]").forEach(b=>b.onclick=()=>runQStarter(b.dataset.qPrompt));
   $("moreAndroidDownloadBtn").onclick=installAndroidApp;
   $("refreshCallsBtn").onclick=loadCalls;
@@ -1464,17 +1472,24 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.6").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.1").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
     if(s.chatId){setView("chats");await loadChats();await openChat(Number(s.chatId),false);return}
     if(s.groupId){setView("chats");await loadChats();await openGroup(Number(s.groupId),false);return}
     if(s.qThread){setView("chats");await loadChats();await openQThread();return}
-    chatsHome(false);
-    setView(s.view||"chats");
+
+    const hashView=(location.hash||"").replace(/^#/,"");
+    const nextView=s.view || (document.getElementById(`view-${hashView}`)?hashView:"chats");
+    if(nextView==="chats") chatsHome(false);
+    setView(nextView);
   });
-  if(!history.state)history.replaceState({view:"chats"},"",location.hash||"#chats");
+  if(!history.state){
+    const hashView=(location.hash||"").replace(/^#/,"");
+    const initialView=document.getElementById(`view-${hashView}`)?hashView:"chats";
+    history.replaceState({view:initialView},"",`#${initialView}`);
+  }
 
   loadAppConfig();
   if(state.token&&state.user)showApp();

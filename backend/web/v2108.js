@@ -62,12 +62,33 @@ async function renderWalletMatrix2108(){
   }catch(e){}
 }
 
+let adminLoadPromise=null;
+async function loadV2108Admin(force=false){
+  if(!document.querySelector("#view-q-admin.active") && !force) return;
+  if(adminLoadPromise) return adminLoadPromise;
+
+  adminLoadPromise=(async()=>{
+    // Load each panel independently: one denied section must not collapse Q Admin.
+    await Promise.allSettled([
+      loadAccessList(),
+      renderWalletMatrix2108(),
+      loadUsage()
+    ]);
+  })();
+
+  try{ await adminLoadPromise; }
+  finally{ adminLoadPromise=null; }
+}
+window.loadV2108Admin=loadV2108Admin;
+
 document.addEventListener("DOMContentLoaded",()=>{
   $("q2108FindAdminUser")?.addEventListener("click",findUser);
   $("q2108SaveAccess")?.addEventListener("click",saveAccess);
   $("q2108UsageLoad")?.addEventListener("click",loadUsage);
   $("q2108UsageCsv")?.addEventListener("click",usageCsv);
-  const obs=new MutationObserver(()=>{if(document.querySelector("#view-q-admin.active")){loadAccessList();renderWalletMatrix2108();loadUsage();}});
-  obs.observe(document.body,{subtree:true,attributes:true,attributeFilter:["class"]});
+
+  // Do not observe every class change. V2.10.8 previously caused repeated
+  // Q Admin reloads while legacy admin renderers toggled classes.
+  if(document.querySelector("#view-q-admin.active")) loadV2108Admin(true);
 });
 })();
