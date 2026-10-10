@@ -86,7 +86,17 @@ async function api(path, opts={}){
   let body=null;
   const ct=r.headers.get("content-type")||"";
   if(ct.includes("application/json")) body=await r.json(); else body=await r.text();
-  if(!r.ok) throw new Error(body?.detail || body?.message || body || `HTTP ${r.status}`);
+  if(!r.ok){
+    const raw=body?.detail ?? body?.message ?? body ?? `HTTP ${r.status}`;
+    let message;
+    if(typeof raw==="string") message=raw;
+    else if(Array.isArray(raw)) message=raw.map(x=>x?.msg||x?.message||JSON.stringify(x)).join(" · ");
+    else {
+      try{ message=JSON.stringify(raw); }
+      catch{ message=String(raw); }
+    }
+    throw new Error(message||`HTTP ${r.status}`);
+  }
   return body;
 }
 function saveSession(data){
@@ -1482,7 +1492,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.2").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.3").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

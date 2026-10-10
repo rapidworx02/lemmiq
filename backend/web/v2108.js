@@ -32,7 +32,10 @@ async function loadAccessList(){
   try{
     const d=await japi("/v2108/admin/access");
     $("q2108AccessList").innerHTML=d.items.map(x=>`<div class="q28-row"><strong>${esc(x.display_name)} · @${esc(x.username)}</strong><small>${esc(x.role)} · ${Object.entries(x.permissions).filter(([k,v])=>v!=="NONE").map(([k,v])=>`${k}:${v}`).join(" · ")||"No section access"}</small></div>`).join("")||`<p class="micro">No support admins configured.</p>`;
-  }catch(e){$("q2108AccessList").innerHTML=`<p class="micro">${esc(e.message)}</p>`}
+  }catch(e){
+    $("q2108AccessList").innerHTML=`<p class="micro">${esc(e?.message||e)}</p>`;
+    throw e;
+  }
 }
 async function loadUsage(){
   if(!$("q2108UsageUsers"))return;
@@ -43,7 +46,10 @@ async function loadUsage(){
     $("q2108UsageSummary").innerHTML=[["Active users",s.active_users],["AI/Q actions",s.total_actions],["Average/user",s.avg_actions_per_user],["Median",s.median_actions],["P90",s.p90],["P95",s.p95],["Provider cost",`US$${Number(s.provider_cost_usd).toFixed(4)}`],["Simulated Q",`${s.simulated_q} Q`]].map(([a,b])=>`<div><small>${a}</small><strong>${b}</strong></div>`).join("");
     $("q2108FeatureTotals").innerHTML=`<h4>Feature usage</h4>`+Object.entries(s.feature_totals||{}).map(([k,v])=>`<span class="q2108-feature-chip">${esc(k)} · ${v}</span>`).join("");
     $("q2108UsageUsers").innerHTML=d.users.map(x=>`<div class="q2108-user-usage"><strong>${esc(x.display_name)} · @${esc(x.username)}</strong><div class="meta"><span>${esc(x.tier)}</span><span>${x.actions} actions</span><span>${x.avg_actions_per_day}/day</span><span>Sim ${x.simulated_q} Q</span><span>Cost US$${Number(x.provider_cost_usd).toFixed(4)}</span><span>${x.failed} failed</span></div><div>${Object.entries(x.features||{}).map(([k,v])=>`<span class="q2108-feature-chip">${esc(k)} ${v}</span>`).join("")}</div></div>`).join("")||`<p class="micro">No usage in this period.</p>`;
-  }catch(e){$("q2108UsageUsers").innerHTML=`<p class="micro">${esc(e.message)}</p>`}
+  }catch(e){
+    $("q2108UsageUsers").innerHTML=`<p class="micro">${esc(e?.message||e)}</p>`;
+    throw e;
+  }
 }
 function usageCsv(){
   const p=$("q2108UsagePeriod").value;
@@ -59,8 +65,38 @@ async function renderWalletMatrix2108(){
     host.querySelectorAll("[data-qr]").forEach(b=>b.onclick=()=>window.open(`/v28/payment-wallets/${b.dataset.qr}/qr`,"_blank"));
     host.querySelectorAll("[data-copy]").forEach(b=>b.onclick=()=>navigator.clipboard.writeText(b.dataset.copy).then(()=>toast("Address copied")));
     host.querySelectorAll("[data-upload]").forEach(inp=>inp.onchange=async()=>{const f=inp.files?.[0];if(!f)return;const fd=new FormData();fd.append("file",f);try{await japi(`/v28/admin/payment-wallets/${inp.dataset.upload}/qr`,{method:"POST",body:fd});toast("QR uploaded");renderWalletMatrix2108()}catch(e){toast(e.message,true)}});
-  }catch(e){}
+  }catch(e){
+    host.innerHTML=`<p class="micro">Wallet matrix failed: ${esc(e?.message||e)}</p>`;
+    throw e;
+  }
 }
+
+async function loadV2108Admin(force=false){
+  if(!force && !document.querySelector("#view-q-admin.active")) return;
+
+  const tasks = [
+    ["Admin Team & Section Access", loadAccessList],
+    ["USDT wallet matrix", renderWalletMatrix2108],
+    ["Q Usage Analytics", loadUsage]
+  ];
+
+  const results = await Promise.allSettled(
+    tasks.map(async ([label,fn])=>{
+      await fn();
+      return label;
+    })
+  );
+
+  const failed = results
+    .map((r,i)=>({r,label:tasks[i][0]}))
+    .filter(x=>x.r.status==="rejected");
+
+  if(failed.length){
+    const msg=failed.map(x=>`${x.label}: ${x.r.reason?.message||x.r.reason}`).join(" | ");
+    throw new Error(msg);
+  }
+}
+window.loadV2108Admin=loadV2108Admin;
 
 let adminLoadPromise=null;
 
@@ -129,7 +165,7 @@ async function loadQAdminStable(force=false){
 
     await run("Q Economy Admin",window.loadQAdmin);
     await run("Q Predict Admin",window.loadV29Admin);
-    await run("V2.10.8 Admin tools",()=>loadV2108Admin(true));
+    await run("V2.10.8 Admin tools",()=>window.loadV2108Admin(true));
 
     const failed=results.filter(x=>!x.ok);
     if(status){
