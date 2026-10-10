@@ -496,7 +496,7 @@ def register_routes(current_user):
                 "call_type":(getattr(c,"call_type",None) or "VOICE").upper(),
                 "duration_seconds":max(0,dur),"started_at":c.started_at.isoformat(),
                 "answered_at":c.answered_at.isoformat() if c.answered_at else None,
-                "ended_at":c.ended_at.isoformat() if c.ended_at else None,"last_heartbeat_at":c.last_heartbeat_at.isoformat() if getattr(c,"last_heartbeat_at",None) else None}
+                "ended_at":c.ended_at.isoformat() if c.ended_at else None}
 
     def _call_participant_filter(ids):
         return or_(CallRecord.caller_id.in_(ids),CallRecord.callee_id.in_(ids))
@@ -511,20 +511,15 @@ def register_routes(current_user):
         )).all()
         for x in rows:
             x.status="MISSED";x.ended_at=now
-        # V2.10.8 heartbeat cleanup: a LiveKit call whose client stopped
-        # heartbeating must not block new calls forever.
-        connected=db.scalars(select(CallRecord).where(
+        # Defensive cleanup for abandoned connected sessions.
+        rows=db.scalars(select(CallRecord).where(
             CallRecord.status.in_({"CONNECTING","CONNECTED"}),
-            _call_participant_filter(ids)
+            _call_participant_filter(ids),
+            CallRecord.started_at < now-timedelta(hours=6)
         )).all()
-        changed=False
-        for x in connected:
-            hb=utc_dt(getattr(x,"last_heartbeat_at",None))
-            started=utc_dt(x.started_at)
-            stale=(hb is not None and hb < now-timedelta(seconds=45)) or (hb is None and started < now-timedelta(minutes=2))
-            if stale:
-                x.status="ENDED";x.ended_at=now;changed=True
-        if changed:db.flush()
+        for x in rows:
+            x.status="ENDED";x.ended_at=now
+        if rows:db.flush()
 
     @router.get("/v24/calls/status")
     def call_status(u=Depends(current_user)):
@@ -572,7 +567,7 @@ def register_routes(current_user):
         call_type=(body.call_type or "VOICE").strip().upper()
         if call_type not in {"VOICE","VIDEO"}:raise HTTPException(422,"call_type must be VOICE or VIDEO")
         cid=uuid.uuid4().hex;room="call_"+uuid.uuid4().hex
-        rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING",call_type=call_type,last_heartbeat_at=datetime.now(timezone.utc))
+        rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING",call_type=call_type)
         db.add(rec);db.commit();db.refresh(rec)
         caller_avatar=_user_json(u).get("avatar_url")
         event={"type":"incoming_call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,"caller_id":u.id,"caller_avatar_url":caller_avatar,"call_type":call_type}
@@ -589,40 +584,10 @@ def register_routes(current_user):
         if not rec or u.id not in (rec.caller_id,rec.callee_id):raise HTTPException(404,"Call not found")
         if rec.status in TERMINAL_CALL_STATES:raise HTTPException(409,f"Call is {rec.status.lower()}")
         if rec.status not in ACTIVE_CALL_STATES:raise HTTPException(409,"Call is no longer active")
-        rec.last_heartbeat_at=datetime.now(timezone.utc)
         if u.id==rec.callee_id and rec.status=="RINGING":
             rec.status="CONNECTED";rec.answered_at=datetime.now(timezone.utc);db.commit()
             await _push(rec.caller_id,{"type":"call_answered","call_id":rec.id,"answered_at":rec.answered_at.isoformat()})
         return {"call":cj(db,rec,u.id),"ws_url":os.environ.get("LIVEKIT_URL",""),"token":token(rec.room_name,u),"incoming":u.id==rec.callee_id}
-
-    @router.post("/v24/calls/{call_id}/heartbeat")
-    def call_heartbeat(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):
-        rec=db.get(CallRecord,call_id)
-        if not rec or u.id not in (rec.caller_id,rec.callee_id):raise HTTPException(404,"Call not found")
-        if rec.status in TERMINAL_CALL_STATES:return {"ok":False,"status":rec.status}
-        rec.last_heartbeat_at=datetime.now(timezone.utc);db.commit()
-        return {"ok":True,"status":rec.status}
-
-    @router.get("/v24/calls/active/me")
-    def active_call(u=Depends(current_user),db:Session=Depends(dep_db)):
-        _expire_stale_calls(db,[u.id]);db.commit()
-        rec=db.scalar(select(CallRecord).where(
-            CallRecord.status.in_(ACTIVE_CALL_STATES),
-            or_(CallRecord.caller_id==u.id,CallRecord.callee_id==u.id)
-        ).order_by(CallRecord.started_at.desc()).limit(1))
-        return {"active":bool(rec),"call":cj(db,rec,u.id) if rec else None}
-
-    @router.post("/v24/calls/active/clear")
-    async def clear_stuck_call(u=Depends(current_user),db:Session=Depends(dep_db)):
-        rec=db.scalar(select(CallRecord).where(
-            CallRecord.status.in_(ACTIVE_CALL_STATES),
-            or_(CallRecord.caller_id==u.id,CallRecord.callee_id==u.id)
-        ).order_by(CallRecord.started_at.desc()).limit(1))
-        if not rec:return {"ok":True,"cleared":False}
-        other=rec.callee_id if u.id==rec.caller_id else rec.caller_id
-        rec.status="ENDED";rec.ended_at=datetime.now(timezone.utc);db.commit()
-        await _push(other,{"type":"call_ended","call_id":rec.id,"status":"ENDED"})
-        return {"ok":True,"cleared":True,"call_id":rec.id}
 
     @router.post("/v24/calls/{call_id}/decline")
     async def call_decline(call_id:str,u=Depends(current_user),db:Session=Depends(dep_db)):

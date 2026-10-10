@@ -40,8 +40,6 @@ from .v28 import (
     _system_to_user,
     _system_to_system,
 )
-from .admin_permissions import permission_level
-
 
 log = logging.getLogger("lemmiq.v29")
 
@@ -305,7 +303,6 @@ FEATURE_ESTIMATES = {
     "CHAT_SUMMARY": (15_000, 0.25),
     "Q_TO_Q": (10_000, 0.50),
     "BUSINESS_AGENT": (20_000, 2.00),
-    "AUTO_MESSAGE": (12_000, 0.35),
 }
 
 
@@ -324,7 +321,7 @@ def track_shadow_event(db: Session, user_id: int | None, feature: str, *, succes
     if user_id:
         feature_map = {
             "Q_AGENT": "Q_CHAT", "TRUST": "TRUST_CHECK", "CHAT_SUMMARY": "CHAT_SUMMARY",
-            "Q_VISION": "Q_VISION", "Q_TO_Q": "Q_TO_Q", "BUSINESS_AGENT": "BUSINESS_AGENT", "AUTO_MESSAGE": "AUTO_MESSAGE",
+            "Q_VISION": "Q_VISION", "Q_TO_Q": "Q_TO_Q", "BUSINESS_AGENT": "BUSINESS_AGENT",
         }
         key = feature_map.get(feature)
         if key:
@@ -366,13 +363,9 @@ def _admin_role(db: Session, uid: int) -> str | None:
 
 def _require_admin(db: Session, u: User, write: bool = False):
     role = _admin_role(db, u.id)
-    if role == "MASTER_ADMIN":
-        return role
-    required = "WRITE" if write else "READ"
-    if role == "READ_ONLY" and write:
-        raise HTTPException(403, "Read-only admin cannot edit Q Predict")
-    if role not in PREDICT_ADMIN_ROLES or permission_level(db, u.id, "Q_PREDICT") not in ({"READ","WRITE","FULL"} if not write else {"WRITE","FULL"}):
-        raise HTTPException(403, f"{required.title()} access required for Q Predict")
+    allowed = PREDICT_WRITE_ROLES if write else PREDICT_ADMIN_ROLES
+    if role not in allowed:
+        raise HTTPException(403, "Q Predict admin permission required")
     return role
 
 
