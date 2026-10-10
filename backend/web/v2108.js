@@ -63,23 +63,131 @@ async function renderWalletMatrix2108(){
 }
 
 let adminLoadPromise=null;
-async function loadV2108Admin(force=false){
-  if(!document.querySelector("#view-q-admin.active") && !force) return;
+
+function qAdminStatusNode(){
+  const view=document.getElementById("view-q-admin");
+  if(!view)return null;
+  let el=document.getElementById("qAdminStableStatus");
+  if(!el){
+    el=document.createElement("div");
+    el.id="qAdminStableStatus";
+    el.className="card glass q-admin-stable-status";
+    el.style.marginBottom="12px";
+    view.insertBefore(el,view.firstChild);
+  }
+  return el;
+}
+
+function forceQAdminVisible(){
+  const target=document.getElementById("view-q-admin");
+  if(!target)return false;
+
+  document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+  target.classList.add("active");
+
+  document.querySelectorAll("#nav button").forEach(b=>{
+    b.classList.toggle("active",b.dataset.view==="more");
+  });
+
+  const title=document.getElementById("pageTitle");
+  const sub=document.getElementById("pageSub");
+  if(title) title.textContent="Q Admin";
+  if(sub) sub.textContent="Treasury, Q Predict, USDT payments, marketplace and economy controls.";
+
+  window.scrollTo({top:0,behavior:"instant"});
+  return true;
+}
+
+async function loadQAdminStable(force=false){
+  if(!force && !document.querySelector("#view-q-admin.active")) return;
   if(adminLoadPromise) return adminLoadPromise;
 
+  const status=qAdminStatusNode();
+  if(status){
+    status.innerHTML='<strong>Loading Q Admin…</strong><p class="micro">Checking admin access and loading sections.</p>';
+  }
+
   adminLoadPromise=(async()=>{
-    // Load each panel independently: one denied section must not collapse Q Admin.
-    await Promise.allSettled([
-      loadAccessList(),
-      renderWalletMatrix2108(),
-      loadUsage()
-    ]);
+    const results=[];
+
+    const run=async(label,fn)=>{
+      if(typeof fn!=="function")return;
+      try{
+        await fn();
+        results.push({label,ok:true});
+      }catch(e){
+        results.push({label,ok:false,error:e?.message||String(e)});
+      }finally{
+        // Some legacy admin code can change the active view when one endpoint fails.
+        // Keep Q Admin visible while this explicit Q Admin load is in progress.
+        forceQAdminVisible();
+        if(location.hash!=="#q-admin"){
+          history.replaceState({view:"q-admin"},"","#q-admin");
+        }
+      }
+    };
+
+    await run("Q Economy Admin",window.loadQAdmin);
+    await run("Q Predict Admin",window.loadV29Admin);
+    await run("V2.10.8 Admin tools",()=>loadV2108Admin(true));
+
+    const failed=results.filter(x=>!x.ok);
+    if(status){
+      if(failed.length){
+        status.innerHTML=
+          '<strong>Q Admin opened, but some sections could not load.</strong>'+
+          '<p class="micro">'+failed.map(x=>`${esc(x.label)}: ${esc(x.error)}`).join("<br>")+'</p>'+
+          '<p class="micro">The screen will stay open so the actual failing section can be identified.</p>';
+      }else{
+        status.innerHTML='<strong>Q Admin ready</strong><p class="micro">All available admin sections loaded.</p>';
+        setTimeout(()=>status?.remove(),1400);
+      }
+    }
+
+    forceQAdminVisible();
+    if(location.hash!=="#q-admin"){
+      history.replaceState({view:"q-admin"},"","#q-admin");
+    }
   })();
 
-  try{ await adminLoadPromise; }
-  finally{ adminLoadPromise=null; }
+  try{
+    await adminLoadPromise;
+  }finally{
+    adminLoadPromise=null;
+  }
 }
-window.loadV2108Admin=loadV2108Admin;
+
+function openQAdminStable(push=true){
+  forceQAdminVisible();
+
+  if(push){
+    if(location.hash==="#q-admin"){
+      history.replaceState({view:"q-admin"},"","#q-admin");
+    }else{
+      history.pushState({view:"q-admin"},"","#q-admin");
+    }
+  }else{
+    history.replaceState({view:"q-admin"},"","#q-admin");
+  }
+
+  // Keep the page pinned during the legacy loaders' first render cycle.
+  let checks=0;
+  const pin=setInterval(()=>{
+    checks++;
+    if(location.hash==="#q-admin") forceQAdminVisible();
+    if(checks>=12) clearInterval(pin);
+  },120);
+
+  loadQAdminStable(true).catch(e=>{
+    const status=qAdminStatusNode();
+    if(status){
+      status.innerHTML=`<strong>Q Admin load error</strong><p class="micro">${esc(e?.message||e)}</p>`;
+    }
+    forceQAdminVisible();
+  });
+}
+window.loadQAdminStable=loadQAdminStable;
+window.openQAdminStable=openQAdminStable;
 
 document.addEventListener("DOMContentLoaded",()=>{
   $("q2108FindAdminUser")?.addEventListener("click",findUser);
@@ -87,8 +195,19 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("q2108UsageLoad")?.addEventListener("click",loadUsage);
   $("q2108UsageCsv")?.addEventListener("click",usageCsv);
 
-  // Do not observe every class change. V2.10.8 previously caused repeated
-  // Q Admin reloads while legacy admin renderers toggled classes.
-  if(document.querySelector("#view-q-admin.active")) loadV2108Admin(true);
+  const qAdminCard=$("qAdminMoreCard");
+  if(qAdminCard){
+    // Capture phase prevents an older generic More handler from also firing.
+    qAdminCard.addEventListener("click",e=>{
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openQAdminStable(true);
+    },true);
+  }
+
+  const requested=(location.hash||"").replace(/^#/,"");
+  if(requested==="q-admin" || requested==="admin"){
+    setTimeout(()=>openQAdminStable(false),0);
+  }
 });
 })();

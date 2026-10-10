@@ -1,9 +1,9 @@
-const CACHE = "lemmiq-v2108-adminfix-1";
+const CACHE = "lemmiq-v2108-adminfix-2";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.8",
   "/web/styles.css?v=2.10.8",
-  "/web/app.js?v=2.10.8.1",
+  "/web/app.js?v=2.10.8.2",
   "/web/v28.js?v=2.10.8",
   "/web/v28.css?v=2.10.8",
   "/web/v29.js?v=2.10.8",
@@ -18,7 +18,7 @@ const SHELL = [
   "/web/v2106.js?v=2.10.8",
   "/web/v2107.css?v=2.10.8",
   "/web/v2108.css?v=2.10.8",
-  "/web/v2108.js?v=2.10.8.1",
+  "/web/v2108.js?v=2.10.8.2",
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",

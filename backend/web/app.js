@@ -108,9 +108,15 @@ function showApp(){
   connectSocket();
   const requested=(location.hash||"").replace(/^#/,"");
   const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin"]);
-  if(requested==="admin") setView("q-admin");
-  else if(directViews.has(requested)) setView(requested);
-  else refreshCurrent();
+  if((requested==="admin" || requested==="q-admin") && window.openQAdminStable) {
+    window.openQAdminStable(false);
+  } else if(requested==="admin") {
+    setView("q-admin");
+  } else if(directViews.has(requested)) {
+    setView(requested);
+  } else {
+    refreshCurrent();
+  }
   if(window.refreshV28Access) window.refreshV28Access();
 }
 function chatsHome(pushHistory=false){
@@ -168,9 +174,12 @@ async function refreshView(name){
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
     if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
     if(name==="q-admin") {
-      if(window.loadQAdmin) await window.loadQAdmin();
-      if(window.loadV29Admin) await window.loadV29Admin();
-      if(window.loadV2108Admin) await window.loadV2108Admin();
+      if(window.loadQAdminStable) await window.loadQAdminStable();
+      else {
+        if(window.loadQAdmin) await window.loadQAdmin();
+        if(window.loadV29Admin) await window.loadV29Admin();
+        if(window.loadV2108Admin) await window.loadV2108Admin();
+      }
     }
   }catch(e){toast(e.message,true)}
 }
@@ -1416,6 +1425,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
   });
   qsa("[data-more-view]").forEach(b=>b.onclick=()=>{
+    if(b.id==="qAdminMoreCard") return;
     const view=b.dataset.moreView;
     setView(view);
     if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
@@ -1472,7 +1482,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.2").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
