@@ -86,17 +86,7 @@ async function api(path, opts={}){
   let body=null;
   const ct=r.headers.get("content-type")||"";
   if(ct.includes("application/json")) body=await r.json(); else body=await r.text();
-  if(!r.ok){
-    const raw=body?.detail ?? body?.message ?? body ?? `HTTP ${r.status}`;
-    let message;
-    if(typeof raw==="string") message=raw;
-    else if(Array.isArray(raw)) message=raw.map(x=>x?.msg||x?.message||JSON.stringify(x)).join(" · ");
-    else {
-      try{ message=JSON.stringify(raw); }
-      catch{ message=String(raw); }
-    }
-    throw new Error(message||`HTTP ${r.status}`);
-  }
+  if(!r.ok) throw new Error(body?.detail || body?.message || body || `HTTP ${r.status}`);
   return body;
 }
 function saveSession(data){
@@ -118,15 +108,9 @@ function showApp(){
   connectSocket();
   const requested=(location.hash||"").replace(/^#/,"");
   const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin"]);
-  if((requested==="admin" || requested==="q-admin") && window.openQAdminStable) {
-    window.openQAdminStable(false);
-  } else if(requested==="admin") {
-    setView("q-admin");
-  } else if(directViews.has(requested)) {
-    setView(requested);
-  } else {
-    refreshCurrent();
-  }
+  if(requested==="admin") setView("q-admin");
+  else if(directViews.has(requested)) setView(requested);
+  else refreshCurrent();
   if(window.refreshV28Access) window.refreshV28Access();
 }
 function chatsHome(pushHistory=false){
@@ -183,14 +167,7 @@ async function refreshView(name){
     if(name==="me") renderMeAvatar();
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
     if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
-    if(name==="q-admin") {
-      if(window.loadQAdminStable) await window.loadQAdminStable();
-      else {
-        if(window.loadQAdmin) await window.loadQAdmin();
-        if(window.loadV29Admin) await window.loadV29Admin();
-        if(window.loadV2108Admin) await window.loadV2108Admin();
-      }
-    }
+    if(name==="q-admin" && window.loadQAdmin) { await window.loadQAdmin(); if(window.loadV29Admin) await window.loadV29Admin(); }
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -1434,12 +1411,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     }
     if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
   });
-  qsa("[data-more-view]").forEach(b=>b.onclick=()=>{
-    if(b.id==="qAdminMoreCard") return;
-    const view=b.dataset.moreView;
-    setView(view);
-    if(location.hash!==`#${view}`) history.pushState({view},"",`#${view}`);
-  });
+  qsa("[data-more-view]").forEach(b=>b.onclick=()=>setView(b.dataset.moreView));
   qsa("[data-q-prompt]").forEach(b=>b.onclick=()=>runQStarter(b.dataset.qPrompt));
   $("moreAndroidDownloadBtn").onclick=installAndroidApp;
   $("refreshCallsBtn").onclick=loadCalls;
@@ -1492,24 +1464,17 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.8.3").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.6").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
     if(s.chatId){setView("chats");await loadChats();await openChat(Number(s.chatId),false);return}
     if(s.groupId){setView("chats");await loadChats();await openGroup(Number(s.groupId),false);return}
     if(s.qThread){setView("chats");await loadChats();await openQThread();return}
-
-    const hashView=(location.hash||"").replace(/^#/,"");
-    const nextView=s.view || (document.getElementById(`view-${hashView}`)?hashView:"chats");
-    if(nextView==="chats") chatsHome(false);
-    setView(nextView);
+    chatsHome(false);
+    setView(s.view||"chats");
   });
-  if(!history.state){
-    const hashView=(location.hash||"").replace(/^#/,"");
-    const initialView=document.getElementById(`view-${hashView}`)?hashView:"chats";
-    history.replaceState({view:initialView},"",`#${initialView}`);
-  }
+  if(!history.state)history.replaceState({view:"chats"},"",location.hash||"#chats");
 
   loadAppConfig();
   if(state.token&&state.user)showApp();
