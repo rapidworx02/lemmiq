@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/web/v2107.css?v=2.10.7">
   <link rel="stylesheet" href="/web/v21071_admin.css?v=2.10.7.1">
   <link rel="stylesheet" href="/web/v21072_q_usage.css?v=2.10.7.2">
+  <link rel="stylesheet" href="/web/v21073_wallets.css?v=2.10.7.3">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -441,7 +442,7 @@
           <div id="q28AdminTeam" class="q28-list"></div>
         </article>
         <div class="grid two">
-          <article class="card glass"><div class="section-head"><div><h3>USDT wallet matrix</h3><p class="micro">10 fixed receiving slots: each subscription has one TRC20 wallet and one BEP20 wallet. Replacing a wallet keeps old payment history intact.</p></div></div>
+          <article class="card glass"><div class="section-head"><div><h3>USDT wallet matrix</h3><p class="micro">2 shared receiving wallets: one TRC20 and one BEP20 wallet are used across every subscription pack. Replacing a wallet keeps old payment history intact.</p></div></div>
             <div id="q28WalletMatrix" class="q28-wallet-matrix"></div>
           </article>
           <article class="card glass"><h3>Q settings</h3><div class="q28-settings-grid"><label>Q reference USD<input id="q28AdminPrice" type="number" step="0.0001"></label><label>Marketplace fee %<input id="q28AdminFee" type="number" step="0.01"></label><label>Basic Q / day<input id="q28AdminBasic" type="number" step="0.01"></label><label>Signup bonus Q<input id="q28AdminSignup" type="number" step="0.01"></label><label>Free signup referrer Q<input id="q28AdminReferrer" type="number" step="0.01"></label><label>Referred user welcome Q<input id="q28AdminReferred" type="number" step="0.01"></label></div><button id="q28AdminSaveConfig" class="primary">Save Q settings</button></article>
@@ -522,5 +523,6 @@
   <script src="/web/v2106.js?v=2.10.7" defer></script>
   <script src="/web/v21071_admin.js?v=2.10.7.1" defer></script>
   <script src="/web/v21072_q_usage.js?v=2.10.7.2" defer></script>
+  <script src="/web/v21073_wallets.js?v=2.10.7.3" defer></script>
 </body>
 </html>

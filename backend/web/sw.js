@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v21072-q-usage-1";
+const CACHE = "lemmiq-v21073-shared-wallets-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.7",

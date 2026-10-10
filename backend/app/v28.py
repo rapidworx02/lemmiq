@@ -956,7 +956,27 @@ def _payment_wallet_json(row: QPaymentWallet):
         "active": row.active,
         "qr_url": f"/v28/payment-wallets/{row.id}/qr",
         "custom_qr": bool(row.qr_image_b64),
+        "shared_all_packs": row.package_code is None,
     }
+
+
+def _shared_payment_wallet(db: Session, network: str):
+    return db.scalar(select(QPaymentWallet).where(
+        QPaymentWallet.active.is_(True),
+        QPaymentWallet.network == network.upper(),
+        QPaymentWallet.package_code.is_(None),
+    ).order_by(QPaymentWallet.id.desc()).limit(1))
+
+
+def _legacy_payment_wallet(db: Session, network: str, package_code: str | None = None):
+    stmt = select(QPaymentWallet).where(
+        QPaymentWallet.active.is_(True),
+        QPaymentWallet.network == network.upper(),
+        QPaymentWallet.package_code.is_not(None),
+    )
+    if package_code:
+        stmt = stmt.where(QPaymentWallet.package_code == package_code.upper())
+    return db.scalar(stmt.order_by(QPaymentWallet.id.desc()).limit(1))
 
 
 def _explorer(network: str, tx_hash: str | None):
@@ -1218,12 +1238,12 @@ def register_v28(app, current_user, get_db):
             raise HTTPException(422, "Unknown package")
         if network not in NETWORKS:
             raise HTTPException(422, "Network must be TRC20 or BEP20")
-        wallet = db.scalar(select(QPaymentWallet).where(
-            QPaymentWallet.active.is_(True), QPaymentWallet.network == network,
-            QPaymentWallet.package_code == code
-        ).order_by(QPaymentWallet.id.desc()).limit(1))
+        # V2.10.7.3: one shared TRC20 and one shared BEP20 receiving wallet
+        # are used across every subscription package.  Legacy package-specific
+        # wallets remain as a safe fallback until the shared wallet is saved.
+        wallet = _shared_payment_wallet(db, network) or _legacy_payment_wallet(db, network, code)
         if not wallet:
-            raise HTTPException(409, f"No active {network} wallet is configured for {PACKAGE_PLANS[code]['name']}")
+            raise HTTPException(409, f"No active {network} receiving wallet is configured")
         price = PACKAGE_PLANS[code]["price_usd"]
         row = QPaymentOrder(
             order_code=f"LQ-{_now().strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}",
@@ -1823,18 +1843,73 @@ def register_v28(app, current_user, get_db):
             "reason": x.reason, "created_at": x.created_at.isoformat(),
         } for x in rows]
 
+    @router.get("/admin/global-payment-wallets")
+    def admin_global_payment_wallets(u: User = Depends(require_section("PAYMENTS", "READ")), db: Session = Depends(get_db)):
+        out = []
+        package_names = [plan["name"] for plan in PACKAGE_PLANS.values()]
+        for network in ("TRC20", "BEP20"):
+            row = _shared_payment_wallet(db, network)
+            fallback = _legacy_payment_wallet(db, network)
+            out.append({
+                "network": network,
+                "wallet": _payment_wallet_json(row) if row else None,
+                "legacy_fallback": _payment_wallet_json(fallback) if (not row and fallback) else None,
+                "used_by_packages": package_names,
+            })
+        return out
+
+    @router.put("/admin/global-payment-wallets/{network}")
+    def admin_set_global_payment_wallet(network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_section("PAYMENTS", "FULL")), db: Session = Depends(get_db)):
+        net = network.strip().upper()
+        if net not in NETWORKS:
+            raise HTTPException(422, "Network must be TRC20 or BEP20")
+        address = body.address.strip()
+        _validate_payment_address(net, address)
+
+        previous = db.scalars(select(QPaymentWallet).where(
+            QPaymentWallet.package_code.is_(None),
+            QPaymentWallet.network == net,
+            QPaymentWallet.active.is_(True),
+        )).all()
+        before = [_payment_wallet_json(x) for x in previous]
+        for x in previous:
+            x.active = False
+            x.updated_at = _now()
+
+        label = body.label.strip() or f"Shared USDT {net} — All Q Packs"
+        row = QPaymentWallet(
+            network=net,
+            package_code=None,
+            label=label,
+            address=address,
+            active=body.active,
+        )
+        db.add(row)
+        db.flush()
+        _audit(
+            db, u.id, "GLOBAL_PAYMENT_WALLET_UPDATE",
+            before={"wallets": before},
+            after=_payment_wallet_json(row),
+            reason=f"Shared {net} receiving wallet for all subscription packs",
+        )
+        db.commit()
+        db.refresh(row)
+        return _payment_wallet_json(row)
+
     @router.get("/admin/payment-wallet-matrix")
     def admin_payment_wallet_matrix(u: User = Depends(require_section("PAYMENTS", "READ")), db: Session = Depends(get_db)):
+        # Compatibility response for the old V2.8 admin renderer.  Once a
+        # shared wallet exists, every package slot reports that same wallet.
         items = []
+        shared = {network: _shared_payment_wallet(db, network) for network in ("TRC20", "BEP20")}
         for code, plan in PACKAGE_PLANS.items():
             for network in ("TRC20", "BEP20"):
-                row = db.scalar(select(QPaymentWallet).where(
-                    QPaymentWallet.package_code == code, QPaymentWallet.network == network, QPaymentWallet.active.is_(True)
-                ).order_by(QPaymentWallet.id.desc()).limit(1))
+                row = shared[network] or _legacy_payment_wallet(db, network, code)
                 items.append({
                     "slot_key": f"{code}:{network}", "package_code": code, "package_name": plan["name"],
                     "price_usd": plan["price_usd"], "network": network,
                     "wallet": _payment_wallet_json(row) if row else None,
+                    "shared_all_packs": bool(row and row.package_code is None),
                 })
         return items
 

@@ -209,7 +209,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.2"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.3"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -938,7 +938,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.10.7.2",
+        "version": "2.10.7.3",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",

@@ -1,0 +1,17 @@
+/* LEMMIQ V2.10.7.3 — shared wallet cards */
+.q21073-shared-wallets{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important}
+.q21073-wallet-card{padding:14px;border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.025);display:grid;gap:10px}
+.q21073-wallet-card label{display:grid;gap:6px;font-size:12px;opacity:.95}
+.q21073-wallet-card input{width:100%;min-width:0}
+.q21073-status{padding:6px 9px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap}
+.q21073-status.active{background:rgba(52,211,153,.15);color:#74e4b8}
+.q21073-status.legacy{background:rgba(250,204,21,.12);color:#f7d96f}
+.q21073-status.empty{background:rgba(148,163,184,.12);color:#b8c1d1}
+.q21073-notice{padding:9px 10px;border:1px solid rgba(250,204,21,.22);border-radius:12px;background:rgba(250,204,21,.07);font-size:12px}
+.q21073-wallet-actions{display:flex;flex-wrap:wrap;gap:7px}
+.q21073-upload{display:inline-flex!important;align-items:center;justify-content:center}
+.q21073-packs{line-height:1.55}
+.q21073-qr-wrap{display:grid;place-items:center;margin:14px 0}
+.q21073-qr-wrap img{width:min(300px,80vw);aspect-ratio:1;object-fit:contain;background:#fff;border-radius:18px;padding:14px}
+.q21073-address{padding:11px;border-radius:12px;background:rgba(0,0,0,.18);overflow-wrap:anywhere;margin-bottom:10px}
+@media(max-width:760px){.q21073-shared-wallets{grid-template-columns:1fr!important}}
