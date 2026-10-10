@@ -25,6 +25,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import java.util.Locale
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
 
 private val Q28Bg=Color(0xFFF7F7FB)
 private val Q28Purple=Color(0xFF6F52ED)
@@ -50,12 +52,13 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 Spacer(Modifier.height(8.dp))
                 Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)
-                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled in V2.9",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
             }
         }
-        Row(Modifier.fillMaxWidth().padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
-            listOf("Wallet","Packages","Market","Refer","Activity").forEachIndexed{i,label->
-                FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp)},modifier=Modifier.weight(1f))
+        LazyRow(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),contentPadding=PaddingValues(end=8.dp)){
+            items(listOf("Wallet","Packages","Market","Refer","Activity")){label->
+                val i=listOf("Wallet","Packages","Market","Refer","Activity").indexOf(label)
+                FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp,maxLines=1)},modifier=Modifier.widthIn(min=92.dp))
             }
         }
         Box(Modifier.weight(1f)){
@@ -107,6 +110,18 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
     val w=vm.qWallet
     var user by remember{mutableStateOf("")}
     var amount by remember{mutableStateOf("")}
+    var period by remember{mutableStateOf("TODAY")}
+    val now=OffsetDateTime.now(ZoneOffset.UTC)
+    val cutoff=when(period){
+        "TODAY"->now.toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
+        "WEEK"->now.minusDays(7)
+        "MONTH"->now.minusMonths(1)
+        "YEAR"->now.minusYears(1)
+        else->null
+    }
+    val recentRows=vm.qLedger.filter{x->
+        if(cutoff==null)true else runCatching{OffsetDateTime.parse(x.created_at)}.getOrNull()?.let{!it.isBefore(cutoff)}?:true
+    }
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         item{
             Card(shape=RoundedCornerShape(18.dp)){
@@ -131,8 +146,15 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
             }
         }
         item{Text("Recent activity",fontWeight=FontWeight.Black,fontSize=19.sp)}
-        if(vm.qLedger.isEmpty())item{Text("No Q transactions yet.",color=Q28Muted)}
-        items(vm.qLedger.take(100),key={it.id}){x->
+        item{
+            LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                items(listOf("TODAY" to "Today","WEEK" to "Week","MONTH" to "Month","YEAR" to "Year","ALL" to "All")){(key,label)->
+                    FilterChip(selected=period==key,onClick={period=key},label={Text(label,fontSize=10.sp,maxLines=1)})
+                }
+            }
+        }
+        if(recentRows.isEmpty())item{Text("No Q transactions in this period.",color=Q28Muted)}
+        items(recentRows.take(100),key={it.id}){x->
             Card(shape=RoundedCornerShape(16.dp)){
                 Row(Modifier.fillMaxWidth().padding(13.dp),verticalAlignment=Alignment.CenterVertically){
                     Column(Modifier.weight(1f)){
@@ -150,14 +172,29 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
 @Composable
 private fun Q28ActivityTab(vm:LemmiqViewModel){
     var filter by remember{mutableStateOf("ALL")}
-    val rows=when(filter){
-        "IN"->vm.qLedger.filter{it.direction.equals("IN",true)}
-        "OUT"->vm.qLedger.filter{it.direction.equals("OUT",true)}
-        else->vm.qLedger
+    var period by remember{mutableStateOf("TODAY")}
+    val now=OffsetDateTime.now(ZoneOffset.UTC)
+    val cutoff=when(period){
+        "TODAY"->now.toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
+        "WEEK"->now.minusDays(7)
+        "MONTH"->now.minusMonths(1)
+        "YEAR"->now.minusYears(1)
+        else->null
     }
-    val incoming=vm.qLedger.filter{it.direction.equals("IN",true)}.sumOf{it.amount_q}
-    val outgoing=vm.qLedger.filter{it.direction.equals("OUT",true)}.sumOf{it.amount_q}
-    val featureUses=vm.qLedger.count{it.kind.contains("FEATURE",true)||!it.feature_key.isNullOrBlank()}
+    fun inPeriod(x:QLedgerDto):Boolean{
+        if(cutoff==null)return true
+        val at=runCatching{OffsetDateTime.parse(x.created_at)}.getOrNull()?:return true
+        return !at.isBefore(cutoff)
+    }
+    val periodRows=vm.qLedger.filter(::inPeriod)
+    val rows=when(filter){
+        "IN"->periodRows.filter{it.direction.equals("IN",true)}
+        "OUT"->periodRows.filter{it.direction.equals("OUT",true)}
+        else->periodRows
+    }
+    val incoming=periodRows.filter{it.direction.equals("IN",true)}.sumOf{it.amount_q}
+    val outgoing=periodRows.filter{it.direction.equals("OUT",true)}.sumOf{it.amount_q}
+    val featureUses=periodRows.count{it.kind.contains("FEATURE",true)||!it.feature_key.isNullOrBlank()}
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -168,6 +205,13 @@ private fun Q28ActivityTab(vm:LemmiqViewModel){
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 Card(Modifier.weight(1f),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(12.dp)){Text("Incoming",fontSize=10.sp,color=Q28Muted);Text("+${q28Q(incoming)} Q",fontWeight=FontWeight.Black,color=Q28Mint)}}
                 Card(Modifier.weight(1f),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(12.dp)){Text("Outgoing",fontSize=10.sp,color=Q28Muted);Text("−${q28Q(outgoing)} Q",fontWeight=FontWeight.Black,color=Color(0xFFD94B63))}}
+            }
+        }
+        item{
+            LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                items(listOf("TODAY" to "Today","WEEK" to "Week","MONTH" to "Month","YEAR" to "Year","ALL" to "All")){(key,label)->
+                    FilterChip(selected=period==key,onClick={period=key},label={Text(label,fontSize=10.sp,maxLines=1)})
+                }
             }
         }
         item{
@@ -182,8 +226,8 @@ private fun Q28ActivityTab(vm:LemmiqViewModel){
             Text("Mining, rewards, packages, marketplace, transfers, Q Predict and feature usage are tracked here.",fontSize=10.sp,color=Q28Muted)
             if(featureUses>0)Text("$featureUses feature usage event${if(featureUses==1)"" else "s"}",fontSize=10.sp,color=Q28Purple,modifier=Modifier.padding(top=3.dp))
         }
-        if(rows.isEmpty())item{Text("No Q activity in this view yet.",color=Q28Muted)}
-        items(rows.take(200),key={it.id}){x->
+        if(rows.isEmpty())item{Text("No Q activity in this period.",color=Q28Muted)}
+        items(rows.take(300),key={it.id}){x->
             val isIn=x.direction.equals("IN",true)
             val amount=if(x.amount_q==0.0)"0 Q" else "${if(isIn)"+" else "−"}${q28Q(x.amount_q)} Q"
             val title=when{

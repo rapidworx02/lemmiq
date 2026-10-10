@@ -81,7 +81,9 @@ class UserIdIn(BaseModel): user_id:int
 class RoleIn(BaseModel): role:str
 class TextIn(BaseModel): text:str=Field(min_length=1,max_length=4000)
 class AskIn(BaseModel): question:str=Field(min_length=1,max_length=1600)
-class CallStartIn(BaseModel): chat_id:int
+class CallStartIn(BaseModel):
+    chat_id:int
+    call_type:str="VOICE"
 class SocialMemoryIn(BaseModel):
     chat_id:int|None=None;memory_type:str="IMPORTANT";title:str=Field(min_length=1,max_length=160);detail:str="";source_message_id:int|None=None
 
@@ -491,6 +493,7 @@ def register_routes(current_user):
         dur=int(((utc_dt(c.ended_at) or datetime.now(timezone.utc))-(utc_dt(c.answered_at) or utc_dt(c.started_at))).total_seconds()) if c.answered_at else 0
         return {"id":c.id,"chat_id":c.chat_id,"caller_id":c.caller_id,"callee_id":c.callee_id,
                 "other_user":_user_json(other) if other else None,"status":c.status,
+                "call_type":(getattr(c,"call_type",None) or "VOICE").upper(),
                 "duration_seconds":max(0,dur),"started_at":c.started_at.isoformat(),
                 "answered_at":c.answered_at.isoformat() if c.answered_at else None,
                 "ended_at":c.ended_at.isoformat() if c.ended_at else None}
@@ -520,7 +523,7 @@ def register_routes(current_user):
 
     @router.get("/v24/calls/status")
     def call_status(u=Depends(current_user)):
-        return {"configured":livekit_ready(),"provider":"LiveKit","voice":True,"video":False,"single_active_call":True}
+        return {"configured":livekit_ready(),"provider":"LiveKit","voice":True,"video":True,"single_active_call":True}
 
     @router.get("/v24/calls")
     def call_history(u=Depends(current_user),db:Session=Depends(dep_db)):
@@ -561,15 +564,17 @@ def register_routes(current_user):
             db.rollback()
             raise HTTPException(409,"Call already active" if same_pair else "User is already in another call")
 
+        call_type=(body.call_type or "VOICE").strip().upper()
+        if call_type not in {"VOICE","VIDEO"}:raise HTTPException(422,"call_type must be VOICE or VIDEO")
         cid=uuid.uuid4().hex;room="call_"+uuid.uuid4().hex
-        rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING")
+        rec=CallRecord(id=cid,chat_id=c.id,caller_id=u.id,callee_id=callee,room_name=room,status="RINGING",call_type=call_type)
         db.add(rec);db.commit();db.refresh(rec)
         caller_avatar=_user_json(u).get("avatar_url")
-        event={"type":"incoming_call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,"caller_id":u.id,"caller_avatar_url":caller_avatar}
+        event={"type":"incoming_call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,"caller_id":u.id,"caller_avatar_url":caller_avatar,"call_type":call_type}
         await _push(callee,event)
         background.add_task(push_service.notify_data,_push_tokens(db,callee),{
             "type":"call","call_id":cid,"chat_id":c.id,"caller_name":u.display_name,
-            "caller_id":u.id,"caller_avatar_url":caller_avatar or ""
+            "caller_id":u.id,"caller_avatar_url":caller_avatar or "","call_type":call_type
         })
         return {"call":cj(db,rec,u.id),"ws_url":os.environ.get("LIVEKIT_URL",""),"token":token(room,u),"incoming":False}
 

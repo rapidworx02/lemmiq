@@ -224,6 +224,12 @@ class Api(private val store:SessionStore){
         req(b("$base/v27/q/coordination/${URLEncoder.encode(requestKey,"UTF-8")}").delete().build())
     }
 
+    suspend fun qThreadV2106():QThreadDto =
+        gson.fromJson(req(b("$base/v2106/q/thread").get().build()),QThreadDto::class.java)
+    suspend fun markQThreadReadV2106(){
+        req(b("$base/v2106/q/thread/read").post("{}".toRequestBody(json)).build())
+    }
+
     suspend fun pushInsight(e:PhoneEvent){
         val payload=mapOf(
             "client_event_id" to e.client_event_id, "category" to e.category,
@@ -471,8 +477,8 @@ class Api(private val store:SessionStore){
         gson.fromJson(req(b("$base/v24/calls/status").get().build()),CallStatusDto::class.java)
     suspend fun callDetail(id:String):CallDto =
         gson.fromJson(req(b("$base/v24/calls/$id").get().build()),CallDto::class.java)
-    suspend fun startCall(cid:Int):CallJoinDto{
-        val rb=gson.toJson(mapOf("chat_id" to cid)).toRequestBody(json)
+    suspend fun startCall(cid:Int,callType:String="VOICE"):CallJoinDto{
+        val rb=gson.toJson(mapOf("chat_id" to cid,"call_type" to callType.uppercase())).toRequestBody(json)
         return gson.fromJson(req(b("$base/v24/calls/start").post(rb).build()),CallJoinDto::class.java)
     }
     suspend fun joinCall(id:String):CallJoinDto =

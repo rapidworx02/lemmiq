@@ -65,10 +65,10 @@ fun V24GroupAvatar(g:GroupDto,size:Int=50){
 }
 
 @Composable
-fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
+fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThread:()->Unit){
     var search by remember{mutableStateOf("")}
     var mode by remember{mutableStateOf("ALL")}
-    val unreadTotal=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}
+    val unreadTotal=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}+vm.qThread.unread_count
     val conversations=remember(vm.chats,vm.groups,search,mode){
         buildList<Pair<String,Any>>{
             vm.chats.forEach{add("chat" to it)}
@@ -100,9 +100,26 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
                 TextButton(onNewGroup){Text("👥 New group")}
             }
         }
-        if(conversations.isEmpty()){
+        val qPreview=vm.qThread.items.firstOrNull()
+        val qMatches=(mode!="GROUPS") && (mode!="UNREAD" || vm.qThread.unread_count>0) &&
+            (search.isBlank() || "q lemmiq assistant ${qPreview?.title.orEmpty()} ${qPreview?.body.orEmpty()}".contains(search.lowercase()))
+        if(conversations.isEmpty()&&!qMatches){
             Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){Text("No matching conversations.",color=V24Muted)}
         }else LazyColumn(Modifier.fillMaxSize()){
+            if(qMatches)item(key="q_thread"){
+                Row(Modifier.fillMaxWidth().clickable{onQThread()}.padding(horizontal=18.dp,vertical=11.dp),verticalAlignment=Alignment.CenterVertically){
+                    Box(Modifier.size(50.dp).clip(CircleShape).background(V24Purple),contentAlignment=Alignment.Center){Text("Q",color=Color.White,fontSize=22.sp,fontWeight=FontWeight.Black)}
+                    Spacer(Modifier.width(11.dp))
+                    Column(Modifier.weight(1f)){
+                        Text("Q · LEMMIQ Assistant",fontWeight=FontWeight.Bold)
+                        Text(qPreview?.body?:"Q requests, results and coordination updates",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                    }
+                    Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
+                        qPreview?.created_at?.takeIf{it.isNotBlank()}?.let{Text(v24Time(it),fontSize=10.sp,color=if(vm.qThread.unread_count>0)V24Purple else V24Muted)}
+                        if(vm.qThread.unread_count>0)Badge{Text("${vm.qThread.unread_count}")}
+                    }
+                }
+            }
             items(conversations,key={it.first+when(val x=it.second){is ChatDto->x.id;is GroupDto->x.id;else->0}}){(kind,data)->
                 if(kind=="chat"){
                     val c=data as ChatDto
@@ -133,6 +150,61 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit){
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun V2106QThread(vm:LemmiqViewModel,onBack:()->Unit){
+    LaunchedEffect(Unit){vm.refreshQThread(markRead=true)}
+    Scaffold(
+        containerColor=V24Bg,
+        topBar={Surface(Modifier.fillMaxWidth().statusBarsPadding(),shadowElevation=1.dp){
+            Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){
+                Text("‹",fontSize=34.sp,modifier=Modifier.clickable{onBack()}.padding(8.dp))
+                Box(Modifier.size(44.dp).clip(CircleShape).background(V24Purple),contentAlignment=Alignment.Center){Text("Q",color=Color.White,fontWeight=FontWeight.Black,fontSize=20.sp)}
+                Spacer(Modifier.width(10.dp));Column{Text("Q · LEMMIQ Assistant",fontWeight=FontWeight.Bold);Text("Requests, results and Q-to-Q updates",fontSize=10.sp,color=V24Muted)}
+            }
+        }}
+    ){pad->
+        if(vm.qThread.items.isEmpty()){
+            Box(Modifier.fillMaxSize().padding(pad),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text("Q",fontSize=42.sp,color=V24Purple,fontWeight=FontWeight.Black);Text("No Q updates yet.",color=V24Muted)}}
+        }else LazyColumn(Modifier.fillMaxSize().padding(pad),contentPadding=PaddingValues(14.dp,12.dp,14.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            items(vm.qThread.items,key={it.id}){item->V2106QThreadCard(vm,item)}
+        }
+    }
+}
+
+@Composable
+private fun V2106QThreadCard(vm:LemmiqViewModel,item:QThreadItemDto){
+    var reply by remember(item.id){mutableStateOf("")}
+    val waiting=item.status.equals("PENDING",true)
+    val statusLabel=when{
+        item.can_respond->"Needs your response"
+        item.mine&&waiting->"Waiting for ${item.other_user?.display_name?:"contact"}"
+        item.status.equals("RESPONDED",true)->if(item.mine)"Response received" else "You responded"
+        item.status.equals("CLOSED",true)->"Closed"
+        else->item.status.lowercase().replaceFirstChar{it.uppercase()}
+    }
+    Card(shape=RoundedCornerShape(20.dp),colors=CardDefaults.cardColors(containerColor=if(item.can_respond)V24Soft else Color.White)){
+        Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                Text("Q ↔ Q",fontWeight=FontWeight.Black,color=V24Purple,fontSize=11.sp);Spacer(Modifier.weight(1f));Text(statusLabel,fontSize=9.sp,color=if(item.can_respond)Color(0xFFB7791F) else V24Muted)
+            }
+            Text(item.title,fontWeight=FontWeight.Bold,fontSize=16.sp)
+            Text(item.body,fontSize=12.sp,color=V24Ink)
+            if(item.can_respond){
+                val options=if(item.options.isEmpty())listOf("Available","Not available") else item.options.take(4)
+                LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                    items(options){choice->
+                        OutlinedButton(onClick={item.request_id?.let{vm.respondQCoordination(it,choice)}}){Text(choice,fontSize=10.sp)}
+                    }
+                }
+                OutlinedTextField(reply,{reply=it},modifier=Modifier.fillMaxWidth(),placeholder={Text("Reply to Q…")},singleLine=true)
+                Button(onClick={val id=item.request_id;if(id!=null&&reply.isNotBlank()){vm.respondQCoordination(id,reply.trim());reply=""}},enabled=reply.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text("Send response to Q")}
+            }
+            if(item.can_cancel)TextButton(onClick={vm.cancelQCoordination(item.request_key)}){Text("Cancel request")}
+            if(item.created_at.isNotBlank())Text("${v24FriendlyDay(item.created_at)} · ${v24Time(item.created_at)}",fontSize=9.sp,color=V24Muted)
         }
     }
 }

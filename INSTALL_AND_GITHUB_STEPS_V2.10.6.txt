@@ -1,0 +1,213 @@
+LEMMIQ V2.10.6 INSTALL / DEPLOY STEPS
+=====================================
+
+BASELINE
+--------
+Deploy this on top of the current V2.10.5 repository (including the Render psycopg-v3 hotfix).
+The V2.10.6 package already contains that hotfix again so it is not lost.
+
+Recommended: take a PostgreSQL backup/snapshot before deployment. V2.10.6 migrations are additive, but the live database contains Q wallet and Q Predict history.
+
+1. EXTRACT
+----------
+Extract:
+  LEMMIQ_V2.10.6_UPDATE.zip
+
+For an existing repository, the CHANGED_FILES_ONLY ZIP is the safer/easier option.
+
+2. COPY BACKEND APP FILES
+-------------------------
+Copy/overwrite the supplied changed backend/app files into:
+  C:\Users\pc\LEMMIQ\backend\app\
+
+Important files:
+  main.py
+  migrations.py
+  models.py
+  v24.py
+  v27.py
+  v210.py
+  v2104_q_features.py
+  v2106.py
+
+Do NOT reset or recreate the database.
+Do NOT remove the V2.10.5 Q-wallet/Q-Predict tables.
+
+3. COPY WEB/PWA FILES
+---------------------
+Copy/overwrite into:
+  C:\Users\pc\LEMMIQ\backend\web\
+
+Files:
+  index.html
+  app.js
+  sw.js
+  v2104.js
+  v2106.css
+  v2106.js
+
+IMPORTANT:
+Keep the existing files already in your real repository, including:
+  v28.js
+  v29.js
+  v28.css
+  v29.css
+
+The update package is a merge package. Do NOT delete the whole backend\web folder before copying it.
+
+4. COPY ANDROID FILES
+---------------------
+Copy/overwrite:
+  android\app\build.gradle.kts
+  android\app\src\main\AndroidManifest.xml
+  android\app\src\main\java\com\lemmiq\app\Api.kt
+  android\app\src\main\java\com\lemmiq\app\Models.kt
+  android\app\src\main\java\com\lemmiq\app\LemmiqViewModel.kt
+  android\app\src\main\java\com\lemmiq\app\LemmiqCallActivity.kt
+  android\app\src\main\java\com\lemmiq\app\LemmiqPushService.kt
+  android\app\src\main\java\com\lemmiq\app\V24Ui.kt
+  android\app\src\main\java\com\lemmiq\app\V28Q.kt
+  android\app\src\main\java\com\lemmiq\app\V29Predict.kt
+  android\app\src\main\java\com\lemmiq\app\LemmiqApp.kt
+
+AndroidManifest adds CAMERA permission and marks a camera as optional hardware so non-camera devices are not automatically excluded.
+
+5. VERIFY VERSION BEFORE PUSH
+-----------------------------
+cd /d C:\Users\pc\LEMMIQ
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+
+Expected:
+  versionCode=56
+  versionName="2.10.6"
+
+6. REVIEW GIT CHANGES
+---------------------
+cd /d C:\Users\pc\LEMMIQ
+git status
+git diff --stat
+
+7. COMMIT / PUSH
+----------------
+git add .
+git commit -m "LEMMIQ V2.10.6 Q Thread video calling Talk to Q and Q Economy UX"
+git push origin main
+
+8. RENDER DEPLOY
+----------------
+Wait for Render deployment to complete.
+
+The previous psycopg2 deployment failure should NOT return: V2.10.6 includes the corrected `postgresql+psycopg://` compatibility connection.
+
+Check the service log for a clean Uvicorn startup.
+
+Then open:
+  https://lemmiq-api.onrender.com/app-config
+
+Expected version:
+  2.10.6
+
+9. VERIFY WEB/PWA
+-----------------
+Open:
+  https://lemmiq-api.onrender.com/web/
+
+If the old UI appears, close all LEMMIQ tabs and reopen. If still stale, clear site data for lemmiq-api.onrender.com. The PWA cache has changed to:
+  lemmiq-v2106-shell-1
+
+Check:
+  - Q Thread appears in Chats when Q-to-Q activity exists;
+  - Q-to-Q statuses are readable;
+  - Talk to Q works where browser speech recognition is available;
+  - Packages stays on one line;
+  - Wallet Recent Activity has Today/Week/Month/Year/All;
+  - Activity has period + incoming/outgoing filters;
+  - video call button is visible in a direct chat;
+  - Q Predict still shows the real Q wallet, not the old test wallet.
+
+10. BUILD ANDROID LOCALLY
+-------------------------
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+Expected APK:
+  C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+If the build fails, send the FIRST Kotlin/Gradle error block, not only the final "BUILD FAILED" line.
+
+11. INSTALL
+-----------
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+If Android reports a signature mismatch, uninstalling the old package will erase local app data/session:
+  adb uninstall com.lemmiq.app
+  adb install app\build\outputs\apk\debug\app-debug.apk
+
+Profile should show:
+  LEMMIQ V2.10.6-debug
+
+12. VIDEO CALL TEST
+-------------------
+Test with two real accounts/devices where possible:
+  A. voice call still works;
+  B. outgoing video call;
+  C. incoming video call;
+  D. camera permission prompt;
+  E. local preview;
+  F. remote video;
+  G. camera off/on;
+  H. switch front/rear camera;
+  I. mute/unmute;
+  J. speaker/audio route;
+  K. decline before answer;
+  L. end after connection;
+  M. second call while busy is rejected;
+  N. call history says Video call;
+  O. background/locked-device incoming-call behavior.
+
+No new LiveKit project/dashboard change should be required if current voice calling is already working.
+
+13. Q THREAD TEST
+-----------------
+Account A:
+  create a Q-to-Q request for Account B.
+
+Account B should receive:
+  - Q Assistant phone notification;
+  - unread Q Thread row in Chats;
+  - readable request card with response options/custom response.
+
+Respond from B.
+
+Account A should receive:
+  - Q update notification;
+  - Q Thread update such as "B replied";
+  - no fake human chat message from B.
+
+14. TALK TO Q TEST
+------------------
+Android:
+  Q Personal Assistant > Talk
+  Speak a short request.
+  The recognised text should be sent to the normal Q pipeline.
+
+Web/PWA:
+  Use Talk to Q in a browser supporting SpeechRecognition.
+  Unsupported browsers should show an explanatory error rather than fail silently.
+
+15. Q ECONOMY TEST
+------------------
+Check:
+  - Packages remains one line;
+  - Wallet Recent Activity filters work;
+  - Activity Today/Week/Month/Year/All works;
+  - Incoming/Outgoing filters work;
+  - 0 Q feature usages display as 0 Q;
+  - Q Predict stake/payout/refund ledger entries remain correct.
+
+16. CUSTOM DOMAIN
+-----------------
+Do NOT change the production URL to api.lemmiq.com yet.
+The Android app is already configurable via LEMMIQ_API_BASE_URL / lemmiq.apiBaseUrl.
+Keep the Render URL until the custom domain has valid DNS + SSL and has been tested.

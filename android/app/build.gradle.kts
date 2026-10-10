@@ -50,8 +50,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=55
-        versionName="2.10.5"
+        versionCode=56
+        versionName="2.10.6"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }

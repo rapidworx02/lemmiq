@@ -1,0 +1,34 @@
+/* LEMMIQ V2.10.6 — stability + Q Thread + video calling + Q Economy UX */
+.q28-tabs{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;gap:8px!important;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.q28-tabs::-webkit-scrollbar{display:none}
+.q28-tabs>button{flex:0 0 auto!important;min-width:112px!important;white-space:nowrap!important;word-break:keep-all!important;padding-inline:16px!important}
+.q2106-period-filters,.q2104-activity-filters{display:flex;gap:7px;overflow-x:auto;padding:8px 0;scrollbar-width:none}
+.q2106-period-filters::-webkit-scrollbar,.q2104-activity-filters::-webkit-scrollbar{display:none}
+.q2106-period-filters button,.q2104-activity-filters button{flex:0 0 auto;border:1px solid var(--line);background:rgba(255,255,255,.04);color:inherit;border-radius:999px;padding:8px 13px}
+.q2106-period-filters button.active,.q2104-activity-filters button.active{background:rgba(108,76,255,.18);border-color:rgba(108,76,255,.55)}
+
+.q-thread-row .q-thread-avatar,.q-thread-avatar{background:linear-gradient(145deg,#6c4cff,#ff4b9c)!important;color:#fff!important;font-weight:900;display:grid!important;place-items:center!important}
+.q-thread-inner{min-height:0}
+.q-thread-list{padding:18px!important;display:flex!important;flex-direction:column!important;gap:12px!important;overflow-y:auto!important}
+.q-thread-card{align-self:flex-start;width:min(620px,92%);padding:14px 15px;border:1px solid var(--line);border-radius:20px;background:rgba(255,255,255,.055)}
+.q-thread-card.needs-response{border-color:rgba(108,76,255,.48);background:rgba(108,76,255,.08)}
+.q-thread-card-head{display:flex;justify-content:space-between;gap:12px;align-items:center}.q-thread-card-head strong{color:#8a72ff;font-size:11px}.q-thread-card-head span{font-size:10px;opacity:.7}
+.q-thread-card h4{margin:8px 0 4px}.q-thread-card p{margin:0 0 8px;line-height:1.45}.q-thread-card>small{display:block;margin-top:8px;opacity:.6}
+.q-thread-options{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}.q-thread-reply{display:flex;gap:7px}.q-thread-reply input{min-width:0;flex:1}
+.q-thread-foot{padding:10px 16px;border-top:1px solid var(--line);text-align:center}
+
+.q2106-today-toggle{margin-top:8px}.q2106-today-details{margin-top:10px;display:grid;gap:8px}.q2106-today-details.hidden{display:none}.q2106-today-row{padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.06);text-align:left}.q2106-today-row strong,.q2106-today-row small{display:block}.q2106-today-row small{opacity:.7;margin-top:3px}
+
+.call-video-stage{position:absolute;inset:0;background:#05060b;border-radius:inherit;overflow:hidden;z-index:0}.call-video-stage.hidden{display:none}.call-remote-video,.call-remote-video video{width:100%;height:100%;object-fit:cover}.call-local-video{position:absolute;right:14px;top:14px;width:118px;height:168px;border-radius:16px;overflow:hidden;background:#111;border:1px solid rgba(255,255,255,.18);box-shadow:0 10px 28px rgba(0,0,0,.35)}.call-local-video video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+#callCard{position:relative;overflow:hidden}#callCard>*:not(.call-video-stage){position:relative;z-index:1}.call-video-stage:not(.hidden)~#callAvatar{display:none!important}.call-video-stage:not(.hidden)~.eyebrow,.call-video-stage:not(.hidden)~h2,.call-video-stage:not(.hidden)~p,.call-video-stage:not(.hidden)~strong{color:#fff;text-shadow:0 1px 4px #000}.call-video-stage:not(.hidden)~.call-actions{background:rgba(0,0,0,.42);border-radius:22px;padding:10px}
+
+@media(max-width:680px){
+  .q28-tabs>button{min-width:104px!important;font-size:14px!important;padding-inline:13px!important}
+  .q-thread-list{padding:12px!important}.q-thread-card{width:96%}
+  #callCard{width:100vw!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important;border-radius:0!important;display:flex!important;flex-direction:column!important;justify-content:flex-end!important;padding:22px!important}
+  .call-video-stage{border-radius:0}.call-local-video{top:max(16px,env(safe-area-inset-top));right:12px;width:105px;height:150px}
+}
+.q2106-wallet-period{display:flex;gap:7px;overflow-x:auto;padding:8px 0 12px;scrollbar-width:none}.q2106-wallet-period::-webkit-scrollbar{display:none}.q2106-wallet-period button{flex:0 0 auto;border:1px solid var(--line);background:rgba(255,255,255,.04);color:inherit;border-radius:999px;padding:8px 13px}.q2106-wallet-period button.active{background:rgba(108,76,255,.18);border-color:rgba(108,76,255,.55)}
+
+/* Active chats use their own contextual Q controls; never cover the composer/send button. */
+.v29-q-orb.q2106-hide-orb{display:none!important}

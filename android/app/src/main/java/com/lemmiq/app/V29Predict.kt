@@ -44,10 +44,10 @@ private fun displayQuestion(m:PredictMarketDto):String{
 }
 
 private fun positionStakeText(p:PredictPositionDto):String =
-    if(p.stake_q>0) "${qFmt(p.stake_q)} Q" else if(p.stake_pc>0) "${qFmt(p.stake_pc)} legacy PC" else "0 Q"
+    if(p.stake_q>0) "${qFmt(p.stake_q)} Q" else if(p.stake_pc>0) "Legacy test stake" else "0 Q"
 
 private fun positionPayoutText(p:PredictPositionDto):String =
-    if(p.payout_q>0) "${qFmt(p.payout_q)} Q" else if(p.payout_pc>0) "${qFmt(p.payout_pc)} legacy PC" else ""
+    if(p.payout_q>0) "${qFmt(p.payout_q)} Q" else if(p.payout_pc>0) "Legacy test result" else ""
 
 @Composable
 fun V29PredictScreen(vm:LemmiqViewModel,onAskQ:(String)->Unit){
@@ -79,7 +79,7 @@ fun V29PredictScreen(vm:LemmiqViewModel,onAskQ:(String)->Unit){
         LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp,4.dp,12.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
             if(h?.real_q_enabled==false)item{
                 Surface(color=Color(0xFFFFF3D9),shape=RoundedCornerShape(14.dp)){
-                    Text("Q Predict is waiting for the server Q-wallet staking switch. Legacy Predict Credits are no longer used for new predictions.",Modifier.padding(11.dp),fontSize=10.sp,color=P29Muted)
+                    Text("Q Predict staking is currently paused by the server. Your main LEMMIQ Q wallet will be used when staking is enabled.",Modifier.padding(11.dp),fontSize=10.sp,color=P29Muted)
                 }
             } else if(!h?.notice.isNullOrBlank()) item{Surface(color=Color(0xFFEEE9FF),shape=RoundedCornerShape(14.dp)){Text(h?.notice.orEmpty(),Modifier.padding(11.dp),fontSize=10.sp,color=P29Muted)}}
             if((h?.live?:emptyList()).isEmpty())item{Card(shape=RoundedCornerShape(20.dp)){Column(Modifier.padding(20.dp)){Text("No live markets yet",fontWeight=FontWeight.Bold);Text("Q Predict Agent drafts markets for Admin approval.",color=P29Muted,fontSize=11.sp)}}}
@@ -132,7 +132,7 @@ private fun PredictDetail(vm:LemmiqViewModel,m:PredictMarketDto){
             if(m.status=="LIVE")item{
                 OutlinedTextField(amount,{amount=it.filter{ch->ch.isDigit()||ch=='.'}},label={Text("Q amount")},singleLine=true,modifier=Modifier.fillMaxWidth(),enabled=canStake)
                 Text("Available: ${qFmt(vm.qWallet?.balance_q?:0.0)} Q",fontSize=10.sp,color=P29Muted)
-                if(!canStake)Text("Q-wallet prediction staking is disabled on the server. New Predict Credit stakes are not allowed.",fontSize=10.sp,color=Color(0xFF9B6B10))
+                if(!canStake)Text("Q-wallet prediction staking is currently disabled on the server.",fontSize=10.sp,color=Color(0xFF9B6B10))
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                     Button(onClick={vm.stakePredict(m.id,"YES",amount.toDoubleOrNull()?:0.0)},enabled=canStake,modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=P29Yes)){Text("Predict YES")}
                     Button(onClick={vm.stakePredict(m.id,"NO",amount.toDoubleOrNull()?:0.0)},enabled=canStake,modifier=Modifier.weight(1f),colors=ButtonDefaults.buttonColors(containerColor=P29No)){Text("Predict NO")}

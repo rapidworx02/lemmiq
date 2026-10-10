@@ -72,9 +72,11 @@ class LemmiqPushService:FirebaseMessagingService(){
             val callId=d["call_id"].orEmpty()
             val caller=d["caller_name"]?.take(60)?.ifBlank{"LEMMIQ user"}?:"LEMMIQ user"
             val callerAvatar=d["caller_avatar_url"].orEmpty()
-            val intent=Intent(this,LemmiqCallActivity::class.java).apply{putExtra("call_id",callId);putExtra("person",caller);putExtra("avatar_url",callerAvatar);putExtra("incoming",true)}
+            val callType=d["call_type"]?.uppercase()?.takeIf{it=="VIDEO"}?:"VOICE"
+            val intent=Intent(this,LemmiqCallActivity::class.java).apply{putExtra("call_id",callId);putExtra("person",caller);putExtra("avatar_url",callerAvatar);putExtra("incoming",true);putExtra("call_type",callType)}
             val pending=PendingIntent.getActivity(this,callId.hashCode(),intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            nm.notify(callId.hashCode(),NotificationCompat.Builder(this,PushControl.CH_CALLS).setSmallIcon(R.drawable.lemmiq_icon).setContentTitle("📞 Incoming LEMMIQ call").setContentText(caller).setContentIntent(pending).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_MAX).setCategory(NotificationCompat.CATEGORY_CALL).setFullScreenIntent(pending,true).build())
+            val title=if(callType=="VIDEO")"🎥 Incoming LEMMIQ video call" else "📞 Incoming LEMMIQ voice call"
+            nm.notify(callId.hashCode(),NotificationCompat.Builder(this,PushControl.CH_CALLS).setSmallIcon(R.drawable.lemmiq_icon).setContentTitle(title).setContentText(caller).setContentIntent(pending).setAutoCancel(true).setPriority(NotificationCompat.PRIORITY_MAX).setCategory(NotificationCompat.CATEGORY_CALL).setFullScreenIntent(pending,true).build())
             return
         }
 

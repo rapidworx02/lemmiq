@@ -209,6 +209,7 @@ class CallRecord(Base):
     callee_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     room_name: Mapped[str] = mapped_column(String(100), unique=True)
     status: Mapped[str] = mapped_column(String(20), default="RINGING")
+    call_type: Mapped[str] = mapped_column(String(12), default="VOICE")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -259,6 +260,17 @@ class SocialMemory(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+class QThreadState(Base):
+    """Per-user read cursor for the synthetic Q assistant thread.
+
+    Q thread content is derived from Q actions (starting with Q-to-Q) so we do
+    not duplicate private message text into another server table.
+    """
+    __tablename__ = "q_thread_states"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 class QCoordinationRequest(Base):
     """Privacy-preserving Q-to-Q coordination request.

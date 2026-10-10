@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/v210", tags=["LEMMIQ v2.10"])
 
-VERSION = "2.10.0"
+VERSION = "2.10.6"
 
 
 class MarketAnalyseRequest(BaseModel):
@@ -170,7 +170,7 @@ async def _anthropic_analyse(prompt: str) -> str:
         "temperature": 0.2,
         "system": (
             "You are LEMMIQ Q, the in-app assistant. Be factual, compact, neutral and transparent. "
-            "Q Predict uses isolated test Predict Credits. Q analysis never settles a market and never guarantees an outcome."
+            "Q Predict uses the user's LEMMIQ Q wallet when staking is enabled. Q analysis never settles a market and never guarantees an outcome."
         ),
         "messages": [{"role": "user", "content": prompt}],
     }

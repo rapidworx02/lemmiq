@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session
 
 from . import media_store
 from .chat_agent import daily_brief
-from .models import QCoordinationRequest, SocialMemory, User, VisionMemory
+from .models import QCoordinationRequest, SocialMemory, User, VisionMemory, PushDevice
+from . import push_service
 
 MAX_VISION_BYTES = 15 * 1024 * 1024
 VISION_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
@@ -184,6 +185,22 @@ def _coord_json(db: Session, row: QCoordinationRequest, viewer_id: int):
         "mine": row.initiator_id == viewer_id,
     }
 
+def _q_push_tokens(db: Session, uid: int):
+    return [x.token for x in db.scalars(select(PushDevice).where(PushDevice.user_id == uid)).all()]
+
+async def _q_phone_notice(db: Session, uid: int, body: str, request_id: int | None = None):
+    payload={
+        "type":"q_to_q",
+        "title":"Q · LEMMIQ Assistant",
+        "body":body[:260],
+        "deep_link":"q-thread",
+    }
+    if request_id is not None:payload["request_id"]=str(request_id)
+    try:
+        push_service.notify_data(_q_push_tokens(db,uid),payload)
+    except Exception:
+        logger.exception("Could not send Q-to-Q phone notification")
+
 def register_v27(app, current_user, get_db, push):
     router = APIRouter()
     dep_db = get_db
@@ -218,7 +235,7 @@ def register_v27(app, current_user, get_db, push):
                 "summary": brief.get("summary", ""),
                 "unread_total": brief.get("unread_total", 0),
                 "needs_reply_count": brief.get("needs_reply_count", 0),
-                "needs_reply": brief.get("needs_reply", [])[:3],
+                "needs_reply": brief.get("needs_reply", [])[:20],
                 "follow_ups": sum(1 for x in memories if x.memory_type in {"FOLLOW_UP","DEADLINE"} and not x.resolved),
                 "promises": sum(1 for x in memories if x.memory_type == "PROMISE" and not x.resolved),
             },
@@ -381,6 +398,7 @@ def register_v27(app, current_user, get_db, push):
                 "kind":row.kind,"from_user":{"id":u.id,"username":u.username,"display_name":u.display_name},
                 "prompt":row.prompt,
             })
+            await _q_phone_notice(db,row.target_user_id,f"{u.display_name}'s Q wants to coordinate: {row.prompt}",row.id)
         return {"request_key":key,"requests":[_coord_json(db,x,u.id) for x in rows]}
 
     @router.get("/v27/q/coordination")
@@ -417,6 +435,7 @@ def register_v27(app, current_user, get_db, push):
             "from_user":{"id":u.id,"username":u.username,"display_name":u.display_name},
             "response":json.loads(row.response_json),
         })
+        await _q_phone_notice(db,row.initiator_id,f"{u.display_name} responded to your Q-to-Q request.",row.id)
         return _coord_json(db,row,u.id)
 
     @router.delete("/v27/q/coordination/{request_key}")

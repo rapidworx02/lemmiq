@@ -68,6 +68,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var qDoAnswer by mutableStateOf<QDoResponseDto?>(null)
     var qDailyBrief by mutableStateOf<QDailyBriefDto?>(null)
     var qCoordination by mutableStateOf(QCoordinationListDto())
+    var qThread by mutableStateOf(QThreadDto())
     var qHome by mutableStateOf<QHomeDto?>(null)
     var qWallet by mutableStateOf<QWalletDto?>(null)
     var qLedger by mutableStateOf<List<QLedgerDto>>(emptyList())
@@ -168,7 +169,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -596,6 +597,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             qDailyBrief=runCatching{api.qDailyBrief()}.getOrNull()
             qHome=runCatching{api.qHome()}.getOrNull()
             qCoordination=runCatching{api.qCoordinationV27()}.getOrDefault(QCoordinationListDto())
+            qThread=runCatching{api.qThreadV2106()}.getOrDefault(QThreadDto())
             visionHistory=runCatching{api.visionList()}.getOrDefault(emptyList())
             if(!autoSocialScanned){
                 autoSocialScanned=true
@@ -637,6 +639,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         try{
             api.respondQCoordinationV27(id,choice,note)
             qCoordination=api.qCoordinationV27()
+            qThread=runCatching{api.qThreadV2106()}.getOrDefault(qThread)
             qHome=runCatching{api.qHome()}.getOrNull()
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
@@ -769,7 +772,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         predictAnalysisBusy=true;predictAnalysisMarketId=m.id;error=null
         try{
             val mine=m.my_positions.joinToString("; "){
-                val stakeText=if(it.stake_q>0)"${it.stake_q} Q" else if(it.stake_pc>0)"${it.stake_pc} legacy PC" else "0 Q"
+                val stakeText=if(it.stake_q>0)"${it.stake_q} Q" else if(it.stake_pc>0)"Legacy test position" else "0 Q"
                 "${it.outcome} $stakeText (${it.status})"
             }.ifBlank{"No position"}
             val pool=m.pool_q
@@ -804,7 +807,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     fun cancelQCoordination(requestKey:String)=viewModelScope.launch{
         agentBusy=true;error=null
-        try{api.cancelQCoordination(requestKey);qCoordination=api.qCoordinationV27();qHome=api.qHome()}
+        try{api.cancelQCoordination(requestKey);qCoordination=api.qCoordinationV27();qThread=runCatching{api.qThreadV2106()}.getOrDefault(qThread);qHome=api.qHome()}
         catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
@@ -994,12 +997,23 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     // ---------------- Calls ----------------
     fun refreshCalls()=viewModelScope.launch{runCatching{callStatus=api.callStatus();callHistory=api.callHistory()}.onFailure{error=it.message}}
-    fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
+    fun startVoiceCall(cid:Int,onReady:(CallJoinDto)->Unit)=startCall(cid,"VOICE",onReady)
+    fun startVideoCall(cid:Int,onReady:(CallJoinDto)->Unit)=startCall(cid,"VIDEO",onReady)
+    private fun startCall(cid:Int,type:String,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
         if(callStarting){error="A call is already starting";return@launch}
         callStarting=true;busy=true;error=null
-        try{onReady(api.startCall(cid))}
+        try{onReady(api.startCall(cid,type))}
         catch(e:Exception){error=e.message}
         finally{busy=false;callStarting=false}
+    }
+
+    fun refreshQThread(markRead:Boolean=false)=viewModelScope.launch{
+        runCatching{
+            if(markRead)api.markQThreadReadV2106()
+            qThread=api.qThreadV2106()
+            qCoordination=api.qCoordinationV27()
+            qHome=api.qHome()
+        }.onFailure{error=it.message}
     }
 
     fun refreshBusiness()=viewModelScope.launch{
@@ -1121,6 +1135,13 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                     viewModelScope.launch{
                         if(activeGroup?.id==gid && groupMessages.none{it.id==m.id})groupMessages=groupMessages+m
                         refreshGroups()
+                    }
+                }
+                if(map["type"]?.toString() in setOf("q_coordination_request","q_coordination_response","q_coordination_closed")){
+                    viewModelScope.launch{
+                        qThread=runCatching{api.qThreadV2106()}.getOrDefault(qThread)
+                        qCoordination=runCatching{api.qCoordinationV27()}.getOrDefault(qCoordination)
+                        qHome=runCatching{api.qHome()}.getOrDefault(qHome)
                     }
                 }
             }

@@ -17,6 +17,7 @@ const state = {
   socialBrief: null,
   qHome: null,
   qCoordination: {inbox:[],outbox:[]},
+  qThread: {unread_count:0,items:[]},
   vision: [],
   visionBlobUrl: null,
   replyTo: null,
@@ -32,9 +33,13 @@ const state = {
   callTimerHandle: null,
   callTimeoutHandle: null,
   callSeconds: 0,
+  callType: "VOICE",
+  cameraFacing: "user",
   ringAudio: null,
   appConfig:{android_download_url:"",android_play_url:"",android_install_url:"/download/android",android_download_configured:false,web_install_enabled:true}
 };
+
+window.lemmiqState=state;
 
 const $ = id => document.getElementById(id);
 const qsa = s => [...document.querySelectorAll(s)];
@@ -110,7 +115,9 @@ function showApp(){
 }
 function chatsHome(pushHistory=false){
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
+  $("globalQOrb")?.classList.remove("q2106-hide-orb");
   const layout=document.querySelector(".chat-layout");if(layout)layout.classList.remove("open-chat");
+  if($("activeQThread"))$("activeQThread").classList.add("hidden");
   if($("activeChat"))$("activeChat").classList.add("hidden");
   if($("activeGroup"))$("activeGroup").classList.add("hidden");
   if($("emptyChat"))$("emptyChat").classList.remove("hidden");
@@ -123,6 +130,7 @@ function chatsHome(pushHistory=false){
 
 function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
+  if(name!=="chats")$("globalQOrb")?.classList.remove("q2106-hide-orb");
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
   const secondary=["trust","business","activity","money","me","q-admin"];
@@ -132,7 +140,7 @@ function setView(name){
     chats:["Chats","Search conversations or ask Q."],
     updates:["Updates","LEMMIQ Status — text, photo and video for 24 hours."],
     agent:["Q","Ask across chats, groups, voice-note transcripts and Social IQ memory."],
-    calls:["Calls","Missed, no-answer and completed LEMMIQ voice calls."],
+    calls:["Calls","Voice and video call history."],
     more:["More","Account and utilities."],
     trust:["LEMMIQ Trust","Fact / Scam Check with saved history."],
     business:["Business Agent","Teach LEMMIQ how your business operates."],
@@ -190,6 +198,10 @@ function connectSocket(){
       }else if(p.type==="group_message"){
         await loadChats();
         if(state.activeGroup&&p.group_id===state.activeGroup.id)await openGroup(state.activeGroup.id,false);
+      }else if(["q_coordination_request","q_coordination_response","q_coordination_closed"].includes(p.type)){
+        await loadQThread();
+        if(!$("activeQThread")?.classList.contains("hidden"))renderQThread();
+        await loadAgentV24().catch(()=>{});
       }else if(p.type==="incoming_call"){
         showIncomingCall(p);
       }else if(p.type==="call_answered"&&state.callId===p.call_id){
@@ -205,9 +217,13 @@ function connectSocket(){
   window.__wsPing=setInterval(()=>{if(ws.readyState===1)ws.send("ping")},20000);
 }
 
+async function loadQThread(){
+  state.qThread=await api("/v2106/q/thread").catch(()=>({unread_count:0,items:[]}));
+  return state.qThread;
+}
 async function loadChats(){
-  const [chats,groups]=await Promise.all([api("/chats"),api("/v24/groups")]);
-  state.chats=chats;state.groups=groups;renderChats();
+  const [chats,groups,qThread]=await Promise.all([api("/chats"),api("/v24/groups"),loadQThread()]);
+  state.chats=chats;state.groups=groups;state.qThread=qThread||state.qThread;renderChats();
 }
 function renderChats(){
   const query=($("chatFilter")?.value||"").toLowerCase().trim();
@@ -222,7 +238,11 @@ function renderChats(){
   if(state.chatFilterMode==="GROUPS")rows=rows.filter(r=>r.kind==="group");
   rows.sort((a,b)=>(Number(b.pinned)-Number(a.pinned))||(new Date(b.updated)-new Date(a.updated)));
   const el=$("conversationList");if(!el)return;
-  el.innerHTML=rows.length?rows.map(r=>{
+  const qp=(state.qThread?.items||[])[0];
+  const qHay=`q lemmiq assistant ${qp?.title||""} ${qp?.body||""}`.toLowerCase();
+  const qVisible=state.chatFilterMode!=="GROUPS" && (state.chatFilterMode!=="UNREAD" || Number(state.qThread?.unread_count||0)>0) && qHay.includes(query);
+  const qRow=qVisible?`<button class="chat-row q-thread-row" onclick="openQThread()"><span class="avatar q-thread-avatar">Q</span><span class="body"><strong>Q · LEMMIQ Assistant</strong><small>${escapeHtml(qp?.body||"Q requests, results and coordination updates")}</small></span>${state.qThread?.unread_count?`<span class="badge">${state.qThread.unread_count}</span>`:""}</button>`:"";
+  const normalRows=rows.length?rows.map(r=>{
     if(r.kind==="group"){
       const g=r.data;
       const av=g.photo_url?`<span class="avatar"><img src="${escapeHtml(g.photo_url)}" alt=""></span>`:`<span class="avatar">${escapeHtml(initials(g.name))}</span>`;
@@ -234,17 +254,51 @@ function renderChats(){
     return `<button class="chat-row ${state.activeChat?.id===c.id?"active":""}" onclick="openChat(${c.id})">${avatarHtml(c.other_user)}
       <span class="body"><strong>${c.pinned?"📌 ":""}${c.favourite?"⭐ ":""}${escapeHtml(c.other_user.display_name)}</strong><small>${escapeHtml(draft)}</small></span>
       ${c.unread?`<span class="badge">${c.unread}</span>`:""}</button>`;
-  }).join(""):`<div class="empty-state"><p>No matching conversations.</p></div>`;
+  }).join(""):``;
+  el.innerHTML=qRow+normalRows || `<div class="empty-state"><p>No matching conversations.</p></div>`;
+}
+async function openQThread(){
+  state.activeChat=null;state.activeGroup=null;state.replyTo=null;
+  $("globalQOrb")?.classList.add("q2106-hide-orb");
+  await loadQThread();
+  $("emptyChat").classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeQThread").classList.remove("hidden");
+  document.querySelector(".chat-layout")?.classList.add("open-chat");
+  renderQThread();
+  await api("/v2106/q/thread/read",{method:"POST"}).catch(()=>{});
+  state.qThread.unread_count=0;renderChats();
+  if(location.hash!=="#q-thread")history.pushState({view:"chats",qThread:true},"","#q-thread");
+}
+function renderQThread(){
+  const host=$("qThreadList");if(!host)return;
+  const rows=state.qThread?.items||[];
+  host.innerHTML=rows.length?rows.map(item=>{
+    const options=(item.options||[]).slice(0,4);
+    const status=item.can_respond?"Needs your response":item.mine&&item.status==="PENDING"?`Waiting for ${escapeHtml(item.other_user?.display_name||"contact")}`:item.status==="RESPONDED"?(item.mine?"Response received":"You responded"):item.status==="CLOSED"?"Closed":item.status;
+    return `<div class="q-thread-card ${item.can_respond?"needs-response":""}"><div class="q-thread-card-head"><strong>Q ↔ Q</strong><span>${escapeHtml(status)}</span></div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p>${item.can_respond?`<div class="q-thread-options">${options.map(o=>`<button class="ghost" data-qthread-choice="${item.request_id}" data-choice="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div><div class="q-thread-reply"><input data-qthread-input="${item.request_id}" placeholder="Reply to Q…"><button class="primary" data-qthread-send="${item.request_id}">Send</button></div>`:""}${item.can_cancel?`<button class="mini" data-qthread-cancel="${escapeHtml(item.request_key||"")}">Cancel request</button>`:""}<small>${escapeHtml(String(item.created_at||"").replace("T"," ").slice(0,19))}</small></div>`;
+  }).join(""):`<div class="empty-state"><h3>Q</h3><p>No Q updates yet.</p></div>`;
+  host.querySelectorAll("[data-qthread-choice]").forEach(b=>b.onclick=()=>respondQThread(Number(b.dataset.qthreadChoice),b.dataset.choice||""));
+  host.querySelectorAll("[data-qthread-send]").forEach(b=>b.onclick=()=>{const id=Number(b.dataset.qthreadSend),inp=host.querySelector(`[data-qthread-input="${id}"]`);const val=(inp?.value||"").trim();if(val)respondQThread(id,val)});
+  host.querySelectorAll("[data-qthread-cancel]").forEach(b=>b.onclick=()=>cancelQThread(b.dataset.qthreadCancel||""));
+  setTimeout(()=>host.scrollTop=host.scrollHeight,20);
+}
+async function respondQThread(id,choice){
+  try{await api(`/v27/q/coordination/${id}/respond`,{method:"POST",body:JSON.stringify({choice,note:""})});await loadQThread();renderQThread();renderChats();toast("Response sent to Q")}
+  catch(e){toast(e.message,true)}
+}
+async function cancelQThread(key){
+  if(!key)return;try{await api(`/v27/q/coordination/${encodeURIComponent(key)}`,{method:"DELETE"});await loadQThread();renderQThread();renderChats();toast("Q-to-Q request cancelled")}
+  catch(e){toast(e.message,true)}
 }
 async function openChat(cid,mark=true){
   let chat=state.chats.find(x=>x.id===cid);
   if(!chat){await loadChats();chat=state.chats.find(x=>x.id===cid)}
   if(!chat)return;
   state.activeGroup=null;state.activeChat=chat;state.replyTo=null;
+  $("globalQOrb")?.classList.add("q2106-hide-orb");
   const [messages,calls]=await Promise.all([api(`/chats/${cid}/messages`),api(`/v24/chats/${cid}/calls`).catch(()=>[])]);
   state.messages=messages;state.chatCalls=calls;
   if(mark)api(`/chats/${cid}/read`,{method:"POST"}).catch(()=>{});
-  $("emptyChat").classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
+  $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
   $("chatName").textContent=chat.other_user.display_name;
   $("chatMeta").textContent=`@${chat.other_user.username} · ${chat.category} · AI ${chat.ai_mode}`;
   $("chatAvatar").innerHTML=chat.other_user.avatar_url?`<img src="${escapeHtml(chat.other_user.avatar_url)}" alt="">`:escapeHtml(initials(chat.other_user.display_name));
@@ -266,7 +320,8 @@ function renderMessages(){
     if(day!==lastDay){html+=`<div class="date-separator"><span>${escapeHtml(day)}</span></div>`;lastDay=day}
     if(item.type==="call"){
       const c=item.c;
-      const label=c.status==="MISSED"?"Missed voice call":c.status==="DECLINED"?"Voice call · declined":c.status==="RINGING"?"Voice call · no answer":"Voice call";
+      const kind=String(c.call_type||"VOICE").toUpperCase()==="VIDEO"?"video call":"voice call";
+      const label=c.status==="MISSED"?`Missed ${kind}`:c.status==="DECLINED"?`${kind[0].toUpperCase()+kind.slice(1)} · declined`:c.status==="RINGING"?`${kind[0].toUpperCase()+kind.slice(1)} · no answer`:(kind[0].toUpperCase()+kind.slice(1));
       const detail=c.duration_seconds?`${formatDuration(c.duration_seconds)} · ${timeOnly(c.started_at)}`:timeOnly(c.started_at);
       html+=`<div class="msg call-event"><strong>📞 ${label}</strong><div class="micro">${detail}</div></div>`;
       continue;
@@ -737,8 +792,9 @@ async function showNewGroup(){
 }
 async function openGroup(gid,pushHistory=true){
   state.activeChat=null;state.replyTo=null;
+  $("globalQOrb")?.classList.add("q2106-hide-orb");
   const g=await api(`/v24/groups/${gid}`);state.activeGroup=g;state.groupMessages=await api(`/v24/groups/${gid}/messages`);await api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
-  $("emptyChat").classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
+  $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
   $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");renderGroupMessages();renderChats();
@@ -826,24 +882,23 @@ function cleanupRemoteAudio(){
     el.remove();
   });
   host.innerHTML="";
+  clearVideoHost("remoteVideo");clearVideoHost("localVideo");
 }
 function startCallTimer(){
   clearInterval(state.callTimerHandle);state.callSeconds=0;$("callTimer").textContent="00:00";
   state.callTimerHandle=setInterval(()=>{$("callTimer").textContent=formatDuration(++state.callSeconds)},1000);
 }
-async function beginVoiceCall(chatId,person){
+async function beginCall(chatId,person,callType="VOICE"){
   if(state.callPhase!=="idle"){
     toast("You already have a call in progress.",true);return;
   }
-  state.callPhase="starting";
+  state.callPhase="starting";state.callType=String(callType||"VOICE").toUpperCase();state.cameraFacing="user";
   try{
-    const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:chatId})});
-    state.callPhase="ringing";$("callState").textContent="Ringing…";$("callTimer").textContent="";
-    $("callOverlay").classList.remove("hidden");
-    const user=person||state.activeChat?.other_user||{};
-    $("callAvatar").innerHTML=user.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user.display_name||"LEMMIQ"));
+    const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:chatId,call_type:state.callType})});
+    state.callType=String(join.call?.call_type||state.callType).toUpperCase();
+    state.callPhase="ringing";prepareCallUi(person||state.activeChat?.other_user||{},"Ringing…");
     startTone("outgoing");
-    await connectCallRoom(join,user.display_name||"LEMMIQ user",false);
+    await connectCallRoom(join,(person||state.activeChat?.other_user||{}).display_name||"LEMMIQ user",false);
     clearTimeout(state.callTimeoutHandle);
     state.callTimeoutHandle=setTimeout(()=>{
       if(state.callPhase==="ringing"){
@@ -853,59 +908,96 @@ async function beginVoiceCall(chatId,person){
     },45000);
   }catch(e){
     state.callPhase="idle";state.callId=null;cleanupRemoteAudio();stopRing();
+    $("callOverlay")?.classList.add("hidden");
     toast(e.message||"Could not start call",true);
   }
 }
-async function startVoiceCall(){
-  if(!state.activeChat)return;
-  await beginVoiceCall(state.activeChat.id,state.activeChat.other_user);
+async function beginVoiceCall(chatId,person){return beginCall(chatId,person,"VOICE")}
+async function beginVideoCall(chatId,person){return beginCall(chatId,person,"VIDEO")}
+async function startVoiceCall(){if(state.activeChat)await beginVoiceCall(state.activeChat.id,state.activeChat.other_user)}
+async function startVideoCall(){if(state.activeChat)await beginVideoCall(state.activeChat.id,state.activeChat.other_user)}
+function prepareCallUi(user,stateText="Ringing…"){
+  const video=state.callType==="VIDEO";
+  $("callState").textContent=stateText;$("callTimer").textContent="";
+  $("callOverlay").classList.remove("hidden");
+  $("callPerson").textContent=user?.display_name||"LEMMIQ user";
+  $("callAvatar").innerHTML=user?.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user?.display_name||"LEMMIQ"));
+  $("callEyebrow").textContent=video?"LEMMIQ VIDEO":"LEMMIQ VOICE";
+  $("callFoot").textContent=`${video?"Video":"Voice"} call · LiveKit/WebRTC`;
+  $("callVideoStage").classList.toggle("hidden",!video);
+  $("callAvatar").classList.toggle("hidden",video);
+  $("cameraCallBtn").classList.toggle("hidden",!video);
+  $("flipCameraBtn").classList.toggle("hidden",!video);
 }
 async function loadCalls(){
   const rows=await api("/v24/calls");
   state.callHistory=rows;
   const el=$("callsList");if(!el)return;
   el.innerHTML=rows.length?rows.map(c=>{
-    const status=(c.status||"").toUpperCase();
+    const status=(c.status||"").toUpperCase(),video=String(c.call_type||"VOICE").toUpperCase()==="VIDEO";
     const cls=status==="MISSED"?"missed":status==="RINGING"?"noanswer":"completed";
-    const label=status==="MISSED"?"Missed voice call":status==="RINGING"?"No answer":status==="DECLINED"?"Declined voice call":"Voice call";
+    const kind=video?"video call":"voice call";
+    const label=status==="MISSED"?`Missed ${kind}`:status==="RINGING"?`No answer · ${kind}`:status==="DECLINED"?`Declined ${kind}`:(kind[0].toUpperCase()+kind.slice(1));
     const detail=c.duration_seconds?`${formatDuration(c.duration_seconds)} · ${new Date(c.started_at).toLocaleString()}`:new Date(c.started_at).toLocaleString();
     return `<div class="call-history-row">${avatarHtml(c.other_user)}
       <div class="body"><strong>${escapeHtml(c.other_user?.display_name||"LEMMIQ user")}</strong><small class="call-status ${cls}">${escapeHtml(label)} · ${escapeHtml(detail)}</small></div>
-      <button class="ghost" data-callback="${c.chat_id}">📞 Call back</button></div>`;
+      <button class="ghost" data-callback="${c.chat_id}" data-call-type="${video?"VIDEO":"VOICE"}">${video?"🎥":"📞"} Call back</button></div>`;
   }).join(""):`<p class="micro">No LEMMIQ calls yet.</p>`;
   qsa("[data-callback]").forEach(b=>b.onclick=()=>{
     const c=rows.find(x=>x.chat_id===Number(b.dataset.callback));
-    if(c)beginVoiceCall(c.chat_id,c.other_user);
+    if(c)beginCall(c.chat_id,c.other_user,b.dataset.callType||c.call_type||"VOICE");
   });
 }
-
+function clearVideoHost(id){
+  const host=$(id);if(!host)return;
+  [...host.querySelectorAll("video")].forEach(el=>{try{el.pause()}catch{};try{el.srcObject=null}catch{};el.remove()});host.innerHTML="";
+}
+function attachVideoTrack(track,hostId,muted=false){
+  const host=$(hostId);if(!host||!track)return;
+  clearVideoHost(hostId);
+  const el=track.attach();el.autoplay=true;el.playsInline=true;el.muted=muted;host.appendChild(el);
+}
+async function syncLocalVideoPreview(){
+  if(state.callType!=="VIDEO"||!state.callRoom)return;
+  const {Track}=LivekitClient;
+  const pub=state.callRoom.localParticipant.getTrackPublication(Track.Source.Camera);
+  const track=pub?.videoTrack||pub?.track;
+  if(track)attachVideoTrack(track,"localVideo",true);else clearVideoHost("localVideo");
+  $("cameraCallBtn").textContent=state.callRoom.localParticipant.isCameraEnabled?"📷":"🚫";
+}
 async function connectCallRoom(join,person,incoming){
   if(!window.LivekitClient)throw new Error("LiveKit client unavailable");
   if(state.callRoom){
+    try{await state.callRoom.localParticipant?.setCameraEnabled(false)}catch{}
     try{await state.callRoom.localParticipant?.setMicrophoneEnabled(false)}catch{}
     try{state.callRoom.disconnect()}catch{}
     cleanupRemoteAudio();
   }
+  state.callType=String(join.call?.call_type||state.callType||"VOICE").toUpperCase();
   const {Room,RoomEvent,Track}=LivekitClient,room=new Room();
   state.callRoom=room;state.callId=join.call.id;$("callPerson").textContent=person;
   room.on(RoomEvent.ParticipantConnected,()=>onRemoteAnswered());
-  room.on(RoomEvent.TrackSubscribed,t=>{
-    if(t.kind===Track.Kind.Audio){
-      const el=t.attach();el.autoplay=true;el.dataset.callId=state.callId||"";
-      $("remoteAudio").appendChild(el);
-    }
+  room.on(RoomEvent.TrackSubscribed,track=>{
+    if(track.kind===Track.Kind.Audio){
+      const el=track.attach();el.autoplay=true;el.dataset.callId=state.callId||"";$("remoteAudio").appendChild(el);
+    }else if(track.kind===Track.Kind.Video){attachVideoTrack(track,"remoteVideo",false);onRemoteAnswered()}
   });
-  if(RoomEvent.TrackUnsubscribed)room.on(RoomEvent.TrackUnsubscribed,t=>{try{t.detach().forEach?.(x=>x.remove())}catch{}});
+  if(RoomEvent.TrackUnsubscribed)room.on(RoomEvent.TrackUnsubscribed,track=>{try{track.detach().forEach?.(x=>x.remove())}catch{}});
   room.on(RoomEvent.Disconnected,()=>{
     if(state.callRoom!==room)return;
     if(state.callPhase==="connected"||state.callPhase==="connecting"){
-      $("callState").textContent="Call ended";
-      setTimeout(()=>endVoiceCall(false),300);
+      $("callState").textContent="Call ended";setTimeout(()=>endVoiceCall(false),300);
     }
   });
   await room.connect(join.ws_url,join.token);
   if(state.callRoom!==room){try{room.disconnect()}catch{};return}
   await room.localParticipant.setMicrophoneEnabled(true);
+  if(state.callType==="VIDEO"){
+    try{await room.localParticipant.setCameraEnabled(true);await syncLocalVideoPreview()}
+    catch(e){toast("Camera unavailable. Continuing with camera off.",true)}
+    const remote=[...(room.remoteParticipants?.values?.()||[])][0];
+    const pub=remote?.getTrackPublication?.(Track.Source.Camera);const vt=pub?.videoTrack||pub?.track;if(vt)attachVideoTrack(vt,"remoteVideo",false);
+  }
   if(incoming||room.remoteParticipants?.size>0)onRemoteAnswered();
 }
 function onRemoteAnswered(){
@@ -915,16 +1007,14 @@ function onRemoteAnswered(){
 }
 function showIncomingCall(p){
   if(state.callPhase!=="idle"){
-    api(`/v24/calls/${p.call_id}/decline`,{method:"POST"}).catch(()=>{});
-    toast("Incoming call declined because you are already in a call.");
-    return;
+    api(`/v24/calls/${p.call_id}/decline`,{method:"POST"}).catch(()=>{});toast("Incoming call declined because you are already in a call.");return;
   }
-  state.callPhase="incoming";state.callId=p.call_id;
-  openModal(`<h3>📞 Incoming LEMMIQ call</h3><p><strong>${escapeHtml(p.caller_name||"LEMMIQ user")}</strong> is calling.</p><div class="suggestion-actions"><button id="incDecline" class="danger">Decline</button><button id="incAnswer" class="primary">Answer</button></div>`);
+  state.callPhase="incoming";state.callId=p.call_id;state.callType=String(p.call_type||"VOICE").toUpperCase();
+  const video=state.callType==="VIDEO";
+  openModal(`<h3>${video?"🎥":"📞"} Incoming LEMMIQ ${video?"video":"voice"} call</h3><p><strong>${escapeHtml(p.caller_name||"LEMMIQ user")}</strong> is calling.</p><div class="suggestion-actions"><button id="incDecline" class="danger">Decline</button><button id="incAnswer" class="primary">${video?"Answer video":"Answer"}</button></div>`);
   startTone("incoming");
   $("incDecline").onclick=async()=>{
-    const id=p.call_id;
-    stopRing();state.callPhase="ending";
+    const id=p.call_id;stopRing();state.callPhase="ending";
     try{await api(`/v24/calls/${id}/decline`,{method:"POST"})}catch(e){toast(e.message,true)}
     finally{state.callId=null;state.callPhase="idle";closeModal();cleanupRemoteAudio()}
   };
@@ -932,37 +1022,42 @@ function showIncomingCall(p){
     stopRing();
     try{
       const join=await api(`/v24/calls/${p.call_id}/join`,{method:"POST"});
-      closeModal();state.callPhase="connecting";
-      $("callOverlay").classList.remove("hidden");
-      $("callPerson").textContent=p.caller_name||"LEMMIQ user";
-      $("callAvatar").innerHTML=p.caller_avatar_url?`<img src="${escapeHtml(p.caller_avatar_url)}">`:escapeHtml(initials(p.caller_name||"LEMMIQ user"));
+      closeModal();state.callPhase="connecting";prepareCallUi({display_name:p.caller_name||"LEMMIQ user",avatar_url:p.caller_avatar_url},"Connecting…");
       await connectCallRoom(join,p.caller_name||"LEMMIQ user",true);
-    }catch(e){
-      state.callId=null;state.callPhase="idle";closeModal();toast(e.message,true);
-    }
+    }catch(e){state.callId=null;state.callPhase="idle";closeModal();$("callOverlay")?.classList.add("hidden");toast(e.message,true)}
   };
 }
 async function endVoiceCall(notify=true){
   if(state.callPhase==="idle")return;
-  const id=state.callId,room=state.callRoom;
-  state.callPhase="ending";
-  stopRing();clearInterval(state.callTimerHandle);clearTimeout(state.callTimeoutHandle);
-  state.callTimerHandle=null;state.callTimeoutHandle=null;
+  const id=state.callId,room=state.callRoom;state.callPhase="ending";
+  stopRing();clearInterval(state.callTimerHandle);clearTimeout(state.callTimeoutHandle);state.callTimerHandle=null;state.callTimeoutHandle=null;
+  try{await room?.localParticipant?.setCameraEnabled(false)}catch{}
   try{await room?.localParticipant?.setMicrophoneEnabled(false)}catch{}
-  try{room?.removeAllListeners?.()}catch{}
-  try{room?.disconnect()}catch{}
-  cleanupRemoteAudio();
-  state.callRoom=null;
+  try{room?.removeAllListeners?.()}catch{};try{room?.disconnect()}catch{}
+  cleanupRemoteAudio();state.callRoom=null;
   if(notify&&id)try{await api(`/v24/calls/${id}/end`,{method:"POST"})}catch{}
-  state.callId=null;state.callPhase="idle";state.callSeconds=0;
+  state.callId=null;state.callPhase="idle";state.callSeconds=0;state.callType="VOICE";
   $("callOverlay").classList.add("hidden");
   if(state.activeChat)openChat(state.activeChat.id,false).catch(()=>{});
 }
 async function toggleCallMute(){
   if(!state.callRoom)return;
   const enabled=state.callRoom.localParticipant.isMicrophoneEnabled;
-  await state.callRoom.localParticipant.setMicrophoneEnabled(!enabled);
-  $("muteCallBtn").textContent=enabled?"🔇":"🎙";
+  await state.callRoom.localParticipant.setMicrophoneEnabled(!enabled);$("muteCallBtn").textContent=enabled?"🔇":"🎙";
+}
+async function toggleCallCamera(){
+  if(!state.callRoom||state.callType!=="VIDEO")return;
+  try{await state.callRoom.localParticipant.setCameraEnabled(!state.callRoom.localParticipant.isCameraEnabled);await syncLocalVideoPreview()}
+  catch(e){toast(e.message||"Could not change camera",true)}
+}
+async function flipCallCamera(){
+  if(!state.callRoom||state.callType!=="VIDEO")return;
+  try{
+    const {Track}=LivekitClient,pub=state.callRoom.localParticipant.getTrackPublication(Track.Source.Camera),track=pub?.videoTrack||pub?.track;
+    if(!track)return toast("Turn the camera on first.");
+    state.cameraFacing=state.cameraFacing==="user"?"environment":"user";
+    await track.restartTrack({facingMode:state.cameraFacing});await syncLocalVideoPreview();
+  }catch(e){toast(e.message||"Could not switch camera",true)}
 }
 
 async function loadStatuses(){
@@ -1158,7 +1253,8 @@ function renderQPlans(){
     const first=g[0];
     const names=[...new Set(g.map(x=>x.target?.display_name).filter(Boolean))].join(", ");
     const replied=g.filter(x=>x.status==="RESPONDED").length;
-    return `<div class="q27-plan"><div><strong>${escapeHtml(first.prompt)}</strong><small>${escapeHtml(names||"LEMMIQ contacts")} · ${replied}/${g.length} responses</small></div><button class="mini" onclick="cancelQPlan('${escapeHtml(first.request_key)}')">Cancel</button></div>`;
+    const humanStatus=replied===0?`Waiting for ${names||"response"}`:replied<g.length?`${replied} replied · waiting for ${g.length-replied}`:"All responses received";
+    return `<div class="q27-plan"><div><strong>${escapeHtml(first.prompt)}</strong><small>${escapeHtml(humanStatus)}</small></div><button class="mini" onclick="cancelQPlan('${escapeHtml(first.request_key)}')">Cancel</button></div>`;
   }).join("");
 }
 async function cancelQPlan(key){
@@ -1330,7 +1426,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}});
   $("messageInput").addEventListener("input",()=>{clearTimeout(window.__draftTimer);window.__draftTimer=setTimeout(()=>saveDraft($("messageInput").value),500)});
   $("fileInput").onchange=e=>{uploadAttachment(e.target.files[0]);e.target.value=""};
-  $("voiceBtn").onclick=()=>toggleVoice("direct");$("callBtn").onclick=startVoiceCall;$("chatSearchBtn").onclick=openChatSearch;$("chatMoreBtn").onclick=openChatMore;
+  $("voiceBtn").onclick=()=>toggleVoice("direct");$("callBtn").onclick=startVoiceCall;$("videoCallBtn").onclick=startVideoCall;$("chatSearchBtn").onclick=openChatSearch;$("chatMoreBtn").onclick=openChatMore;
   $("chatAiBtn").onclick=personalChatSettings;$("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
 
   $("groupVoiceBtn").onclick=()=>toggleVoice("group");$("groupSendBtn").onclick=sendGroupMessage;
@@ -1338,7 +1434,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("groupFileInput").onchange=async e=>{const f=e.target.files[0];if(f&&state.activeGroup){const fd=new FormData();fd.append("file",f);try{await api(`/v24/groups/${state.activeGroup.id}/attachments`,{method:"POST",body:fd});await openGroup(state.activeGroup.id)}catch(err){toast(err.message,true)}}e.target.value=""};
   $("groupSuggestBtn").onclick=groupSuggestReply;$("groupSuggestTop").onclick=groupSuggestReply;$("groupCatchupBtn").onclick=groupCatchup;$("groupQBtn").onclick=groupAsk;$("groupSettingsBtn").onclick=groupSettings;
 
-  $("muteCallBtn").onclick=toggleCallMute;$("endCallBtn").onclick=()=>endVoiceCall(true);$("speakerCallBtn").onclick=()=>toast("Browser speaker routing follows your device/browser audio output.");
+  $("muteCallBtn").onclick=toggleCallMute;$("cameraCallBtn").onclick=toggleCallCamera;$("flipCameraBtn").onclick=flipCallCamera;$("endCallBtn").onclick=()=>endVoiceCall(true);$("speakerCallBtn").onclick=()=>toast("Browser speaker routing follows your device/browser audio output.");
 
   $("addTextStatusBtn").onclick=addTextStatus;
   $("statusMediaInput").onchange=e=>{uploadStatusMedia(e.target.files[0]);e.target.value=""};
@@ -1368,12 +1464,13 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.5").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.6").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
     if(s.chatId){setView("chats");await loadChats();await openChat(Number(s.chatId),false);return}
     if(s.groupId){setView("chats");await loadChats();await openGroup(Number(s.groupId),false);return}
+    if(s.qThread){setView("chats");await loadChats();await openQThread();return}
     chatsHome(false);
     setView(s.view||"chats");
   });
@@ -1385,4 +1482,11 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 window.openChat=openChat;
 window.openGroup=openGroup;
+window.openQThread=openQThread;
+window.loadQThread=loadQThread;
+window.renderQThread=renderQThread;
+window.renderChats=renderChats;
+window.loadChats=loadChats;
+window.setView=setView;
+window.askAgent=askAgent;
 window.checkMessage=checkMessage;

@@ -10,14 +10,15 @@
   <link rel="manifest" href="/web/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/web/icon-192.png">
   <link rel="icon" href="/web/icon-192.png">
-  <link rel="stylesheet" href="/web/styles.css?v=2.10.5">
+  <link rel="stylesheet" href="/web/styles.css?v=2.10.6">
   <title>LEMMIQ — Messaging with social IQ</title>
-  <link rel="stylesheet" href="/web/v28.css?v=2.10.5">
-  <link rel="stylesheet" href="/web/v29.css?v=2.10.5">
-  <link rel="stylesheet" href="/web/v210.css?v=2.10.5">
-  <link rel="stylesheet" href="/web/v2103.css?v=2.10.5">
-  <link rel="stylesheet" href="/web/v2104.css?v=2.10.5">
-  <link rel="stylesheet" href="/web/v2105.css?v=2.10.5">
+  <link rel="stylesheet" href="/web/v28.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v29.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v210.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v2103.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v2104.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v2105.css?v=2.10.6">
+  <link rel="stylesheet" href="/web/v2106.css?v=2.10.6">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -103,10 +104,15 @@
           </div>
 
           <div id="chatPane" class="chat-pane glass">
-            <div id="emptyChat" class="empty-state"><img src="/web/brand-icon.png" alt=""><h3>Choose a conversation</h3><p>Message someone, open a group, ask Q, or make a voice call.</p></div>
+            <div id="emptyChat" class="empty-state"><img src="/web/brand-icon.png" alt=""><h3>Choose a conversation</h3><p>Message someone, open Q Thread, ask Q, or make a voice/video call.</p></div>
+            <div id="activeQThread" class="hidden chat-inner q-thread-inner">
+              <div class="chat-head"><div class="chat-person"><div class="avatar big q-thread-avatar">Q</div><div><strong>Q · LEMMIQ Assistant</strong><small>Requests, results and Q-to-Q updates</small></div></div><div class="chat-head-actions"><button id="qThreadRefreshBtn" class="ghost">↻</button></div></div>
+              <div id="qThreadList" class="messages q-thread-list"></div>
+              <div class="q-thread-foot micro">Q Thread only shows meaningful assistant activity. Human messages remain in their own chats.</div>
+            </div>
             <div id="activeChat" class="hidden chat-inner">
               <div class="chat-head"><div class="chat-person"><div id="chatAvatar" class="avatar big"></div><div><strong id="chatName">Contact</strong><small id="chatMeta">LEMMIQ chat</small></div></div>
-                <div class="chat-head-actions"><button id="callBtn" class="ghost">📞</button><button id="chatSearchBtn" class="ghost">🔎</button><button id="chatMoreBtn" class="ghost">⋮</button><button id="chatAiBtn" class="ghost">⚙ Chat AI</button><button id="summaryBtn" class="ghost">🧠</button><button id="businessChatBtn" class="ghost">💼</button></div></div>
+                <div class="chat-head-actions"><button id="callBtn" class="ghost" title="Voice call">📞</button><button id="videoCallBtn" class="ghost" title="Video call">🎥</button><button id="chatSearchBtn" class="ghost">🔎</button><button id="chatMoreBtn" class="ghost">⋮</button><button id="chatAiBtn" class="ghost">⚙ Chat AI</button><button id="summaryBtn" class="ghost">🧠</button><button id="businessChatBtn" class="ghost">💼</button></div></div>
               <div id="messageList" class="messages"></div>
               <div id="assistBar" class="assist-bar hidden"><button id="assistBarBtn" class="ghost">✨ Suggest reply</button><span>ASSIST drafts only — you choose what to send.</span></div>
               <div id="suggestionCard" class="suggestion hidden"></div>
@@ -158,6 +164,7 @@
           <div class="q27-input-actions">
             <label class="ghost upload">＋ Image<input id="qVisionInput" type="file" accept="image/*" hidden></label>
             <label class="ghost upload">📷 Camera<input id="qVisionCameraInput" type="file" accept="image/*" capture="environment" hidden></label>
+            <button id="talkAgentBtn" class="ghost">🎙 Talk to Q</button>
             <button id="askAgentBtn" class="primary">Ask Q</button>
           </div>
           <div class="q27-quick">
@@ -174,6 +181,8 @@
             <span class="eyebrow">TODAY</span>
             <h3 id="qTodayTitle">Checking your conversations…</h3>
             <p id="qTodayMeta" class="micro"></p>
+            <button id="qTodayDetailsBtn" class="ghost q2106-today-toggle">View details</button>
+            <div id="qTodayDetails" class="q2106-today-details hidden"></div>
           </article>
           <article class="card glass">
             <span class="eyebrow">Q-TO-Q</span>
@@ -361,7 +370,7 @@
             <article class="card glass"><div class="section-head"><div><span class="eyebrow">DAILY Q</span><h3>Basic mining</h3></div><button id="q28ClaimDaily" class="primary">Claim daily Q</button></div><p id="q28DailyInfo" class="micro"></p></article>
             <article class="card glass"><span class="eyebrow">SEND Q</span><h3>Transfer to a LEMMIQ user</h3><div class="q28-inline"><input id="q28SendUser" placeholder="@username"><input id="q28SendAmount" type="number" min="0.000001" step="0.01" placeholder="Q amount"><button id="q28SendBtn" class="primary">Send</button></div></article>
           </div>
-          <article class="card glass"><div class="section-head"><div><h3>Recent Q activity</h3><p class="micro">Every transfer and reward is recorded in the Q ledger.</p></div><button id="q28RefreshLedger" class="ghost">↻</button></div><div id="q28Ledger" class="q28-list"></div></article>
+          <article class="card glass"><div class="section-head"><div><h3>Recent Q activity</h3><p class="micro">Every transfer and reward is recorded in the Q ledger.</p></div><button id="q28RefreshLedger" class="ghost">↻</button></div><div class="q2106-wallet-period"><button class="active" data-q2106-wallet-period="TODAY">Today</button><button data-q2106-wallet-period="WEEK">Week</button><button data-q2106-wallet-period="MONTH">Month</button><button data-q2106-wallet-period="YEAR">Year</button><button data-q2106-wallet-period="ALL">All</button></div><div id="q28Ledger" class="q28-list"></div></article>
         </div>
 
         <div id="q28Tab-packages" class="q28-tab">
@@ -389,6 +398,7 @@
           <article class="card glass">
             <div class="section-head"><div><span class="eyebrow">Q ACTIVITY</span><h3>Q activity ledger</h3><p class="micro">Incoming, outgoing and 0 Q feature usage are shown here.</p></div><button id="q2104RefreshActivity" class="ghost">↻</button></div>
             <div id="q2104ActivitySummary" class="q28-admin-stats"></div>
+            <div class="q2106-period-filters"><button class="active" data-q2106-period="TODAY">Today</button><button data-q2106-period="WEEK">Week</button><button data-q2106-period="MONTH">Month</button><button data-q2106-period="YEAR">Year</button><button data-q2106-period="ALL">All</button></div>
             <div class="q2104-activity-filters"><button class="active" data-q2104-filter="ALL">All</button><button data-q2104-filter="IN">Incoming</button><button data-q2104-filter="OUT">Outgoing</button></div>
             <div id="q2104ActivityList" class="q28-list"></div>
           </article>
@@ -492,7 +502,7 @@
     </div>
   </div>
 
-  <div id="callOverlay" class="call-overlay hidden"><div class="call-card glass"><div id="callAvatar" class="avatar call-avatar">Q</div><span class="eyebrow">LEMMIQ VOICE</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><p class="micro">Voice-call beta · LiveKit/WebRTC</p></div></div>
+  <div id="callOverlay" class="call-overlay hidden"><div id="callCard" class="call-card glass"><div id="callVideoStage" class="call-video-stage hidden"><div id="remoteVideo" class="call-remote-video"></div><div id="localVideo" class="call-local-video"></div></div><div id="callAvatar" class="avatar call-avatar">Q</div><span id="callEyebrow" class="eyebrow">LEMMIQ CALL</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="cameraCallBtn" class="ghost round hidden">📷</button><button id="flipCameraBtn" class="ghost round hidden">🔄</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><p id="callFoot" class="micro">LiveKit/WebRTC</p></div></div>
   <dialog id="modal">
     <div class="modal-card glass">
       <button id="closeModal" class="modal-close">×</button>
@@ -501,10 +511,11 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.10.5" defer></script>
-  <script src="/web/v28.js?v=2.10.5" defer></script>
-  <script src="/web/v29.js?v=2.10.5" defer></script>
-  <script src="/web/v2104.js?v=2.10.5" defer></script>
-  <script src="/web/v2105.js?v=2.10.5" defer></script>
+  <script src="/web/app.js?v=2.10.6" defer></script>
+  <script src="/web/v28.js?v=2.10.6" defer></script>
+  <script src="/web/v29.js?v=2.10.6" defer></script>
+  <script src="/web/v2104.js?v=2.10.6" defer></script>
+  <script src="/web/v2105.js?v=2.10.6" defer></script>
+  <script src="/web/v2106.js?v=2.10.6" defer></script>
 </body>
 </html>

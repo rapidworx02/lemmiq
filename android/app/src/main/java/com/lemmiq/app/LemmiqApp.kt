@@ -10,6 +10,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import android.content.Intent
 import android.Manifest
 import android.content.pm.PackageManager
@@ -25,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Locale
 
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
@@ -116,10 +118,28 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
 private fun V29ConversationQOrb(vm:LemmiqViewModel){
     var open by remember{mutableStateOf(false)}
     var prompt by remember{mutableStateOf("")}
-    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
-        FloatingActionButton(onClick={open=true},containerColor=Purple.copy(alpha=.68f),contentColor=Color.White,shape=CircleShape,modifier=Modifier.padding(end=18.dp,bottom=92.dp)){
-            Text("Q",fontSize=23.sp,fontWeight=FontWeight.Black)
+    val talkToQ=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){result->
+        if(result.resultCode==android.app.Activity.RESULT_OK){
+            val spoken=result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
+            if(spoken.isNotBlank()){prompt=spoken;vm.askAgent(spoken)}
         }
+    }
+    val startTalk={
+        val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
+        }
+        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}
+    }
+    Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
+        SmallFloatingActionButton(
+            onClick={open=true},
+            containerColor=Purple.copy(alpha=.66f),
+            contentColor=Color.White,
+            shape=CircleShape,
+            modifier=Modifier.padding(end=18.dp,bottom=146.dp)
+        ){Text("Q",fontSize=19.sp,fontWeight=FontWeight.Black)}
     }
     if(open){
         ModalBottomSheet(onDismissRequest={open=false}){
@@ -127,7 +147,10 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
                 Text("Q · Personal Assistant",fontSize=22.sp,fontWeight=FontWeight.Black)
                 Text(if(vm.active!=null)"Ask Q about this conversation or anything in LEMMIQ." else "Ask Q while you are in this group.",fontSize=11.sp,color=Muted)
                 OutlinedTextField(prompt,{prompt=it},modifier=Modifier.fillMaxWidth(),placeholder={Text("Ask Q…")},minLines=2)
-                Button(onClick={if(prompt.isNotBlank()){vm.askAgent(prompt.trim());prompt=""}},enabled=prompt.isNotBlank()&&!vm.agentBusy,modifier=Modifier.fillMaxWidth()){Text(if(vm.agentBusy)"Q is thinking…" else "Ask Q")}
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                    OutlinedButton(onClick=startTalk,modifier=Modifier.weight(1f)){Text("🎙 Talk to Q",fontSize=11.sp)}
+                    Button(onClick={if(prompt.isNotBlank()){vm.askAgent(prompt.trim());prompt=""}},enabled=prompt.isNotBlank()&&!vm.agentBusy,modifier=Modifier.weight(1f)){Text(if(vm.agentBusy)"Thinking…" else "Ask Q",fontSize=11.sp)}
+                }
                 vm.agentAnswer?.answer?.takeIf{it.isNotBlank()}?.let{Surface(color=Soft,shape=RoundedCornerShape(16.dp)){Text(it,Modifier.padding(14.dp),fontSize=12.sp,color=Ink)}}
                 Spacer(Modifier.height(18.dp))
             }
@@ -191,8 +214,9 @@ private fun Home(vm:LemmiqViewModel){
     var newGroup by remember{mutableStateOf(false)}
     var qSheet by remember{mutableStateOf(false)}
     var qFullScreen by remember{mutableStateOf(false)}
+    var qThreadOpen by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){
-        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict()
+        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict();vm.refreshQThread()
     }
     val launchRoute=LemmiqLaunchRouterV2103.route.value
     LaunchedEffect(launchRoute,vm.chats,vm.groups){
@@ -202,7 +226,8 @@ private fun Home(vm:LemmiqViewModel){
             "group"->r.id?.let{id->vm.groups.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.openGroup(it);LemmiqLaunchRouterV2103.consume()}}
             "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=3;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
             "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
-            "q_assistant","q_to_q","q_analysis"->{qFullScreen=true;showMore=false;LemmiqLaunchRouterV2103.consume()}
+            "q_to_q"->{tab=0;qThreadOpen=true;qFullScreen=false;showMore=false;vm.refreshQThread(markRead=true);LemmiqLaunchRouterV2103.consume()}
+            "q_assistant","q_analysis"->{qFullScreen=true;qThreadOpen=false;showMore=false;LemmiqLaunchRouterV2103.consume()}
             else->{if(r.type.isNotBlank()){showMore=true;morePage="notifications";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}}
         }
     }
@@ -214,7 +239,7 @@ private fun Home(vm:LemmiqViewModel){
         "📞" to "Calls",
         "☰" to "More"
     )
-    val totalUnread=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}
+    val totalUnread=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}+vm.qThread.unread_count
     Scaffold(
         containerColor=Bg,
         bottomBar={
@@ -224,6 +249,7 @@ private fun Home(vm:LemmiqViewModel){
                         selected=!qFullScreen && if(i==5) showMore else (!showMore && tab==i),
                         onClick={
                             qFullScreen=false
+                            qThreadOpen=false
                             morePage=null
                             if(i==5){
                                 showMore=true
@@ -259,6 +285,7 @@ private fun Home(vm:LemmiqViewModel){
     ){pad->
         Box(Modifier.padding(pad)){
             when{
+                qThreadOpen->V2106QThread(vm){qThreadOpen=false;vm.refreshQThread(markRead=true)}
                 qFullScreen->Column(Modifier.fillMaxSize()){
                     Surface(shadowElevation=1.dp){Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){TextButton({qFullScreen=false}){Text("‹ Back")};Text("Q · Personal Assistant",fontWeight=FontWeight.Bold)}}
                     Box(Modifier.weight(1f)){ChatAgent(vm)}
@@ -276,17 +303,17 @@ private fun Home(vm:LemmiqViewModel){
                 }
                 else->when(tab){
                     0->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
-                        qFullScreen=true
+                        qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
-                    })
+                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)})
                     1->V24Updates(vm)
                     2->V28QEconomyScreen(vm)
                     3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
                     4->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
-                        qFullScreen=true
+                        qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
-                    })
+                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)})
                 }
             }
         }
@@ -299,6 +326,7 @@ private fun Home(vm:LemmiqViewModel){
                     OutlinedButton(onClick={qSheet=false;qFullScreen=true;vm.askAgent(prompt)},modifier=Modifier.fillMaxWidth()){Text(prompt)}
                 }
                 Button(onClick={qSheet=false;qFullScreen=true},modifier=Modifier.fillMaxWidth()){Text("Open full Q workspace")}
+                OutlinedButton(onClick={qSheet=false;qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)},modifier=Modifier.fillMaxWidth()){Text("Open Q Thread") }
                 Spacer(Modifier.height(18.dp))
             }
         }
@@ -321,18 +349,20 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
     val ctx=LocalContext.current
     LaunchedEffect(Unit){vm.refreshCalls()}
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
-        item{Header("Calls","Missed, no-answer and completed LEMMIQ voice calls")}
+        item{Header("Calls","Voice and video call history")}
         if(vm.callHistory.isEmpty()){
-            item{Empty("📞","No calls yet","Your LEMMIQ voice call history will appear here.")}
+            item{Empty("📞","No calls yet","Your LEMMIQ voice and video call history will appear here.")}
         }else{
             items(vm.callHistory,key={it.id}){c->
                 val other=c.other_user?:UserDto(0,"","LEMMIQ user")
                 val status=c.status.uppercase()
+                val isVideo=c.call_type.equals("VIDEO",true)
+                val callLabel=if(isVideo)"video call" else "voice call"
                 val label=when(status){
-                    "MISSED"->"Missed voice call"
-                    "RINGING"->"No answer"
-                    "DECLINED"->"Declined voice call"
-                    else->"Voice call"
+                    "MISSED"->"Missed $callLabel"
+                    "RINGING"->"No answer · $callLabel"
+                    "DECLINED"->"Declined $callLabel"
+                    else->callLabel.replaceFirstChar{it.uppercase()}
                 }
                 val statusColor=when(status){
                     "MISSED"->Color(0xFFD63C57)
@@ -352,17 +382,14 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
                             )
                         }
                         FilledTonalButton(onClick={
-                            vm.startVoiceCall(c.chat_id){join->
+                            val launchCall:(CallJoinDto)->Unit={join->
                                 ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
-                                    putExtra("call_id",join.call.id)
-                                    putExtra("ws_url",join.ws_url)
-                                    putExtra("token",join.token)
-                                    putExtra("person",other.display_name)
-                                    putExtra("avatar_url",other.avatar_url)
-                                    putExtra("incoming",false)
+                                    putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
+                                    putExtra("person",other.display_name);putExtra("avatar_url",other.avatar_url);putExtra("incoming",false);putExtra("call_type",join.call.call_type)
                                 })
                             }
-                        }){Text("📞")}
+                            if(isVideo)vm.startVideoCall(c.chat_id,launchCall) else vm.startVoiceCall(c.chat_id,launchCall)
+                        }){Text(if(isVideo)"🎥" else "📞")}
                     }
                 }
             }
@@ -607,10 +634,18 @@ private fun Chat(vm:LemmiqViewModel){
                         vm.startVoiceCall(c.id){join->
                             ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
                                 putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
-                                putExtra("person",c.other_user.display_name);putExtra("avatar_url",c.other_user.avatar_url);putExtra("incoming",false)
+                                putExtra("person",c.other_user.display_name);putExtra("avatar_url",c.other_user.avatar_url);putExtra("incoming",false);putExtra("call_type","VOICE")
                             })
                         }
-                    }.padding(8.dp))
+                    }.padding(7.dp))
+                    Text("🎥",fontSize=18.sp,modifier=Modifier.clickable{
+                        vm.startVideoCall(c.id){join->
+                            ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
+                                putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
+                                putExtra("person",c.other_user.display_name);putExtra("avatar_url",c.other_user.avatar_url);putExtra("incoming",false);putExtra("call_type","VIDEO")
+                            })
+                        }
+                    }.padding(7.dp))
                     Text("🔎",fontSize=17.sp,modifier=Modifier.clickable{showSearch=true}.padding(7.dp))
                     Text("⋮",fontSize=22.sp,modifier=Modifier.clickable{showMore=true}.padding(7.dp))
                     if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(8.dp))
@@ -753,9 +788,11 @@ private fun Chat(vm:LemmiqViewModel){
                     when(val x=item.second){
                         is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x})
                         is CallDto->{
-                            val label=when(x.status){"MISSED"->"Missed voice call";"DECLINED"->"Voice call · declined";"RINGING"->"Voice call · no answer";else->"Voice call"}
+                            val isVideo=x.call_type.equals("VIDEO",true)
+                            val base=if(isVideo)"Video call" else "Voice call"
+                            val label=when(x.status){"MISSED"->"Missed ${base.lowercase()}";"DECLINED"->"$base · declined";"RINGING"->"$base · no answer";else->base}
                             Card(Modifier.fillMaxWidth(.72f),colors=CardDefaults.cardColors(containerColor=Color.White)){
-                                Column(Modifier.padding(10.dp)){Text("📞 $label",fontWeight=FontWeight.Bold);Text((if(x.duration_seconds>0)"${x.duration_seconds/60}m ${x.duration_seconds%60}s · " else "")+v24Time(x.started_at),fontSize=10.sp,color=Muted)}
+                                Column(Modifier.padding(10.dp)){Text("${if(isVideo)"🎥" else "📞"} $label",fontWeight=FontWeight.Bold);Text((if(x.duration_seconds>0)"${x.duration_seconds/60}m ${x.duration_seconds%60}s · " else "")+v24Time(x.started_at),fontSize=10.sp,color=Muted)}
                             }
                         }
                     }
@@ -1144,6 +1181,20 @@ private fun ChatAgent(vm:LemmiqViewModel){
             vm.scanVisionBytes(out.toByteArray(),visionQuestion.ifBlank{"What is in this photo? Give me the useful details."})
         }
     }
+    val talkToQ=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){result->
+        if(result.resultCode==android.app.Activity.RESULT_OK){
+            val spoken=result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim().orEmpty()
+            if(spoken.isNotBlank()){q=spoken;vm.askAgent(spoken)}
+        }
+    }
+    val startTalkToQ={
+        val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
+        }
+        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}
+    }
 
     LaunchedEffect(Unit){vm.refreshAgent()}
 
@@ -1181,6 +1232,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
                         FilledTonalButton(onClick={gallery.launch("image/*")}){Text("＋")}
                         FilledTonalButton(onClick={camera.launch(null)}){Text("📷")}
                         OutlinedButton(onClick={showVisionHistory=true}){Text("Vision")}
+                        FilledTonalButton(onClick=startTalkToQ){Text("🎙 Talk")}
                         Spacer(Modifier.weight(1f))
                         Button(onClick={vm.askAgent(q);q=""},enabled=q.isNotBlank()&&!vm.agentBusy){Text("Ask Q")}
                     }
@@ -1325,7 +1377,14 @@ private fun ChatAgent(vm:LemmiqViewModel){
                     Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
                         Column(Modifier.weight(1f)){
                             Text(first.prompt,fontWeight=FontWeight.Bold,fontSize=12.sp,maxLines=2,overflow=TextOverflow.Ellipsis)
-                            Text(if(names.isBlank())"$responses/${group.size} responses" else "$names · $responses/${group.size} responses",fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
+                            val waitingNames=group.filter{it.status=="PENDING"}.mapNotNull{it.target?.display_name}.distinct().joinToString(", ")
+                            val statusText=when{
+                                responses==group.size->"Responses received · Q is ready to coordinate"
+                                waitingNames.isNotBlank()->"Waiting for $waitingNames"
+                                responses>0->"$responses response${if(responses==1)"" else "s"} received"
+                                else->"Waiting for response"
+                            }
+                            Text(statusText,fontSize=10.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
                         }
                         TextButton({vm.cancelQCoordination(first.request_key)}){Text("Cancel",fontSize=10.sp)}
                     }

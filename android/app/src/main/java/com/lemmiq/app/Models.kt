@@ -132,7 +132,7 @@ data class GroupAskDto(val answer:String="",val references:List<String> = emptyL
 data class VoiceAiDto(val transcript:String="",val summary:String="",val suggested_reply:String="")
 data class CallDto(
     val id:String="",val chat_id:Int=0,val caller_id:Int=0,val callee_id:Int=0,val other_user:UserDto?=null,
-    val status:String="",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
+    val status:String="",val call_type:String="VOICE",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
 )
 data class CallJoinDto(val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false)
 data class CallStatusDto(val configured:Boolean=false,val provider:String="LiveKit",val voice:Boolean=true,val video:Boolean=false)
@@ -183,6 +183,15 @@ data class QCoordinationDto(
 data class QCoordinationListDto(
     val inbox:List<QCoordinationDto> = emptyList(),val outbox:List<QCoordinationDto> = emptyList()
 )
+
+// LEMMIQ V2.10.6 Q Thread
+data class QThreadItemDto(
+    val id:String="",val kind:String="Q_TO_Q",val title:String="",val body:String="",val created_at:String="",
+    val unread:Boolean=false,val request_id:Int?=null,val request_key:String="",val status:String="",val mine:Boolean=false,
+    val other_user:UserDto?=null,val options:List<String> = emptyList(),val response:Map<String,String> = emptyMap(),
+    val can_respond:Boolean=false,val can_cancel:Boolean=false
+)
+data class QThreadDto(val unread_count:Int=0,val items:List<QThreadItemDto> = emptyList())
 data class QCoordinationCreateDto(
     val request_key:String="",val count:Int=0,val requests:List<QCoordinationDto> = emptyList(),val note:String=""
 )

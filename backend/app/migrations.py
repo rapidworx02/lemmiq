@@ -25,6 +25,9 @@ def apply_compat_migrations(engine):
     _add_column_if_missing(engine, "voice_notes", "transcribed_at", "TIMESTAMP")
     _add_column_if_missing(engine, "group_voice_notes", "transcribed_at", "TIMESTAMP")
 
+    # V2.10.6: distinguish voice and video calls without changing old history.
+    _add_column_if_missing(engine, "call_records", "call_type", "VARCHAR(12) DEFAULT 'VOICE'")
+
     # V2.10.5: Q Predict moves new predictions from isolated Predict Credits to
     # the authoritative V2.8 Q wallet. Existing rows are explicitly marked PC
     # so historical test positions are never converted 1:1 into Q.
