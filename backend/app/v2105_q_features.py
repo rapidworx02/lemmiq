@@ -20,6 +20,7 @@ from .v28 import (
     QAdminRole, QSubscriptionLot, PACKAGE_PLANS, Q_MICROS,
     _ledger, _user_to_system,
 )
+from .admin_rbac import require_admin_access
 
 FEATURES = {
     "SUGGEST_REPLY": "Suggest Reply",
@@ -181,10 +182,18 @@ def record_feature_usage(db: Session, user_id: int, feature_key: str, *, status:
 def register_v2105_q_features(app, current_user, get_db):
     router = APIRouter(prefix="/v2105", tags=["LEMMIQ V2.10.5 Q Feature Pricing"])
 
-    def require_master(u: User = Depends(current_user), db: Session = Depends(get_db)):
+    def require_feature_read(u: User = Depends(current_user), db: Session = Depends(get_db)):
         role = db.get(QAdminRole, u.id)
-        if not role or not role.active or role.role != "MASTER_ADMIN":
-            raise HTTPException(403, "Master Admin access required")
+        if not role or not role.active:
+            raise HTTPException(403, "Admin access required")
+        require_admin_access(db, u.id, role.role, "Q_FEATURE_PRICING", "READ")
+        return u
+
+    def require_feature_full(u: User = Depends(current_user), db: Session = Depends(get_db)):
+        role = db.get(QAdminRole, u.id)
+        if not role or not role.active:
+            raise HTTPException(403, "Admin access required")
+        require_admin_access(db, u.id, role.role, "Q_FEATURE_PRICING", "FULL")
         return u
 
     @app.on_event("startup")
@@ -206,7 +215,7 @@ def register_v2105_q_features(app, current_user, get_db):
         data = _quote(db, u.id, feature_key); db.commit(); return data
 
     @router.get("/admin/q-features")
-    def admin_list(_u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_list(_u: User = Depends(require_feature_read), db: Session = Depends(get_db)):
         _seed(db)
         settings = db.get(QFeatureSetting, 1)
         rules = db.scalars(select(QFeatureTierRule).order_by(QFeatureTierRule.feature_key, QFeatureTierRule.tier_key)).all()
@@ -221,13 +230,13 @@ def register_v2105_q_features(app, current_user, get_db):
         }
 
     @router.put("/admin/q-features/settings")
-    def admin_settings(body: GlobalUpdate, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_settings(body: GlobalUpdate, u: User = Depends(require_feature_full), db: Session = Depends(get_db)):
         _seed(db); row = db.get(QFeatureSetting, 1); row.charging_enabled = body.charging_enabled; row.updated_at = utcnow()
         db.add(QFeatureAudit(admin_user_id=u.id, feature_key="GLOBAL", change_json=json.dumps({"charging_enabled": body.charging_enabled})))
         db.commit(); return {"charging_enabled": row.charging_enabled}
 
     @router.put("/admin/q-features/{feature_key}/{tier_key}")
-    def admin_update(feature_key: str, tier_key: str, body: RuleUpdate, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_update(feature_key: str, tier_key: str, body: RuleUpdate, u: User = Depends(require_feature_full), db: Session = Depends(get_db)):
         _seed(db); key = feature_key.strip().upper(); tier = tier_key.strip().upper()
         if key not in FEATURES: raise HTTPException(404, "Unknown feature key")
         if tier not in TIERS: raise HTTPException(422, "Unknown tier")

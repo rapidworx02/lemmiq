@@ -40,6 +40,7 @@ from .v28 import (
     _system_to_user,
     _system_to_system,
 )
+from .admin_rbac import require_admin_access
 
 log = logging.getLogger("lemmiq.v29")
 
@@ -361,11 +362,11 @@ def _admin_role(db: Session, uid: int) -> str | None:
     return r.role if r and r.active else None
 
 
-def _require_admin(db: Session, u: User, write: bool = False):
+def _require_admin(db: Session, u: User, required: str = "READ", section: str = "Q_PREDICT"):
     role = _admin_role(db, u.id)
-    allowed = PREDICT_WRITE_ROLES if write else PREDICT_ADMIN_ROLES
-    if role not in allowed:
-        raise HTTPException(403, "Q Predict admin permission required")
+    if not role:
+        raise HTTPException(403, "Admin access required")
+    require_admin_access(db, u.id, role, section, required)
     return role
 
 
@@ -1019,11 +1020,11 @@ def register_v29(app, current_user, get_db):
 
     @router.post("/predict/admin/markets")
     def admin_create_market(body:PredictMarketIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);m=_create_market(db,body,creator_id=u.id,generated_by="ADMIN",status="REVIEW");db.commit();db.refresh(m);return _market_json(db,m,None)
+        _require_admin(db,u,"WRITE");m=_create_market(db,body,creator_id=u.id,generated_by="ADMIN",status="REVIEW");db.commit();db.refresh(m);return _market_json(db,m,None)
 
     @router.post("/predict/admin/markets/{market_id}/publish")
     def admin_publish_market(market_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);m=db.get(PredictMarket,market_id)
+        _require_admin(db,u,"WRITE");m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,"Market not found")
         if m.status not in {"REVIEW","DRAFT"}:raise HTTPException(409,"Only review/draft markets can be published")
         live=int(db.scalar(select(func.count()).select_from(PredictMarket).where(PredictMarket.status=="LIVE")) or 0)
@@ -1032,23 +1033,23 @@ def register_v29(app, current_user, get_db):
 
     @router.post("/predict/admin/markets/{market_id}/resolve")
     def admin_resolve_market(market_id:int,body:PredictResolveIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);m=db.get(PredictMarket,market_id)
+        _require_admin(db,u,"FULL");m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,"Market not found")
         _settle_market(db,m,body.outcome,body.source_value,body.note,u.id,{"manual":True});db.commit();return _market_json(db,m,None)
 
     @router.post("/predict/admin/markets/{market_id}/void")
     def admin_void_market(market_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);m=db.get(PredictMarket,market_id)
+        _require_admin(db,u,"FULL");m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,"Market not found")
         _settle_market(db,m,"VOID","","Voided by Q Predict Admin",u.id,{"manual":True});db.commit();return _market_json(db,m,None)
 
     @router.post("/predict/admin/agent/run")
     def admin_run_agent(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);rows=_auto_candidates(db);db.commit();return {"created":len(rows),"markets":[_market_json(db,x,None) for x in rows]}
+        _require_admin(db,u,"WRITE");rows=_auto_candidates(db);db.commit();return {"created":len(rows),"markets":[_market_json(db,x,None) for x in rows]}
 
     @router.post("/predict/admin/settle-due")
     def admin_settle_due(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u,True);out=_settle_due(db);db.commit();return out
+        _require_admin(db,u,"FULL");out=_settle_due(db);db.commit();return out
 
     @router.get("/predict/admin/config")
     def admin_config(u:User=Depends(current_user), db:Session=Depends(get_db)):
@@ -1067,7 +1068,7 @@ def register_v29(app, current_user, get_db):
 
     @router.put("/predict/admin/config")
     def admin_save_config(body:PredictConfigIn, u:User=Depends(current_user), db:Session=Depends(get_db)):
-        _require_admin(db,u,True); c=_config(db)
+        _require_admin(db,u,"FULL"); c=_config(db)
         if body.real_q_enabled is not None: c.real_q_enabled = bool(body.real_q_enabled)
         if body.fee_percent is not None: c.fee_bps = int(round(body.fee_percent*100))
         if body.minimum_stake_q is not None: c.minimum_stake_micros = _q_micros(body.minimum_stake_q)
@@ -1084,7 +1085,7 @@ def register_v29(app, current_user, get_db):
 
     @router.get("/admin/operations")
     def operations(period:str="7d",u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);start=_range_start(period)
+        _require_admin(db,u,"READ","OVERVIEW");start=_range_start(period)
         users=int(db.scalar(select(func.count()).select_from(User).where(User.created_at>=start)) or 0) if hasattr(User,"created_at") else int(db.scalar(select(func.count()).select_from(User)) or 0)
         packages=0
         try:
@@ -1100,7 +1101,7 @@ def register_v29(app, current_user, get_db):
 
     @router.get("/admin/monetisation")
     def monetisation(period:str="7d",u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);start=_range_start(period)
+        _require_admin(db,u,"READ","OVERVIEW");start=_range_start(period)
         rows=db.scalars(select(ShadowMonetisationEvent).where(ShadowMonetisationEvent.created_at>=start)).all()
         by={}
         for x in rows:
@@ -1112,12 +1113,12 @@ def register_v29(app, current_user, get_db):
 
     @router.get("/admin/q-simulation")
     def q_simulation(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);current=_supply_demand_snapshot(db,True);db.commit();history=db.scalars(select(QSimulationSnapshot).order_by(QSimulationSnapshot.snapshot_date.desc()).limit(90)).all()
+        _require_admin(db,u,"READ","Q_ECONOMY");current=_supply_demand_snapshot(db,True);db.commit();history=db.scalars(select(QSimulationSnapshot).order_by(QSimulationSnapshot.snapshot_date.desc()).limit(90)).all()
         return {"current":current,"history":[{"date":x.snapshot_date.isoformat(),"actual_price_usd":x.actual_price_microusd/1_000_000,"simulated_price_usd":x.simulated_price_microusd/1_000_000,"change_percent":x.applied_change_percent} for x in reversed(history)]}
 
     @router.get("/admin/treasury/{wallet_key}")
     def treasury_detail(wallet_key:str,period:str="30d",u:User=Depends(current_user),db:Session=Depends(get_db)):
-        _require_admin(db,u);key=wallet_key.upper();w=db.get(QSystemWallet,key)
+        _require_admin(db,u,"READ","Q_ECONOMY");key=wallet_key.upper();w=db.get(QSystemWallet,key)
         if not w:raise HTTPException(404,"Treasury wallet not found")
         start=_range_start(period)
         rows=db.scalars(select(QLedgerEntry).where(QLedgerEntry.created_at>=start,or_(QLedgerEntry.from_system_key==key,QLedgerEntry.to_system_key==key)).order_by(QLedgerEntry.created_at.desc()).limit(500)).all()

@@ -26,6 +26,10 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 from .database import Base
 from .models import User
 from . import media_store
+from .admin_rbac import (
+    ACCESS_LEVELS, ADMIN_SECTIONS, QAdminSectionPermission,
+    effective_access, permission_map, require_admin_access,
+)
 
 Q_MICROS = 1_000_000
 USD_MICROS = 1_000_000
@@ -364,6 +368,18 @@ class AdminRoleIn(BaseModel):
     username: str = Field(min_length=3, max_length=40)
     role: str = Field(min_length=3, max_length=30)
     active: bool = True
+
+
+class AdminSectionPermissionIn(BaseModel):
+    section_key: str = Field(min_length=2, max_length=64)
+    access_level: str = Field(min_length=3, max_length=12)
+
+
+class AdminAccessUpdateIn(BaseModel):
+    username: str = Field(min_length=3, max_length=40)
+    role: str = Field(default="SUPPORT_ADMIN", min_length=3, max_length=30)
+    active: bool = True
+    permissions: list[AdminSectionPermissionIn] = Field(default_factory=list)
 
 
 class AdminConfigIn(BaseModel):
@@ -1001,6 +1017,18 @@ def register_v28(app, current_user, get_db):
             raise HTTPException(403, "Master Admin access required")
         return u
 
+
+    def require_section(section: str, required: str = "READ"):
+        section = section.upper()
+        required = required.upper()
+        def dependency(u: User = Depends(current_user), db: Session = Depends(get_db)):
+            role = _admin_role(db, u.id)
+            if not role:
+                raise HTTPException(403, "Admin access required")
+            require_admin_access(db, u.id, role.role, section, required)
+            return u
+        return dependency
+
     @app.on_event("startup")
     def v28_startup():
         from .database import SessionLocal, engine
@@ -1460,8 +1488,71 @@ def register_v28(app, current_user, get_db):
         role = _admin_role(db, u.id)
         return {"id": u.id, "username": u.username, "display_name": u.display_name, "role": role.role}
 
+
+    @router.get("/admin/access/me")
+    def admin_access_me(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+        role = _admin_role(db, u.id)
+        return {"user":{"id":u.id,"username":u.username,"display_name":u.display_name},"role":role.role,
+                "permissions":permission_map(db,u.id,role.role),"sections":ADMIN_SECTIONS,"levels":list(ACCESS_LEVELS)}
+
+    @router.get("/admin/access/user")
+    def admin_access_user(username: str, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        uname=username.strip().lstrip("@").lower()
+        target=db.scalar(select(User).where(func.lower(User.username)==uname))
+        if not target: raise HTTPException(404,"LEMMIQ user not found")
+        r=_admin_role(db,target.id)
+        return {"user":{"id":target.id,"username":target.username,"display_name":target.display_name},
+                "role":r.role if r else None,"active":bool(r),
+                "permissions":permission_map(db,target.id,r.role) if r else {k:"NONE" for k in ADMIN_SECTIONS},
+                "sections":ADMIN_SECTIONS}
+
+    @router.get("/admin/access/list")
+    def admin_access_list(u: User = Depends(require_master), db: Session = Depends(get_db)):
+        rows=db.scalars(select(QAdminRole).order_by(QAdminRole.created_at,QAdminRole.user_id)).all()
+        items=[]
+        for r in rows:
+            target=db.get(User,r.user_id)
+            if not target: continue
+            items.append({"user":{"id":target.id,"username":target.username,"display_name":target.display_name},
+                          "role":r.role,"active":r.active,
+                          "permissions":permission_map(db,target.id,r.role) if r.active else {k:"NONE" for k in ADMIN_SECTIONS}})
+        return {"items":items,"sections":ADMIN_SECTIONS}
+
+    @router.put("/admin/access/user")
+    def admin_access_save(body: AdminAccessUpdateIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+        uname=body.username.strip().lstrip("@").lower()
+        target=db.scalar(select(User).where(func.lower(User.username)==uname))
+        if not target: raise HTTPException(404,"LEMMIQ user not found")
+        existing=db.get(QAdminRole,target.id)
+        if target.id==u.id or (existing and existing.role=="MASTER_ADMIN"):
+            raise HTTPException(403,"Master Admin access cannot be changed here")
+        role_name=body.role.strip().upper()
+        if role_name not in (ADMIN_ROLES-{"MASTER_ADMIN"}):
+            raise HTTPException(422,"Choose a delegated admin role")
+        before={"role":existing.role if existing else None,"active":bool(existing and existing.active),
+                "permissions":permission_map(db,target.id,existing.role) if existing and existing.active else {k:"NONE" for k in ADMIN_SECTIONS}}
+        if not existing:
+            existing=QAdminRole(user_id=target.id,role=role_name,active=body.active);db.add(existing)
+        else:
+            existing.role=role_name;existing.active=body.active
+        requested={x.section_key.strip().upper():x.access_level.strip().upper() for x in body.permissions}
+        for section in ADMIN_SECTIONS:
+            level="NONE" if section=="ADMIN_TEAM" else requested.get(section,"NONE")
+            if level not in ACCESS_LEVELS: raise HTTPException(422,f"Unknown access level for {section}")
+            if role_name=="READ_ONLY" and ACCESS_LEVELS[level]>ACCESS_LEVELS["READ"]: level="READ"
+            row=db.scalar(select(QAdminSectionPermission).where(QAdminSectionPermission.user_id==target.id,QAdminSectionPermission.section_key==section))
+            if not row:
+                row=QAdminSectionPermission(user_id=target.id,section_key=section);db.add(row)
+            row.access_level=level if body.active else "NONE";row.granted_by_user_id=u.id;row.updated_at=_now()
+        db.flush()
+        after={"role":role_name,"active":body.active,
+               "permissions":permission_map(db,target.id,role_name) if body.active else {k:"NONE" for k in ADMIN_SECTIONS}}
+        _audit(db,u.id,"ADMIN_ACCESS_UPDATE",target_user_id=target.id,before=before,after=after,reason="Section-based admin access updated")
+        db.commit()
+        return {"ok":True,"user":{"id":target.id,"username":target.username,"display_name":target.display_name},**after}
+
     @router.get("/admin/roles")
-    def admin_roles(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_roles(u: User = Depends(require_master), db: Session = Depends(get_db)):
         rows = db.scalars(select(QAdminRole).order_by(QAdminRole.created_at, QAdminRole.user_id)).all()
         out = []
         for row in rows:
@@ -1480,6 +1571,8 @@ def register_v28(app, current_user, get_db):
         role_name = body.role.strip().upper()
         if role_name not in ADMIN_ROLES:
             raise HTTPException(422, "Unknown admin role")
+        if role_name == "MASTER_ADMIN":
+            raise HTTPException(403, "MASTER_ADMIN cannot be granted from the admin panel")
         target = db.scalar(select(User).where(User.username == username))
         if not target:
             raise HTTPException(404, "LEMMIQ user not found")
@@ -1496,7 +1589,7 @@ def register_v28(app, current_user, get_db):
         return {"ok": True, "user_id": target.id, "username": target.username, "role": row.role, "active": row.active}
 
     @router.get("/admin/economy")
-    def admin_economy(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_economy(u: User = Depends(require_section("OVERVIEW", "READ")), db: Session = Depends(get_db)):
         users = db.scalars(select(User.id)).all()
         for uid in users:
             try:
@@ -1530,12 +1623,12 @@ def register_v28(app, current_user, get_db):
         }
 
     @router.get("/admin/referral-rules")
-    def admin_referral_rules(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_referral_rules(u: User = Depends(require_section("PACKAGES_REFERRALS", "READ")), db: Session = Depends(get_db)):
         rows = db.scalars(select(QReferralRewardRule).order_by(QReferralRewardRule.package_code)).all()
         return [_referral_rule_json(x) for x in rows]
 
     @router.put("/admin/referral-rules")
-    def admin_save_referral_rules(body: ReferralRulesIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_save_referral_rules(body: ReferralRulesIn, u: User = Depends(require_section("PACKAGES_REFERRALS", "FULL")), db: Session = Depends(get_db)):
         values = {
             "STARTER_10": body.starter_10_q, "PLUS_50": body.plus_50_q,
             "PRO_100": body.pro_100_q, "PREMIUM_500": body.premium_500_q,
@@ -1553,7 +1646,7 @@ def register_v28(app, current_user, get_db):
         return admin_referral_rules(u, db)
 
     @router.get("/admin/referrals")
-    def admin_referral_overview(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_referral_overview(u: User = Depends(require_section("PACKAGES_REFERRALS", "READ")), db: Session = Depends(get_db)):
         links = db.scalars(select(QReferral)).all()
         earnings = db.scalars(select(QReferralEarning)).all()
         return {
@@ -1565,12 +1658,12 @@ def register_v28(app, current_user, get_db):
         }
 
     @router.get("/admin/package-rules")
-    def admin_package_rules(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_package_rules(u: User = Depends(require_section("PACKAGES_REFERRALS", "READ")), db: Session = Depends(get_db)):
         _seed_package_rules(db); db.commit()
         return [_package_rule_json(_package_rule(db, code)) for code in PACKAGE_PLANS]
 
     @router.put("/admin/package-rules/{package_code}")
-    def admin_update_package_rule(package_code: str, body: PackageRuleUpdateIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_update_package_rule(package_code: str, body: PackageRuleUpdateIn, u: User = Depends(require_section("PACKAGES_REFERRALS", "FULL")), db: Session = Depends(get_db)):
         code = package_code.strip().upper()
         if code not in PACKAGE_PLANS:
             raise HTTPException(404, "Package not found")
@@ -1615,7 +1708,7 @@ def register_v28(app, current_user, get_db):
         return {"ok": True, "rule": after_rule, "affected": affected, "skipped_custom": skipped_custom}
 
     @router.get("/admin/users")
-    def admin_users(q: str = "", package_code: str = "", status: str = "", u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_users(q: str = "", package_code: str = "", status: str = "", u: User = Depends(require_section("USERS", "READ")), db: Session = Depends(get_db)):
         term = q.strip().lower()
         stmt = select(User).order_by(User.id.desc()).limit(500)
         users = db.scalars(stmt).all()
@@ -1639,7 +1732,7 @@ def register_v28(app, current_user, get_db):
         return out[:250]
 
     @router.get("/admin/users/{user_id}")
-    def admin_user_detail(user_id: int, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_user_detail(user_id: int, u: User = Depends(require_section("USERS", "READ")), db: Session = Depends(get_db)):
         user = db.get(User, user_id)
         if not user:
             raise HTTPException(404, "User not found")
@@ -1654,7 +1747,7 @@ def register_v28(app, current_user, get_db):
         }
 
     @router.post("/admin/users/{user_id}/wallet-adjust")
-    def admin_adjust_user_wallet(user_id: int, body: WalletAdjustmentIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_adjust_user_wallet(user_id: int, body: WalletAdjustmentIn, u: User = Depends(require_section("USERS", "FULL")), db: Session = Depends(get_db)):
         target = db.get(User, user_id)
         if not target:
             raise HTTPException(404, "User not found")
@@ -1672,7 +1765,10 @@ def register_v28(app, current_user, get_db):
         return {"ok": True, "balance_q": after}
 
     @router.put("/admin/subscriptions/{lot_id}")
-    def admin_edit_subscription(lot_id: int, body: UserPackageEditIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_edit_subscription(lot_id: int, body: UserPackageEditIn, u: User = Depends(require_section("USERS", "WRITE")), db: Session = Depends(get_db)):
+        role = _admin_role(db, u.id)
+        if body.status and body.status.strip().upper() in {"STOPPED", "ADMIN_CANCELLED"}:
+            require_admin_access(db, u.id, role.role if role else "", "USERS", "FULL")
         lot = db.get(QSubscriptionLot, lot_id)
         if not lot:
             raise HTTPException(404, "Subscription package not found")
@@ -1718,7 +1814,7 @@ def register_v28(app, current_user, get_db):
         return _subscription_json(lot, _config(db), db)
 
     @router.get("/admin/audit")
-    def admin_audit(limit: int = 200, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_audit(limit: int = 200, u: User = Depends(require_section("AUDIT_LOGS", "READ")), db: Session = Depends(get_db)):
         rows = db.scalars(select(QAdminAuditLog).order_by(QAdminAuditLog.id.desc()).limit(max(1, min(limit, 500)))).all()
         return [{
             "id": x.id, "admin": _user_json_brief(db, x.admin_user_id), "action": x.action,
@@ -1728,7 +1824,7 @@ def register_v28(app, current_user, get_db):
         } for x in rows]
 
     @router.get("/admin/payment-wallet-matrix")
-    def admin_payment_wallet_matrix(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_payment_wallet_matrix(u: User = Depends(require_section("PAYMENTS", "READ")), db: Session = Depends(get_db)):
         items = []
         for code, plan in PACKAGE_PLANS.items():
             for network in ("TRC20", "BEP20"):
@@ -1743,7 +1839,7 @@ def register_v28(app, current_user, get_db):
         return items
 
     @router.put("/admin/payment-wallet-matrix/{package_code}/{network}")
-    def admin_set_payment_wallet_slot(package_code: str, network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_set_payment_wallet_slot(package_code: str, network: str, body: AdminPaymentWalletSlotIn, u: User = Depends(require_section("PAYMENTS", "FULL")), db: Session = Depends(get_db)):
         code = package_code.strip().upper(); net = network.strip().upper()
         if code not in PACKAGE_PLANS:
             raise HTTPException(404, "Package not found")
@@ -1759,12 +1855,12 @@ def register_v28(app, current_user, get_db):
         return _payment_wallet_json(row)
 
     @router.get("/admin/payment-wallets")
-    def admin_payment_wallets(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_payment_wallets(u: User = Depends(require_section("PAYMENTS", "READ")), db: Session = Depends(get_db)):
         rows = db.scalars(select(QPaymentWallet).order_by(QPaymentWallet.id.desc())).all()
         return [_payment_wallet_json(x) for x in rows]
 
     @router.post("/admin/payment-wallets")
-    def admin_add_payment_wallet(body: AdminPaymentWalletIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_add_payment_wallet(body: AdminPaymentWalletIn, u: User = Depends(require_section("PAYMENTS", "FULL")), db: Session = Depends(get_db)):
         network = body.network.strip().upper()
         _validate_payment_address(network, body.address.strip())
         code = body.package_code.strip().upper() if body.package_code else None
@@ -1782,7 +1878,7 @@ def register_v28(app, current_user, get_db):
         return _payment_wallet_json(row)
 
     @router.put("/admin/payment-wallets/{wallet_id}")
-    def admin_update_payment_wallet(wallet_id: int, body: AdminPaymentWalletIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_update_payment_wallet(wallet_id: int, body: AdminPaymentWalletIn, u: User = Depends(require_section("PAYMENTS", "FULL")), db: Session = Depends(get_db)):
         row = db.get(QPaymentWallet, wallet_id)
         if not row:
             raise HTTPException(404, "Payment wallet not found")
@@ -1795,7 +1891,7 @@ def register_v28(app, current_user, get_db):
         db.commit(); return _payment_wallet_json(row)
 
     @router.post("/admin/payment-wallets/{wallet_id}/qr")
-    async def admin_upload_qr(wallet_id: int, file: UploadFile = File(...), u: User = Depends(require_master), db: Session = Depends(get_db)):
+    async def admin_upload_qr(wallet_id: int, file: UploadFile = File(...), u: User = Depends(require_section("PAYMENTS", "FULL")), db: Session = Depends(get_db)):
         row = db.get(QPaymentWallet, wallet_id)
         if not row:
             raise HTTPException(404, "Payment wallet not found")
@@ -1809,7 +1905,7 @@ def register_v28(app, current_user, get_db):
         return _payment_wallet_json(row)
 
     @router.get("/admin/payment-orders")
-    def admin_payment_orders(status: str = "", u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_payment_orders(status: str = "", u: User = Depends(require_section("PAYMENTS", "READ")), db: Session = Depends(get_db)):
         stmt = select(QPaymentOrder)
         if status.strip():
             stmt = stmt.where(QPaymentOrder.status == status.strip().upper())
@@ -1823,8 +1919,7 @@ def register_v28(app, current_user, get_db):
         return out
 
     @router.post("/admin/payment-orders/{order_id}/approve")
-    def admin_approve_payment(order_id: int, u: User = Depends(require_admin), db: Session = Depends(get_db)):
-        _require_roles(db, u, "MASTER_ADMIN", "FINANCE_ADMIN")
+    def admin_approve_payment(order_id: int, u: User = Depends(require_section("PAYMENTS", "WRITE")), db: Session = Depends(get_db)):
         row = db.get(QPaymentOrder, order_id)
         if not row:
             raise HTTPException(404, "Payment order not found")
@@ -1852,8 +1947,7 @@ def register_v28(app, current_user, get_db):
         return {"ok": True, "payment": _payment_order_json(db, row), "subscription": _subscription_json(lot, _config(db), db)}
 
     @router.post("/admin/payment-orders/{order_id}/reject")
-    def admin_reject_payment(order_id: int, body: DisputeIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
-        _require_roles(db, u, "MASTER_ADMIN", "FINANCE_ADMIN")
+    def admin_reject_payment(order_id: int, body: DisputeIn, u: User = Depends(require_section("PAYMENTS", "WRITE")), db: Session = Depends(get_db)):
         row = db.get(QPaymentOrder, order_id)
         if not row:
             raise HTTPException(404, "Payment order not found")
@@ -1863,7 +1957,7 @@ def register_v28(app, current_user, get_db):
         db.commit(); return _payment_order_json(db, row)
 
     @router.put("/admin/config")
-    def admin_config(body: AdminConfigIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_config(body: AdminConfigIn, u: User = Depends(require_section("SYSTEM_SETTINGS", "FULL")), db: Session = Depends(get_db)):
         cfg = _config(db)
         if body.q_price_usd is not None:
             cfg.q_price_microusd = int(round(body.q_price_usd * USD_MICROS))
@@ -1881,7 +1975,7 @@ def register_v28(app, current_user, get_db):
         return config(db)
 
     @router.post("/admin/treasury/transfer")
-    def admin_treasury_transfer(body: TreasuryTransferIn, u: User = Depends(require_master), db: Session = Depends(get_db)):
+    def admin_treasury_transfer(body: TreasuryTransferIn, u: User = Depends(require_section("Q_ECONOMY", "FULL")), db: Session = Depends(get_db)):
         from_key, to_key = body.from_wallet.strip().upper(), body.to_wallet.strip().upper()
         if from_key not in SYSTEM_OPENING_Q or to_key not in SYSTEM_OPENING_Q:
             raise HTTPException(422, "Unknown Q system wallet")
@@ -1891,7 +1985,7 @@ def register_v28(app, current_user, get_db):
         return {"ok": True}
 
     @router.get("/admin/ledger")
-    def admin_ledger(limit: int = 250, u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_ledger(limit: int = 250, u: User = Depends(require_section("Q_ECONOMY", "READ")), db: Session = Depends(get_db)):
         limit = max(1, min(limit, 1000))
         rows = db.scalars(select(QLedgerEntry).order_by(QLedgerEntry.id.desc()).limit(limit)).all()
         return [{
@@ -1902,13 +1996,12 @@ def register_v28(app, current_user, get_db):
         } for x in rows]
 
     @router.get("/admin/market/orders")
-    def admin_market_orders(u: User = Depends(require_admin), db: Session = Depends(get_db)):
+    def admin_market_orders(u: User = Depends(require_section("MARKETPLACE", "READ")), db: Session = Depends(get_db)):
         rows = db.scalars(select(QMarketOrder).order_by(QMarketOrder.id.desc()).limit(500)).all()
         return [_market_order_json(db, x) for x in rows]
 
     @router.post("/admin/market/orders/{order_id}/resolve")
-    def admin_resolve_market(order_id: int, body: ResolveDisputeIn, u: User = Depends(require_admin), db: Session = Depends(get_db)):
-        _require_roles(db, u, "MASTER_ADMIN", "MARKETPLACE_ADMIN", "RISK_ADMIN")
+    def admin_resolve_market(order_id: int, body: ResolveDisputeIn, u: User = Depends(require_section("MARKETPLACE", "FULL")), db: Session = Depends(get_db)):
         row = db.get(QMarketOrder, order_id)
         if not row or row.status != "DISPUTED":
             raise HTTPException(404, "Open dispute not found")
