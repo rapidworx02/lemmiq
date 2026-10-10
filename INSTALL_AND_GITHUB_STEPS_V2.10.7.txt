@@ -1,0 +1,60 @@
+LEMMIQ V2.10.7 INSTALL / GITHUB STEPS
+
+Recommended: use LEMMIQ_V2.10.7_CHANGED_FILES_ONLY.zip over your current V2.10.6 repo.
+
+1) BACKUP / PULL
+cd /d C:\Users\pc\LEMMIQ
+git pull origin main
+git status
+
+2) EXTRACT THE CHANGED-FILES ZIP
+Copy/merge the contents of LEMMIQ_V2.10.7_CHANGED_ONLY into C:\Users\pc\LEMMIQ.
+Do not delete v28.js, v29.js, v28.css or v29.css from your existing repo.
+
+3) VERIFY VERSION
+findstr /n /i "versionCode versionName" android\app\build.gradle.kts
+
+Expected:
+versionCode=57
+versionName="2.10.7"
+
+4) PUSH
+git add .
+git commit -m "LEMMIQ V2.10.7 fix Q Predict contrast and web chat composer"
+git push origin main
+
+5) RENDER
+Wait for Render deploy to finish.
+Open:
+https://lemmiq-api.onrender.com/app-config
+
+Expected version: 2.10.7
+
+6) PWA / BROWSER TEST
+Open:
+https://lemmiq-api.onrender.com/web/#q-predict
+
+If old styles remain:
+- close all LEMMIQ browser tabs
+- reopen
+- hard refresh (Ctrl+Shift+R)
+- if still stale, clear site data for lemmiq-api.onrender.com once
+
+Check:
+- Q Predict cards are dark/readable
+- YES/NO percentages and market details are visible
+- Chat message field uses most of the composer width
+- Mic / attachment / Q / Send buttons remain compact
+
+7) ANDROID BUILD
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+APK:
+app\build\outputs\apk\debug\app-debug.apk
+
+Install:
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+Note: V2.10.7 does not change Android call/Q logic; Android version is bumped so all clients stay on the same release number.

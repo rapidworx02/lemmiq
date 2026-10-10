@@ -1,0 +1,148 @@
+/* LEMMIQ V2.10.7 — web readability + composer hotfix */
+
+/* 1) Desktop/web composer: keep controls compact and give text input the remaining width. */
+.composer{
+  display:flex!important;
+  align-items:flex-end!important;
+  gap:8px!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+}
+.composer .attach-btn,
+.composer .voice-btn,
+.composer .qbtn,
+.composer .send{
+  flex:0 0 44px!important;
+  width:44px!important;
+  min-width:44px!important;
+  max-width:44px!important;
+  height:44px!important;
+  padding:0!important;
+  border-radius:14px!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.composer textarea{
+  flex:1 1 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  min-height:44px!important;
+  max-height:132px!important;
+  box-sizing:border-box!important;
+  resize:none!important;
+}
+@media(min-width:900px){
+  .chat-pane .composer{padding:10px 12px!important}
+  .chat-pane .composer textarea{font-size:15px!important}
+}
+@media(max-width:680px){
+  .composer{gap:6px!important}
+  .composer .attach-btn,
+  .composer .voice-btn,
+  .composer .qbtn,
+  .composer .send{
+    flex-basis:42px!important;
+    width:42px!important;
+    min-width:42px!important;
+    max-width:42px!important;
+    height:42px!important;
+  }
+}
+
+/* 2) Q Predict desktop card contrast.
+   Old v29 cards can carry a light background while inheriting light text.
+   Force the market surface back into the LEMMIQ dark/glass theme. */
+#view-q-predict{
+  color-scheme:dark!important;
+}
+#view-q-predict #v29PredictMarkets > *,
+#view-q-predict .v29-market-list > *,
+#view-q-predict [class*="market-card"],
+#view-q-predict [class*="predict-card"],
+#view-q-predict [class*="prediction-card"]{
+  background:
+    linear-gradient(145deg,rgba(27,30,57,.96),rgba(18,21,43,.96))!important;
+  color:#f7f4ff!important;
+  border:1px solid rgba(149,124,255,.28)!important;
+  box-shadow:0 12px 32px rgba(0,0,0,.22)!important;
+  opacity:1!important;
+  filter:none!important;
+}
+
+#view-q-predict #v29PredictMarkets > * *,
+#view-q-predict .v29-market-list > * *,
+#view-q-predict [class*="market-card"] *,
+#view-q-predict [class*="predict-card"] *,
+#view-q-predict [class*="prediction-card"] *{
+  opacity:1;
+}
+
+#view-q-predict #v29PredictMarkets h1,
+#view-q-predict #v29PredictMarkets h2,
+#view-q-predict #v29PredictMarkets h3,
+#view-q-predict #v29PredictMarkets h4,
+#view-q-predict #v29PredictMarkets strong,
+#view-q-predict .v29-market-list h1,
+#view-q-predict .v29-market-list h2,
+#view-q-predict .v29-market-list h3,
+#view-q-predict .v29-market-list h4,
+#view-q-predict .v29-market-list strong{
+  color:#fff!important;
+}
+
+#view-q-predict #v29PredictMarkets p,
+#view-q-predict #v29PredictMarkets small,
+#view-q-predict #v29PredictMarkets .micro,
+#view-q-predict #v29PredictMarkets span,
+#view-q-predict .v29-market-list p,
+#view-q-predict .v29-market-list small,
+#view-q-predict .v29-market-list .micro,
+#view-q-predict .v29-market-list span{
+  color:#d5d1e3!important;
+}
+
+/* Preserve clearly readable YES / NO affordances where v29 naming is available. */
+#view-q-predict [class*="yes"],
+#view-q-predict [class*="YES"]{
+  color:#66e4b0!important;
+}
+#view-q-predict [class*="no"],
+#view-q-predict [class*="NO"]{
+  color:#ff8ca8!important;
+}
+
+/* Inputs/buttons inside market cards must not turn white-on-white. */
+#view-q-predict #v29PredictMarkets button,
+#view-q-predict .v29-market-list button{
+  color:#f8f6ff!important;
+}
+#view-q-predict #v29PredictMarkets input,
+#view-q-predict #v29PredictMarkets textarea,
+#view-q-predict .v29-market-list input,
+#view-q-predict .v29-market-list textarea{
+  background:rgba(8,10,25,.72)!important;
+  color:#fff!important;
+  border-color:rgba(255,255,255,.18)!important;
+}
+
+/* Desktop market cards: keep content legible and avoid translucent washout. */
+@media(min-width:900px){
+  #view-q-predict #v29PredictMarkets,
+  #view-q-predict .v29-market-list{
+    align-items:stretch!important;
+  }
+  #view-q-predict #v29PredictMarkets > *,
+  #view-q-predict .v29-market-list > *{
+    min-height:178px!important;
+    padding:18px!important;
+  }
+}
+
+/* Windows/Chrome accessibility/high contrast safety. */
+@media(forced-colors:active){
+  #view-q-predict #v29PredictMarkets > *,
+  #view-q-predict .v29-market-list > *{
+    forced-color-adjust:auto!important;
+    border:1px solid CanvasText!important;
+  }
+}
