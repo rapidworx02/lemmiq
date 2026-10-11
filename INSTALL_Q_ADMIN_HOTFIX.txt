@@ -1,0 +1,46 @@
+LEMMIQ V2.10.8 Q ADMIN NAVIGATION HOTFIX
+
+Fixes:
+- Q Admin opened from More now gets its own #q-admin browser history state.
+- Browser Back returns Q Admin -> More cleanly.
+- Removes the V2.10.8 MutationObserver that repeatedly reloaded admin panels.
+- Adds a single-flight Q Admin loader to prevent overlapping reloads.
+- Keeps #q-admin on refresh.
+- Adds /v2108 to the service-worker API bypass so admin analytics/access responses are not cached.
+- Makes v2108.js/css network-first.
+- Bumps the service-worker cache to lemmiq-v2108-adminfix-1.
+
+FILES TO REPLACE:
+backend/web/app.js
+backend/web/v2108.js
+backend/web/index.html
+backend/web/sw.js
+
+INSTALL:
+1. Extract this hotfix.
+2. Copy the backend folder into:
+   C:\Users\pc\LEMMIQ\
+   and allow the 4 files to overwrite.
+
+3. Push:
+   cd /d C:\Users\pc\LEMMIQ
+   git status
+   git add backend\web\app.js backend\web\v2108.js backend\web\index.html backend\web\sw.js
+   git commit -m "Fix V2.10.8 Q Admin browser navigation"
+   git push origin main
+
+4. Wait for Render deploy.
+
+5. On the browser:
+   - close all LEMMIQ tabs
+   - reopen https://lemmiq-api.onrender.com/web/#more
+   - press Ctrl+Shift+R once
+   - click Q Admin
+
+Expected:
+More -> Q Admin stays open.
+URL becomes #q-admin.
+Browser Back returns to #more.
+No repeated open/back/forth behavior.
+
+No backend/database/Android files are changed by this hotfix.

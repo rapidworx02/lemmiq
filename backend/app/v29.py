@@ -299,11 +299,11 @@ class PredictConfigIn(BaseModel):
 
 FEATURE_ESTIMATES = {
     "Q_AGENT": (10_000, 0.25),      # US$0.0100 estimated / 0.25Q simulated
-    "Q_VISION": (30_000, 1.00),
-    "TRUST": (20_000, 0.50),
-    "CHAT_SUMMARY": (15_000, 0.25),
+    "Q_VISION": (30_000, 2.00),
+    "TRUST": (20_000, 1.00),
+    "CHAT_SUMMARY": (15_000, 0.50),
     "Q_TO_Q": (10_000, 0.50),
-    "BUSINESS_AGENT": (20_000, 2.00),
+    "BUSINESS_AGENT": (20_000, 5.00),
     "SUGGEST_REPLY": (8_000, 0.20),
     "AUTO_MESSAGE": (12_000, 0.35),
 }
@@ -321,19 +321,9 @@ def track_shadow_event(db: Session, user_id: int | None, feature: str, *, succes
         success=bool(success),
         note=(note or "")[:240],
     ))
-    if user_id:
-        feature_map = {
-            "Q_AGENT": "Q_CHAT", "TRUST": "TRUST_CHECK", "CHAT_SUMMARY": "CHAT_SUMMARY",
-            "Q_VISION": "Q_VISION", "Q_TO_Q": "Q_TO_Q", "BUSINESS_AGENT": "BUSINESS_AGENT",
-            "SUGGEST_REPLY": "SUGGEST_REPLY", "AUTO_MESSAGE": "AUTO_MESSAGE",
-        }
-        key = feature_map.get(feature)
-        if key:
-            try:
-                from .v2105_q_features import record_feature_usage
-                record_feature_usage(db, user_id, key, status="SUCCESS" if success else "FAILED", reference=(note or feature)[:180], charge=False)
-            except Exception:
-                log.exception("Q feature usage logging failed for %s", feature)
+    # V2.10.7.4 feature usage/charging is recorded by the feature endpoint
+    # itself so that wallet preflight happens BEFORE the AI/provider call.
+    # Shadow analytics remains independent and never charges Q here.
 
 
 def _config(db: Session) -> PredictConfig:

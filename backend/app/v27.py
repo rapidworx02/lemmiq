@@ -205,6 +205,14 @@ def register_v27(app, current_user, get_db, push):
     router = APIRouter()
     dep_db = get_db
 
+    def feature_begin(db: Session, uid: int, key: str, reference: str = ""):
+        from .v2105_q_features import charge_feature_for_user
+        return charge_feature_for_user(db, uid, key, reference=reference)
+
+    def feature_finish(db: Session, reservation: dict, success: bool):
+        from .v2105_q_features import finish_feature_charge
+        return finish_feature_charge(db, reservation, success)
+
     @router.get("/v27/q/home")
     def q_home(u=Depends(current_user), db: Session = Depends(dep_db)):
         brief = daily_brief(db, u.id)
@@ -263,7 +271,13 @@ def register_v27(app, current_user, get_db, push):
         mime = _sniff_image_mime(data, declared_mime)
         if mime not in VISION_MIME:
             raise HTTPException(415, "Q Vision currently supports JPG, PNG, WEBP and GIF images.")
-        analysis = _vision_ai(data, mime, question)
+        billing = feature_begin(db, u.id, "Q_VISION", "vision:new")
+        try:
+            analysis = _vision_ai(data, mime, question)
+        except Exception:
+            feature_finish(db, billing, False); db.commit()
+            raise
+        feature_finish(db, billing, True)
         key = media_store.store(data)
         history = [{"role":"user","text":question},{"role":"q","text":analysis["summary"]}]
         row = VisionMemory(
@@ -323,7 +337,13 @@ def register_v27(app, current_user, get_db, push):
         actual_mime = _sniff_image_mime(data, row.mime_type)
         if actual_mime and actual_mime != row.mime_type:
             row.mime_type = actual_mime
-        result = _vision_ai(data, actual_mime or row.mime_type, body.question.strip(), prior=prior)
+        billing = feature_begin(db, u.id, "Q_VISION", f"vision:{vision_id}:follow-up")
+        try:
+            result = _vision_ai(data, actual_mime or row.mime_type, body.question.strip(), prior=prior)
+        except Exception:
+            feature_finish(db, billing, False); db.commit()
+            raise
+        feature_finish(db, billing, True)
         history += [{"role":"user","text":body.question.strip()},{"role":"q","text":result["summary"]}]
         row.title = result.get("title") or row.title
         row.category = result.get("category") or row.category
@@ -376,21 +396,29 @@ def register_v27(app, current_user, get_db, push):
         for x in existing:
             if re.sub(r"\s+", " ", x.prompt.strip().lower()) == norm and x.target_user_id in ids:
                 raise HTTPException(409, "A matching Q-to-Q plan is already waiting for a response.")
+        billing = feature_begin(db, u.id, "Q_TO_Q", f"q-to-q:{len(ids)}")
         key = uuid.uuid4().hex; now = datetime.now(timezone.utc); rows = []
-        for target in targets:
-            row = QCoordinationRequest(
-                request_key=key, initiator_id=u.id, target_user_id=target.id,
-                kind=(body.kind or "PLAN").strip().upper(), prompt=body.prompt.strip(),
-                options_json=json.dumps(options, ensure_ascii=False), response_json="{}",
-                status="PENDING", created_at=now, updated_at=now, expires_at=now + timedelta(days=7),
-            )
-            db.add(row); rows.append(row)
         try:
-            from .v29 import track_shadow_event
-            track_shadow_event(db,u.id,"Q_TO_Q",success=True,note=f"{len(rows)} participant(s)")
+            for target in targets:
+                row = QCoordinationRequest(
+                    request_key=key, initiator_id=u.id, target_user_id=target.id,
+                    kind=(body.kind or "PLAN").strip().upper(), prompt=body.prompt.strip(),
+                    options_json=json.dumps(options, ensure_ascii=False), response_json="{}",
+                    status="PENDING", created_at=now, updated_at=now, expires_at=now + timedelta(days=7),
+                )
+                db.add(row); rows.append(row)
+            feature_finish(db, billing, True)
+            try:
+                from .v29 import track_shadow_event
+                track_shadow_event(db,u.id,"Q_TO_Q",success=True,note=f"{len(rows)} participant(s)")
+            except Exception:
+                pass
+            db.commit()
         except Exception:
-            pass
-        db.commit()
+            db.rollback()
+            # The original fee transaction was rolled back with the failed write,
+            # so no second refund is required after rollback.
+            raise
         for row in rows:
             db.refresh(row)
             await push(row.target_user_id, {

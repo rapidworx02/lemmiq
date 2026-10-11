@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
 import os
 import re
 import secrets
@@ -43,6 +44,8 @@ SYSTEM_OPENING_Q = {
     "PROFIT": 0,
     "ESCROW": 0,
     "PREDICT_ESCROW": 0,
+    "WITHDRAWAL_RESERVE": 0,
+    "REBUY_RESERVE": 0,
     "LOCKED_RESERVE": 990_000_000,
 }
 
@@ -514,6 +517,13 @@ def _system_to_user(db: Session, system_key: str, uid: int, amount: int, kind: s
     uw.balance_micros += amount
     uw.updated_at = _now()
     _ledger(db, kind, amount, from_system=system_key, to_user=uid, reference=reference, note=note, usd_cents=usd_cents)
+    # V2.10.7.4: LEMMIQ-generated rewards consume the current package
+    # earning-cap cycle. Refunds/transfers/marketplace payouts are excluded.
+    try:
+        from .v21074_q_economy import capture_qualifying_reward
+        capture_qualifying_reward(db, uid, amount, kind, reference=reference, note=note)
+    except ImportError:
+        pass
 
 
 def _user_to_system(db: Session, uid: int, system_key: str, amount: int, kind: str, reference: str = "", note: str = ""):
@@ -827,7 +837,7 @@ def _subscription_json(row: QSubscriptionLot, cfg: QEconomyConfig, db: Session |
         "progress_to_cap_percent": round(progress_to_cap, 4),
         "cap_usd": _usd(row.cap_usd_micros),
         "remaining_cap_usd": _usd(remaining),
-        "status": row.status,
+        "status": "COMPLETED" if row.status == "CAP_REACHED" else row.status,
         "daily_rate_override": bool(ov and ov.daily_rate_override),
         "cap_percent_override": bool(ov and ov.cap_percent_override),
         "started_at": row.started_at.isoformat(),
@@ -861,11 +871,29 @@ def _accrue_user_packages(db: Session, uid: int):
             )
             row.accrued_usd_micros += owed_usd
             row.accrued_q_micros += q_amount
+            try:
+                from .v21074_q_economy import record_package_accrual_event
+                record_package_accrual_event(
+                    db, row, q_amount, owed_usd,
+                    reference=f"subscription:{row.id}",
+                    note=f"{days} day package accrual",
+                )
+            except ImportError:
+                pass
         row.last_accrual_date = end_date
         if row.accrued_usd_micros >= row.cap_usd_micros:
-            row.status = "CAP_REACHED"
+            row.status = "COMPLETED"
         elif today >= row.expires_at.date():
             row.status = "EXPIRED"
+
+
+def _v21074_withdrawal_enabled(db: Session) -> bool:
+    try:
+        from .v21074_q_economy import QEconomyV21074Config
+        row = db.get(QEconomyV21074Config, 1)
+        return bool(row and row.withdrawal_enabled)
+    except ImportError:
+        return False
 
 
 def _wallet_summary(db: Session, u: User):
@@ -880,8 +908,8 @@ def _wallet_summary(db: Session, u: User):
         "balance_q": _q(w.balance_micros),
         "balance_usd_reference": round(_q(w.balance_micros) * cfg.q_price_microusd / USD_MICROS, 4),
         "q_reference_usd": cfg.q_price_microusd / USD_MICROS,
-        "cashout_enabled": bool(cfg.cashout_enabled),
-        "cashout_note": "Cash-out is not enabled in LEMMIQ V2.8.3.",
+        "cashout_enabled": _v21074_withdrawal_enabled(db),
+        "cashout_note": "Q → USDT withdrawal is available." if _v21074_withdrawal_enabled(db) else "Q → USDT withdrawal is currently turned off by Admin.",
         "basic_daily_q": _q(cfg.basic_daily_micros),
         "basic_claimed_today": bool(today_claimed),
         "signup_bonus_q": _q(cfg.signup_bonus_micros),
@@ -947,20 +975,31 @@ def _market_order_json(db: Session, row: QMarketOrder):
 
 
 def _payment_wallet_json(row: QPaymentWallet):
+    shared = row.package_code in (None, "ALL_PACKS")
     return {
         "id": row.id,
         "network": row.network,
-        "package_code": row.package_code,
+        "package_code": None if shared else row.package_code,
         "label": row.label,
         "address": row.address,
         "active": row.active,
         "qr_url": f"/v28/payment-wallets/{row.id}/qr",
         "custom_qr": bool(row.qr_image_b64),
-        "shared_all_packs": row.package_code is None,
+        "shared_all_packs": shared,
     }
 
 
 def _shared_payment_wallet(db: Session, network: str):
+    # ALL_PACKS avoids the old production-schema NOT NULL problem that caused
+    # V2.10.7.3 Save / Use for all packs to throw Internal Server Error.
+    row = db.scalar(select(QPaymentWallet).where(
+        QPaymentWallet.active.is_(True),
+        QPaymentWallet.network == network.upper(),
+        QPaymentWallet.package_code == "ALL_PACKS",
+    ).order_by(QPaymentWallet.id.desc()).limit(1))
+    if row:
+        return row
+    # Compatibility with any database where the nullable V2.10.7.3 row worked.
     return db.scalar(select(QPaymentWallet).where(
         QPaymentWallet.active.is_(True),
         QPaymentWallet.network == network.upper(),
@@ -973,6 +1012,7 @@ def _legacy_payment_wallet(db: Session, network: str, package_code: str | None =
         QPaymentWallet.active.is_(True),
         QPaymentWallet.network == network.upper(),
         QPaymentWallet.package_code.is_not(None),
+        QPaymentWallet.package_code != "ALL_PACKS",
     )
     if package_code:
         stmt = stmt.where(QPaymentWallet.package_code == package_code.upper())
@@ -1260,6 +1300,12 @@ def register_v28(app, current_user, get_db):
             raise HTTPException(404, "Payment order not found")
         if row.status not in ("CREATED", "REJECTED"):
             raise HTTPException(409, "This payment order cannot be submitted")
+        try:
+            from .v21074_q_economy import rebuy_submit_allowed
+            if not rebuy_submit_allowed(db, row.id):
+                raise HTTPException(409, "Create a new Q + USDT rebuy order; the previous Q lock has been released")
+        except ImportError:
+            pass
         tx_hash = body.tx_hash.strip()
         duplicate = db.scalar(select(QPaymentOrder).where(QPaymentOrder.submitted_tx_hash == tx_hash, QPaymentOrder.id != row.id))
         if duplicate:
@@ -1717,10 +1763,10 @@ def register_v28(app, current_user, get_db):
                 elif custom_cap:
                     skipped_custom += 1
                 if changed:
-                    if lot.status == "CAP_REACHED" and lot.accrued_usd_micros < lot.cap_usd_micros and _now() < lot.expires_at:
+                    if lot.status in {"CAP_REACHED", "COMPLETED"} and lot.accrued_usd_micros < lot.cap_usd_micros and _now() < lot.expires_at:
                         lot.status = "ACTIVE"
                     if lot.accrued_usd_micros >= lot.cap_usd_micros and lot.status == "ACTIVE":
-                        lot.status = "CAP_REACHED"
+                        lot.status = "COMPLETED"
                     affected += 1
         after_rule = _package_rule_json(rule)
         _audit(db, u.id, "PACKAGE_MASTER_RULE_UPDATE", before=before_rule, after={**after_rule, "affected": affected}, reason=body.reason)
@@ -1815,9 +1861,9 @@ def register_v28(app, current_user, get_db):
 
         if body.status is not None:
             new_status = body.status.strip().upper()
-            allowed = {"ACTIVE", "PAUSED", "STOPPED", "ADMIN_CANCELLED"}
+            allowed = {"ACTIVE", "PAUSED", "STOPPED", "ADMIN_CANCELLED", "COMPLETED"}
             if new_status not in allowed:
-                raise HTTPException(422, "Status must be ACTIVE, PAUSED, STOPPED or ADMIN_CANCELLED")
+                raise HTTPException(422, "Status must be ACTIVE, PAUSED, STOPPED, ADMIN_CANCELLED or COMPLETED")
             if new_status == "ACTIVE":
                 if _now() >= lot.expires_at:
                     raise HTTPException(409, "Expired package cannot be resumed")
@@ -1826,7 +1872,7 @@ def register_v28(app, current_user, get_db):
             lot.status = new_status
 
         if lot.status == "ACTIVE" and lot.accrued_usd_micros >= lot.cap_usd_micros:
-            lot.status = "CAP_REACHED"
+            lot.status = "COMPLETED"
         ov.updated_at = _now()
         after = _package_snapshot(lot, db)
         _audit(db, u.id, "USER_PACKAGE_EDIT", target_user_id=lot.user_id, lot_id=lot.id, before=before, after=after, reason=body.reason)
@@ -1867,11 +1913,17 @@ def register_v28(app, current_user, get_db):
         _validate_payment_address(net, address)
 
         previous = db.scalars(select(QPaymentWallet).where(
-            QPaymentWallet.package_code.is_(None),
+            QPaymentWallet.package_code.in_(["ALL_PACKS"]),
             QPaymentWallet.network == net,
             QPaymentWallet.active.is_(True),
         )).all()
         before = [_payment_wallet_json(x) for x in previous]
+        nullable_shared = db.scalars(select(QPaymentWallet).where(
+            QPaymentWallet.package_code.is_(None),
+            QPaymentWallet.network == net,
+            QPaymentWallet.active.is_(True),
+        )).all()
+        previous = list(previous) + [x for x in nullable_shared if x not in previous]
         for x in previous:
             x.active = False
             x.updated_at = _now()
@@ -1879,7 +1931,7 @@ def register_v28(app, current_user, get_db):
         label = body.label.strip() or f"Shared USDT {net} — All Q Packs"
         row = QPaymentWallet(
             network=net,
-            package_code=None,
+            package_code="ALL_PACKS",
             label=label,
             address=address,
             active=body.active,
@@ -1959,7 +2011,7 @@ def register_v28(app, current_user, get_db):
             raise HTTPException(404, "Payment wallet not found")
         network = body.network.strip().upper(); _validate_payment_address(network, body.address.strip())
         code = body.package_code.strip().upper() if body.package_code else None
-        if code and code not in PACKAGE_PLANS:
+        if code and code not in PACKAGE_PLANS and code != "ALL_PACKS":
             raise HTTPException(422, "Unknown package code")
         row.network = network; row.package_code = code; row.label = body.label.strip()
         row.address = body.address.strip(); row.active = body.active; row.updated_at = _now()
@@ -2017,6 +2069,11 @@ def register_v28(app, current_user, get_db):
         row.status = "APPROVED"; row.reviewed_at = now; row.reviewed_by = u.id
         db.add(lot)
         db.flush()
+        try:
+            from .v21074_q_economy import finalize_rebuy_on_payment_approval
+            finalize_rebuy_on_payment_approval(db, row, lot)
+        except ImportError:
+            pass
         _award_subscription_referral(db, row)
         db.commit(); db.refresh(lot)
         return {"ok": True, "payment": _payment_order_json(db, row), "subscription": _subscription_json(lot, _config(db), db)}
@@ -2029,6 +2086,11 @@ def register_v28(app, current_user, get_db):
         if row.status != "PENDING":
             raise HTTPException(409, "Only pending payments can be rejected")
         row.status = "REJECTED"; row.admin_note = body.note.strip(); row.reviewed_at = _now(); row.reviewed_by = u.id
+        try:
+            from .v21074_q_economy import finalize_rebuy_on_payment_reject
+            finalize_rebuy_on_payment_reject(db, row, body.note.strip())
+        except ImportError:
+            pass
         db.commit(); return _payment_order_json(db, row)
 
     @router.put("/admin/config")

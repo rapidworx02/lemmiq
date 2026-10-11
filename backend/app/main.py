@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.10.7.1")
+app = FastAPI(title="LEMMIQ Server", version="2.10.7.4")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -60,6 +60,16 @@ def current_user(authorization: str = Header(default=""), db: Session = Depends(
     if not u:
         raise HTTPException(401, "User not found")
     return u
+
+def _q_feature_begin(db: Session, user_id: int, feature_key: str, reference: str = ""):
+    from .v2105_q_features import charge_feature_for_user
+    return charge_feature_for_user(db, user_id, feature_key, reference=reference)
+
+
+def _q_feature_finish(db: Session, reservation: dict, success: bool, metadata: dict | None = None):
+    from .v2105_q_features import finish_feature_charge
+    return finish_feature_charge(db, reservation, success, metadata=metadata)
+
 
 def user_json(u: User):
     return {"id": u.id, "username": u.username, "display_name": u.display_name, "avatar": u.avatar, "avatar_url": f"/v24/profile/avatar/{u.id}" if u.avatar else None}
@@ -209,7 +219,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.3"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.4"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -303,7 +313,12 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
     business_handled = False
     if bs and bp and bp.enabled and bs.enabled and bs.mode == "AUTO" and not sensitive(body.text):
         try:
-            br = business_reply(db, oid, cid, body.text)
+            _billing = _q_feature_begin(db, oid, "AUTO_MESSAGE", f"business-auto chat:{cid}")
+            try:
+                br = business_reply(db, oid, cid, body.text)
+            except Exception:
+                _q_feature_finish(db, _billing, False); db.commit()
+                raise
             if br.get("reply") and int(br.get("confidence", 0)) >= int(bp.auto_threshold or 90) and not br.get("requires_review", True):
                 if db.get(AutoReplyReceipt, m.id):
                     return data
@@ -311,6 +326,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 c.updated_at = datetime.now(timezone.utc)
                 db.add(auto); db.flush()
                 db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
+                _q_feature_finish(db, _billing, True)
                 db.commit(); db.refresh(auto)
                 try:
                     from .v29 import track_shadow_event
@@ -322,6 +338,8 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
                 background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
                 business_handled = True
+            else:
+                _q_feature_finish(db, _billing, False); db.commit()
         except Exception as e:
             print("Business AUTO error:", e)
     s = get_settings(db, cid, oid)
@@ -334,11 +352,17 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
         try:
             if db.get(AutoReplyReceipt, m.id):
                 return data
-            reply = ai_reply(s.category, s.tone, "\n".join(lines), body.text)
+            _billing = _q_feature_begin(db, oid, "AUTO_MESSAGE", f"personal-auto chat:{cid}")
+            try:
+                reply = ai_reply(s.category, s.tone, "\n".join(lines), body.text)
+            except Exception:
+                _q_feature_finish(db, _billing, False); db.commit()
+                raise
             auto = Message(chat_id=cid, sender_id=oid, text=reply, ai_generated=True)
             c.updated_at = datetime.now(timezone.utc)
             db.add(auto); db.flush()
             db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
+            _q_feature_finish(db, _billing, True)
             db.commit(); db.refresh(auto)
             try:
                 from .v29 import track_shadow_event
@@ -386,13 +410,19 @@ def suggest(cid: int, u: User = Depends(current_user), db: Session = Depends(get
     lines=[]
     for x in rows:
         sender=db.get(User,x.sender_id); lines.append(f"{sender.display_name}: {x.text}")
-    reply = ai_reply(s.category, s.tone, "\n".join(lines), incoming)
+    billing = _q_feature_begin(db, u.id, "SUGGEST_REPLY", f"chat:{cid}")
+    try:
+        reply = ai_reply(s.category, s.tone, "\n".join(lines), incoming)
+    except Exception:
+        _q_feature_finish(db, billing, False); db.commit()
+        raise
+    _q_feature_finish(db, billing, True)
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db, u.id, "SUGGEST_REPLY", note=f"chat:{cid}")
-        db.commit()
     except Exception:
-        db.rollback()
+        logging.getLogger("lemmiq.v29").exception("Suggest Reply shadow tracking failed")
+    db.commit()
     return {"reply": reply}
 
 @app.get("/moments")
@@ -440,11 +470,13 @@ def trust_check(body: TrustIn, refresh: bool=False, u: User = Depends(current_us
         cached=db.scalar(select(TrustHistory).where(TrustHistory.user_id==u.id,TrustHistory.content_hash==digest,TrustHistory.checked_at>=cutoff).order_by(TrustHistory.checked_at.desc()).limit(1))
         if cached:
             out=trust_history_json(cached);out["cached"]=True;return out
+    billing=_q_feature_begin(db,u.id,"TRUST_CHECK","trust-check")
     trust_success=True
     try:result=check_text(body.text)
     except Exception:
         trust_success=False
         logging.getLogger("lemmiq.trust").exception("Trust endpoint failed");result=unavailable_result()
+    _q_feature_finish(db,billing,trust_success)
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db,u.id,"TRUST",success=trust_success)
@@ -493,17 +525,23 @@ def agent_search(q: str, u: User = Depends(current_user), db: Session = Depends(
 
 @app.get("/agent/chats/{cid}/summary")
 def agent_chat_summary(cid: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
+    billing = _q_feature_begin(db, u.id, "CHAT_SUMMARY", f"chat:{cid}")
     try:
         result = summarize_chat(db, u.id, cid)
-        try:
-            from .v29 import track_shadow_event
-            track_shadow_event(db, u.id, "CHAT_SUMMARY", note=f"chat:{cid}")
-            db.commit()
-        except Exception:
-            db.rollback()
-        return result
     except ValueError:
+        _q_feature_finish(db, billing, False); db.commit()
         raise HTTPException(404, "Chat not found")
+    except Exception:
+        _q_feature_finish(db, billing, False); db.commit()
+        raise
+    _q_feature_finish(db, billing, True)
+    try:
+        from .v29 import track_shadow_event
+        track_shadow_event(db, u.id, "CHAT_SUMMARY", note=f"chat:{cid}")
+    except Exception:
+        logging.getLogger("lemmiq.v29").exception("Chat Summary shadow tracking failed")
+    db.commit()
+    return result
 
 @app.post("/agent/ask")
 def agent_ask(body: AgentAskIn, u: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -512,13 +550,19 @@ def agent_ask(body: AgentAskIn, u: User = Depends(current_user), db: Session = D
         if isinstance(x,dict) and x.get("source") in {"WhatsApp","SMS"}:
             clean.append({"source":x["source"],"contact":str(x.get("contact",""))[:80],
                           "text":str(x.get("text",""))[:500]})
-    result = ask_agent(db, u.id, body.question, body.days, clean)
+    billing = _q_feature_begin(db, u.id, "Q_CHAT", "agent-ask")
+    try:
+        result = ask_agent(db, u.id, body.question, body.days, clean)
+    except Exception:
+        _q_feature_finish(db, billing, False); db.commit()
+        raise
+    _q_feature_finish(db, billing, True)
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db, u.id, "Q_AGENT")
-        db.commit()
     except Exception:
-        db.rollback()
+        logging.getLogger("lemmiq.v29").exception("Q Chat shadow tracking failed")
+    db.commit()
     return result
 
 
@@ -768,13 +812,19 @@ def external_suggest(body:ExternalAsk,u:User=Depends(current_user),db:Session=De
     if not rows:
         raise HTTPException(422,"No matching messages")
     hist="\n".join(f"{x.contact}: {x.text}" for x in rows)
-    reply=ai_reply("FRIEND",body.tone,hist,rows[-1].text)
+    billing=_q_feature_begin(db,u.id,"SUGGEST_REPLY",f"external:{body.source}")
+    try:
+        reply=ai_reply("FRIEND",body.tone,hist,rows[-1].text)
+    except Exception:
+        _q_feature_finish(db,billing,False);db.commit()
+        raise
+    _q_feature_finish(db,billing,True)
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db, u.id, "SUGGEST_REPLY", note=f"external:{body.source}")
-        db.commit()
     except Exception:
-        db.rollback()
+        logging.getLogger("lemmiq.v29").exception("External Suggest shadow tracking failed")
+    db.commit()
     return {"reply":reply,
             "note":"Draft only. Review and copy into the original app; LEMMIQ never sends it."}
 
@@ -889,13 +939,19 @@ def business_suggest(cid:int,u:User=Depends(current_user),db:Session=Depends(get
     rows=db.scalars(select(Message).where(Message.chat_id==cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
     incoming=next((x.text for x in reversed(rows) if x.sender_id!=u.id),None)
     if not incoming: raise HTTPException(400,"No incoming customer message")
-    result = business_reply(db,u.id,cid,incoming)
+    billing=_q_feature_begin(db,u.id,"BUSINESS_AGENT",f"chat:{cid}")
+    try:
+        result = business_reply(db,u.id,cid,incoming)
+    except Exception:
+        _q_feature_finish(db,billing,False);db.commit()
+        raise
+    _q_feature_finish(db,billing,True)
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db, u.id, "BUSINESS_AGENT", note=f"chat:{cid}")
-        db.commit()
     except Exception:
-        db.rollback()
+        logging.getLogger("lemmiq.v29").exception("Business Agent shadow tracking failed")
+    db.commit()
     return result
 
 @app.post("/business/chats/{cid}/learn")
@@ -938,7 +994,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.10.7.3",
+        "version": "2.10.7.4",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -977,12 +1033,15 @@ register_v29(app,current_user,get_db)
 from .v2104_predict_router import register_v2104_predict_compat
 register_v2104_predict_compat(app,current_user,get_db)
 
-# V2.10.5 server-authoritative Q feature pricing by active subscription tier.
+# V2.10.7.4 server-authoritative global Q feature pricing (same price for every package).
 from .v2105_q_features import register_v2105_q_features
 register_v2105_q_features(app,current_user,get_db)
 
 from .v21072_q_usage import register_v21072_q_usage
 register_v21072_q_usage(app,current_user,get_db)
+
+from .v21074_q_economy import register_v21074_q_economy
+register_v21074_q_economy(app,current_user,get_db)
 
 # Compatibility catalog for V2.10.4 clients. Prices remain 0 Q there; V2.10.5
 # clients use the authenticated /v2105/q-features/catalog endpoint.

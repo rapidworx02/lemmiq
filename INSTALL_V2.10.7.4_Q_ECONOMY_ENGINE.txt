@@ -1,0 +1,332 @@
+LEMMIQ V2.10.7.4 Q ECONOMY ENGINE — INSTALL
+
+BASE REQUIRED
+Current working/deployed version should be V2.10.7.3.
+
+IMPORTANT
+This package is intentionally based on the stable incremental V2.10.7.x line.
+Do NOT restore the abandoned bundled V2.10.8 release.
+
+============================================================
+1) BACK UP CURRENT BACKEND / WEB
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web' -DestinationPath '.\BACKUP_BEFORE_V21074_Q_ECONOMY.zip' -Force"
+
+============================================================
+2) EXTRACT THIS ZIP
+============================================================
+
+Extract:
+LEMMIQ_V2.10.7.4_Q_ECONOMY_ENGINE.zip
+
+Open the extracted folder and copy ONLY its:
+backend
+
+folder into:
+C:\Users\pc\LEMMIQ\
+
+Allow Windows to overwrite matching files.
+
+DO NOT delete:
+backend\web\v28.js
+backend\web\v29.js
+
+This patch does not contain or replace those stable legacy files.
+
+============================================================
+3) VERIFY COPY
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+dir backend\app\v21074_q_economy.py
+dir backend\web\v21074_q_economy.js
+dir backend\web\v21074_q_economy.css
+
+findstr /n /i "2.10.7.4" backend\app\main.py
+
+git status --short backend
+
+Expected new files include:
+?? backend/app/v21074_q_economy.py
+?? backend/web/v21074_q_economy.js
+?? backend/web/v21074_q_economy.css
+
+and modified files under backend/app + backend/web.
+
+============================================================
+4) STAGE ONLY V2.10.7.4 FILES
+============================================================
+
+git add backend\app\main.py
+git add backend\app\v210.py
+git add backend\app\v2105_q_features.py
+git add backend\app\v21074_q_economy.py
+git add backend\app\v27.py
+git add backend\app\v28.py
+git add backend\app\v29.py
+git add backend\web\index.html
+git add backend\web\sw.js
+git add backend\web\v21074_q_economy.js
+git add backend\web\v21074_q_economy.css
+
+git status
+
+DO NOT use:
+git add .
+
+============================================================
+5) COMMIT + PUSH
+============================================================
+
+git commit -m "LEMMIQ V2.10.7.4 add Q economy engine"
+git push origin main
+
+If GitHub DNS/network temporarily fails, the local commit is safe. Push again after connectivity returns.
+
+============================================================
+6) WAIT FOR RENDER
+============================================================
+
+After Render completes, open:
+https://lemmiq-api.onrender.com/app-config
+
+Expected version:
+2.10.7.4
+
+If Render fails, copy the FIRST traceback/error from the Render log before changing anything.
+
+============================================================
+7) REFRESH PWA CACHE
+============================================================
+
+Close ALL LEMMIQ browser/PWA tabs.
+
+Open:
+https://lemmiq-api.onrender.com/web/#q-admin
+
+Use one hard refresh:
+Ctrl + Shift + R
+
+On Android Chrome, if old UI persists:
+Chrome -> Site settings -> lemmiq-api.onrender.com -> Clear & reset
+Then sign in again.
+
+============================================================
+8) TEST SHARED WALLETS FIRST
+============================================================
+
+Q Admin -> Shared USDT receiving wallets
+
+Test TRC20:
+- legacy wallet may be prefilled
+- press Save / Use for all packs
+- should NOT show Internal Server Error
+- reload Admin
+- badge should show Active · shared
+
+Repeat BEP20.
+
+Then create Starter and Pro test payment orders on the same network.
+They must return the SAME shared wallet address for that network.
+
+Historical payment orders must keep their original wallet references.
+
+============================================================
+9) TEST PAYMENT QR ENLARGEMENT
+============================================================
+
+Open a user payment order.
+Tap the displayed QR.
+
+Expected:
+- large/full-screen QR lightbox opens
+- underlying payment order remains intact
+- close with ×, Escape or outside tap
+- Copy address / Copy amount / Copy Order ID still work
+
+============================================================
+10) TEST 200% EARNING CYCLE
+============================================================
+
+Q Economy -> Packages -> Package earning cycles
+
+Expected:
+- cap used
+- cap ceiling
+- cap remaining
+- source breakdown
+
+New qualifying rewards should contribute:
+- package accrual
+- daily active Q
+- weekly active Q if configured
+- referral rewards
+- signup/welcome
+- package-linked bonus
+
+Transfers / marketplace / Admin corrections must not consume the cap.
+
+A completed package should show:
+COMPLETED
+
+Do not manually reset old completed rows.
+
+============================================================
+11) TEST Q + USDT REBUY / UPGRADE
+============================================================
+
+Q Admin -> Package economy controls
+
+Recommended test defaults:
+Rebuy enabled: ON
+Same-package max Q: 40%
+Upgrade max Q: 50%
+Weekly active Q: 0 while first testing
+
+Use a user with a COMPLETED package.
+Q Economy -> Packages -> Use Q + USDT
+
+Example at 1 Q = US$0.05:
+Q Starter US$10
+80 Q = US$4
+USDT due = 6
+
+Create the hybrid order.
+Then use the normal USDT payment order flow:
+- submit transaction hash
+- Admin approves payment
+
+Expected:
+- locked Q settles
+- old package remains COMPLETED
+- NEW package cycle becomes ACTIVE
+- new cycle gets a fresh 200% earning ceiling
+
+============================================================
+12) GLOBAL AI Q PRICING
+============================================================
+
+Q Admin -> AI feature Q charges
+
+Important:
+Keep the global AI Q Charging switch OFF during initial deployment testing.
+
+Confirm one global price per feature; there should NOT be separate Starter/Plus/Pro/Premium/Elite prices.
+
+Starting values:
+Q Chat = 0.25 Q
+Q Advanced = 1 Q
+Q Vision = 2 Q
+Trust Check = 1 Q
+Chat Summary = 0.5 Q
+Q-to-Q = 0.5 Q
+Business Agent = 5 Q
+Suggest Reply = 0.20 Q
+Smart Memory = 0.20 Q
+Voice Transcription = 0.25 Q
+Document Analysis = 2 Q
+Q Predict Analysis = 1 Q
+AUTO Message = 0 Q
+
+After normal functionality is verified, briefly turn charging ON with a test user and test:
+- sufficient Q -> AI feature runs and Q is deducted
+- insufficient Q -> AI call is blocked before provider execution
+- failed AI operation -> Q is refunded
+- Q Activity shows the fee/refund
+
+Turn charging OFF again after the test if you are not ready for public charging.
+
+============================================================
+13) TEST Q -> USDT WITHDRAWAL
+============================================================
+
+Q Admin -> Payments / USDT -> Q -> USDT Withdrawals
+
+Default global switch should be OFF.
+
+Turn it ON only while testing.
+
+Test user:
+Q Economy -> Wallet -> Withdraw Q
+
+Rules:
+- gross Q entered by user
+- 10% fee in Q
+- net 90% converted at locked Q reference rate
+- final payout must be at least 10 USDT
+- TRC20 or BEP20 destination
+
+Example at 1 Q = US$0.05:
+300 Q requested
+30 Q fee
+270 Q net
+13.50 USDT payout
+
+Expected after Submit:
+- 300 Q leaves available user balance and is locked
+- request = PENDING
+
+Admin test A:
+- Approve
+- Mark Paid + enter TX hash
+Expected:
+- 30 Q fee -> Profit wallet
+- 270 Q redeemed -> Locked Reserve
+- request = PAID
+
+Admin test B:
+- create another request
+- Reject OR Failed
+Expected:
+- entire locked gross Q is released back to user
+
+After testing:
+Turn Q Withdrawal OFF again.
+
+============================================================
+14) OUTGOING USDT ADMIN HISTORY
+============================================================
+
+Test:
+Today / Week / Month / Year / All
+Status filter
+Network filter
+@username filter
+View Details
+Export CSV
+
+RBAC expected:
+PAYMENTS READ = view/export
+PAYMENTS WRITE = approve/reject/failed/mark-paid
+PAYMENTS FULL = above + global withdrawal ON/OFF
+
+============================================================
+15) ANDROID
+============================================================
+
+No Android source files are replaced in this update.
+
+Existing Android remains compatible with backend APIs.
+If AI charging is enabled, server-side wallet checks/deductions also apply to Android AI requests.
+
+Withdrawal/Rebuy native Android screens are NOT part of V2.10.7.4; test those flows in browser/PWA first.
+
+============================================================
+ROLLBACK
+============================================================
+
+If a release-blocking regression appears:
+
+cd /d C:\Users\pc\LEMMIQ
+git log --oneline -6
+
+git revert <V2.10.7.4_COMMIT_HASH>
+git push origin main
+
+V2.10.7.3 remains the immediate fallback line.
+
+Do not restore the old abandoned bundled V2.10.8 release.

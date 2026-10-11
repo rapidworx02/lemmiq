@@ -1,0 +1,135 @@
+LEMMIQ V2.10.7.1 ADMIN RBAC — INSTALL STEPS
+
+BASE REQUIRED
+Confirm the live backend is currently working on V2.10.7 before applying this patch.
+
+1. BACK UP CURRENT BACKEND
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web' -DestinationPath '.\BACKUP_BEFORE_V21071_ADMIN_RBAC.zip' -Force"
+
+2. EXTRACT THIS ZIP
+
+Copy the included:
+  backend\app\...
+  backend\web\...
+into:
+  C:\Users\pc\LEMMIQ\
+
+Allow overwrite.
+
+IMPORTANT:
+This patch does NOT replace your existing:
+  backend\web\v28.js
+  backend\web\v29.js
+
+Those stable files stay exactly as they are.
+
+3. VERIFY CHANGES
+
+cd /d C:\Users\pc\LEMMIQ
+
+git status
+git diff --stat
+
+You should see new files:
+  backend\app\admin_rbac.py
+  backend\web\v21071_admin.js
+  backend\web\v21071_admin.css
+
+4. PUSH
+
+git add -A backend
+git commit -m "LEMMIQ V2.10.7.1 add secure admin section permissions"
+git push origin main
+
+5. WAIT FOR RENDER
+
+Check:
+https://lemmiq-api.onrender.com/app-config
+
+Expected version:
+2.10.7.1
+
+The new table:
+q_admin_section_permissions
+is created automatically by the existing backend startup flow.
+
+6. BROWSER RESET
+
+Close all LEMMIQ browser tabs.
+
+Open:
+https://lemmiq-api.onrender.com/web/#q-admin
+
+Press:
+Ctrl + Shift + R
+
+If the old Admin Team card still appears, clear site data for lemmiq-api.onrender.com once and sign in again.
+
+7. MASTER ADMIN TEST
+
+Open:
+More > Q Admin
+
+The old Admin Team & Roles card should now become:
+Admin Team & Section Access
+
+Search a test user by @username.
+
+For first test:
+Role = READ_ONLY
+
+Set:
+Overview = READ
+Users = READ
+Payments = READ
+Q Predict = READ
+everything else = NONE
+
+Save.
+
+8. TRUE READ-ONLY TEST
+
+Sign in as that test user.
+
+Expected:
+- only granted sections are shown
+- no approve/reject/publish/resolution action buttons are shown
+- direct write API attempts return HTTP 403
+- READ_ONLY remains READ even if a bad permission row tries to grant WRITE/FULL
+
+9. WRITE TEST
+
+As Master Admin:
+change the test user to SUPPORT_ADMIN
+set Payments = WRITE
+
+Sign back in as that test user.
+
+Expected:
+- payment Approve/Reject actions appear
+- unrelated mutation controls remain unavailable
+
+10. FULL TEST
+
+Grant a trusted test account:
+Marketplace = FULL
+or
+Users = FULL
+
+Verify high-risk actions work only in that exact section.
+
+ROLLBACK
+
+If anything behaves unexpectedly:
+
+cd /d C:\Users\pc\LEMMIQ
+git log --oneline -5
+
+Then:
+git revert <V2.10.7.1 commit hash>
+git push origin main
+
+The extra q_admin_section_permissions table may remain in PostgreSQL;
+stable V2.10.7 ignores it.

@@ -1,0 +1,52 @@
+LEMMIQ V2.10.8 — Q ADMIN FIX 3
+
+This fixes the exact error shown on-screen:
+"V2.10.8 Admin tools: loadV2108Admin is not defined"
+
+It also fixes FastAPI/browser errors displaying as:
+[object Object]
+
+WHAT THIS PATCH DOES
+- Restores and exports window.loadV2108Admin().
+- Loads these V2.10.8 sections:
+  * Admin Team & Section Access
+  * USDT wallet matrix
+  * Q Usage Analytics
+- Stops silently swallowing section-load errors.
+- If one of those endpoints fails, Q Admin stays open and displays the exact section/error.
+- Improves structured API error text so validation errors no longer show [object Object].
+- Bumps browser/PWA cache to lemmiq-v2108-adminfix-3.
+
+REPLACE ONLY:
+backend\web\app.js
+backend\web\v2108.js
+backend\web\index.html
+backend\web\sw.js
+
+INSTALL
+1) Extract this ZIP.
+2) Copy the backend folder into:
+   C:\Users\pc\LEMMIQ\
+   Allow overwrite.
+
+3) Push:
+   cd /d C:\Users\pc\LEMMIQ
+   git add backend\web\app.js backend\web\v2108.js backend\web\index.html backend\web\sw.js
+   git commit -m "Fix V2.10.8 Q Admin V2108 loader"
+   git push origin main
+
+4) Wait for Render deploy.
+
+5) Browser reset:
+   - close all LEMMIQ tabs
+   - open https://lemmiq-api.onrender.com/web/#q-admin
+   - Ctrl+Shift+R once
+   - if needed, clear site data once
+
+EXPECTED
+- No "loadV2108Admin is not defined" error.
+- Q Usage Analytics loads its figures.
+- Admin Team access list loads.
+- USDT wallet matrix loads.
+- If any backend endpoint has a separate problem, the diagnostic card names that exact section/error.
+- Structured errors show readable text instead of [object Object].

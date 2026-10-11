@@ -1,0 +1,72 @@
+LEMMIQ V2.10.7.2 Q USAGE ANALYTICS — INSTALL
+
+BASE: working V2.10.7.1
+
+1) Backup:
+cd /d C:\Users\pc\LEMMIQ
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web' -DestinationPath '.\BACKUP_BEFORE_V21072_Q_USAGE.zip' -Force"
+
+2) Extract this ZIP and copy its backend folder into:
+C:\Users\pc\LEMMIQ\
+Allow overwrite.
+
+Do NOT delete or replace v28.js / v29.js.
+
+3) Verify:
+cd /d C:\Users\pc\LEMMIQ
+dir backend\app\v21072_q_usage.py
+dir backend\web\v21072_q_usage.js
+dir backend\web\v21072_q_usage.css
+findstr /n /i "2.10.7.2" backend\app\main.py
+git status --short backend
+
+4) Stage ONLY:
+git add backend\app\admin_rbac.py
+git add backend\app\main.py
+git add backend\app\v210.py
+git add backend\app\v2105_q_features.py
+git add backend\app\v29.py
+git add backend\app\v21072_q_usage.py
+git add backend\web\index.html
+git add backend\web\sw.js
+git add backend\web\v21072_q_usage.js
+git add backend\web\v21072_q_usage.css
+
+git commit -m "LEMMIQ V2.10.7.2 add Q Usage Analytics"
+git push origin main
+
+5) Render:
+https://lemmiq-api.onrender.com/app-config
+Expected: 2.10.7.2
+
+6) Browser:
+close all LEMMIQ tabs
+open https://lemmiq-api.onrender.com/web/#q-admin
+Ctrl+Shift+R once
+
+7) Admin permission:
+Q Admin > Admin Team & Section Access now includes:
+Q Usage Analytics
+
+Master Admin has access automatically.
+For support admins give READ to view/filter/export.
+The analytics module itself is read-only.
+
+8) Generate some fresh usage:
+Ask Q
+Suggest Reply
+Q Vision
+Trust Check
+Chat Summary
+Q-to-Q
+Business Agent
+AUTO Message
+
+Then test Today / 7 Days / 30 Days / username / feature / tier / CSV / user Details.
+
+AUTO_MESSAGE appears after a new AUTO reply is generated.
+
+ROLLBACK:
+git log --oneline -5
+git revert <V2.10.7.2 commit>
+git push origin main

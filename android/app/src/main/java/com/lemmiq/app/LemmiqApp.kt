@@ -124,7 +124,7 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){prompt=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalk={
+    val startTalk: () -> Unit = {
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
@@ -1187,7 +1187,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){q=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalkToQ={
+    val startTalkToQ: () -> Unit = {
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())

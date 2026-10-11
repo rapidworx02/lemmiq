@@ -1,0 +1,126 @@
+LEMMIQ V2.10.7.3 SHARED WALLET QR — INSTALL
+
+BASE REQUIRED
+Your current live backend should be the working V2.10.7.2 build.
+
+1) BACK UP
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web' -DestinationPath '.\BACKUP_BEFORE_V21073_WALLETS.zip' -Force"
+
+2) EXTRACT THIS ZIP
+
+Copy its backend folder into:
+C:\Users\pc\LEMMIQ\
+
+Allow overwrite.
+
+IMPORTANT:
+Do NOT delete or replace your stable v28.js or v29.js.
+This patch does not contain those files.
+
+3) VERIFY
+
+cd /d C:\Users\pc\LEMMIQ
+
+dir backend\web\v21073_wallets.js
+dir backend\web\v21073_wallets.css
+
+findstr /n /i "2.10.7.3" backend\app\main.py
+
+git status --short backend
+
+4) STAGE ONLY THIS PATCH
+
+git add backend\app\v28.py
+git add backend\app\main.py
+git add backend\app\v210.py
+git add backend\web\index.html
+git add backend\web\sw.js
+git add backend\web\v21073_wallets.js
+git add backend\web\v21073_wallets.css
+
+git status
+
+git commit -m "LEMMIQ V2.10.7.3 use shared USDT wallets with QR"
+git push origin main
+
+5) RENDER
+
+Wait for Render deployment.
+
+Open:
+https://lemmiq-api.onrender.com/app-config
+
+Expected:
+2.10.7.3
+
+6) BROWSER CACHE
+
+Close every LEMMIQ browser tab.
+
+Open:
+https://lemmiq-api.onrender.com/web/#q-admin
+
+Press:
+Ctrl + Shift + R
+
+If the old 10-wallet matrix still appears, clear site data for lemmiq-api.onrender.com once and sign in again.
+
+7) CONFIGURE THE TWO SHARED WALLETS
+
+Q Admin > Shared USDT receiving wallets
+
+You should see only:
+- USDT TRC20
+- USDT BEP20
+
+If an old package wallet exists, its address may be prefilled as:
+Legacy wallet found
+
+Press:
+Use for all packs
+
+or enter the wallet you want and Save.
+
+Repeat for both networks.
+
+8) QR TEST
+
+For TRC20:
+- press QR
+- confirm QR opens
+- Copy address
+- optionally Upload QR
+
+Repeat for BEP20.
+
+If you do not upload a custom QR, LEMMIQ generates one automatically from the saved address.
+
+9) PACKAGE TEST
+
+Create test payment orders for:
+Q Starter
+Q Plus
+Q Pro
+Q Premium
+Q Elite
+
+For the same selected network, every order should return the SAME wallet ID/address.
+
+Example:
+All TRC20 package orders -> the shared TRC20 address.
+All BEP20 package orders -> the shared BEP20 address.
+
+10) HISTORY SAFETY
+
+Do not delete old wallet rows from PostgreSQL.
+Historical payment orders keep their original wallet_id for audit/history.
+
+ROLLBACK
+
+git log --oneline -5
+git revert <V2.10.7.3 commit>
+git push origin main
+
+V2.10.7.2 remains the fallback baseline.

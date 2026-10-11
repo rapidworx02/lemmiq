@@ -1,0 +1,51 @@
+LEMMIQ V2.10.8 Q ADMIN HARD FIX 2
+
+This replaces the first Q Admin navigation hotfix.
+
+WHAT IT CHANGES
+- Q Admin card has its own dedicated capture-phase click handler.
+- Generic More navigation no longer handles the Q Admin card.
+- Q Admin is forced to remain visible while legacy admin loaders run.
+- Legacy Q Economy Admin, Q Predict Admin and V2.10.8 Admin tools load independently.
+- If one section fails, Q Admin stays open and shows the exact failing section/error.
+- #q-admin is preserved during loading.
+- Direct browser opening of /web/#q-admin uses the stable Q Admin loader.
+- Service worker cache is bumped again to lemmiq-v2108-adminfix-2.
+
+FILES TO REPLACE
+backend\web\app.js
+backend\web\v2108.js
+backend\web\index.html
+backend\web\sw.js
+
+INSTALL
+1. Extract this ZIP.
+2. Copy the backend folder into:
+   C:\Users\pc\LEMMIQ\
+   Allow all 4 files to overwrite.
+
+3. Push:
+   cd /d C:\Users\pc\LEMMIQ
+   git status
+   git add backend\web\app.js backend\web\v2108.js backend\web\index.html backend\web\sw.js
+   git commit -m "Hard fix V2.10.8 Q Admin browser loading"
+   git push origin main
+
+4. Wait for Render deployment.
+
+5. IMPORTANT BROWSER RESET
+   - Close every LEMMIQ tab.
+   - Open Chrome:
+     https://lemmiq-api.onrender.com/web/#q-admin
+   - Press Ctrl+Shift+R once.
+   - If the old behavior still appears, clear site data for lemmiq-api.onrender.com once, then sign in again.
+
+EXPECTED
+- Q Admin remains on screen.
+- URL remains #q-admin.
+- A temporary "Loading Q Admin..." card appears.
+- If all sections work it changes to "Q Admin ready" then disappears.
+- If an endpoint fails, the screen STAYS OPEN and shows the failing section/error instead of bouncing back to More.
+
+This hotfix changes browser/PWA files only.
+No database, backend Python, Android or LiveKit files are changed.

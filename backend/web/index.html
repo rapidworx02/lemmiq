@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="/web/v21071_admin.css?v=2.10.7.1">
   <link rel="stylesheet" href="/web/v21072_q_usage.css?v=2.10.7.2">
   <link rel="stylesheet" href="/web/v21073_wallets.css?v=2.10.7.3">
+  <link rel="stylesheet" href="/web/v21074_q_economy.css?v=2.10.7.4">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -378,7 +379,7 @@
         </div>
 
         <div id="q28Tab-packages" class="q28-tab">
-          <article class="card glass"><span class="eyebrow">Q SUBSCRIPTIONS</span><h3>Choose a package</h3><p class="micro">Manual USDT payment verification in V2.8. Cash-out is not enabled at launch.</p><div id="q28Plans" class="q28-plan-grid"></div></article>
+          <article class="card glass"><span class="eyebrow">Q SUBSCRIPTIONS</span><h3>Choose a package</h3><p class="micro">Manual USDT payment verification. Q withdrawal availability is controlled by Master Admin.</p><div id="q28Plans" class="q28-plan-grid"></div></article>
           <article class="card glass"><h3>My active & previous packages</h3><div id="q28Subscriptions" class="q28-list"></div></article>
           <article class="card glass"><h3>USDT payment orders</h3><div id="q28PaymentOrders" class="q28-list"></div></article>
         </div>
@@ -450,7 +451,7 @@
         <article class="card glass"><div class="section-head"><div><h3>Package referral rewards</h3><p class="micro">Paid to the original referrer only after the referred user's USDT package payment is approved.</p></div></div><div class="q28-settings-grid"><label>$10 Starter referral Q<input id="q28RefStarter" type="number" step="0.01"></label><label>$50 Plus referral Q<input id="q28RefPlus" type="number" step="0.01"></label><label>$100 Pro referral Q<input id="q28RefPro" type="number" step="0.01"></label><label>$500 Premium referral Q<input id="q28RefPremium" type="number" step="0.01"></label><label>$1,000 Elite referral Q<input id="q28RefElite" type="number" step="0.01"></label></div><button id="q28AdminSaveReferralRules" class="primary">Save referral rewards</button><div id="q28AdminReferralOverview" class="q28-ref-admin-summary"></div></article>
         <article class="card glass"><div class="section-head"><div><h3>Subscription master controls</h3><p class="micro">Change daily return and maximum return by package. “Apply to all” updates active existing packages as well as future packages. Past earnings are never recalculated.</p></div></div><div id="q28PackageMasterRules" class="q28-package-rules"></div></article>
         <article class="card glass"><div class="section-head"><div><h3>User package & wallet control</h3><p class="micro">Search any user, review packages, earned percentage, custom rates and make auditable corrections.</p></div><button id="q28AdminRefreshUsers" class="ghost">↻</button></div>
-          <div class="q28-admin-user-search"><input id="q28AdminUserSearch" placeholder="Search user ID, name or @username"><select id="q28AdminUserPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><select id="q28AdminUserStatus"><option value="">All statuses</option><option>ACTIVE</option><option>PAUSED</option><option>CAP_REACHED</option><option>STOPPED</option><option>ADMIN_CANCELLED</option><option>EXPIRED</option></select><button id="q28AdminUserSearchBtn" class="primary">Search</button></div>
+          <div class="q28-admin-user-search"><input id="q28AdminUserSearch" placeholder="Search user ID, name or @username"><select id="q28AdminUserPackage"><option value="">All packages</option><option value="STARTER_10">$10 Starter</option><option value="PLUS_50">$50 Plus</option><option value="PRO_100">$100 Pro</option><option value="PREMIUM_500">$500 Premium</option><option value="ELITE_1000">$1,000 Elite</option></select><select id="q28AdminUserStatus"><option value="">All statuses</option><option>ACTIVE</option><option>PAUSED</option><option>COMPLETED</option><option>CAP_REACHED</option><option>STOPPED</option><option>ADMIN_CANCELLED</option><option>EXPIRED</option></select><button id="q28AdminUserSearchBtn" class="primary">Search</button></div>
           <div id="q28AdminUsers" class="q28-list"></div>
         </article>
         <article class="card glass"><div class="section-head"><div><h3>Pending USDT payments</h3><p class="micro">Open the blockchain transaction, verify amount/network/address, then approve or reject.</p></div><button id="q28AdminRefreshPayments" class="ghost">↻</button></div><div id="q28AdminPayments" class="q28-list"></div></article>
@@ -524,5 +525,6 @@
   <script src="/web/v21071_admin.js?v=2.10.7.1" defer></script>
   <script src="/web/v21072_q_usage.js?v=2.10.7.2" defer></script>
   <script src="/web/v21073_wallets.js?v=2.10.7.3" defer></script>
+  <script src="/web/v21074_q_economy.js?v=2.10.7.4" defer></script>
 </body>
 </html>

@@ -1,0 +1,103 @@
+LEMMIQ V2.10.7 BACKEND RECOVERY
+
+PURPOSE
+This is a clean backend/browser rollback built directly from the last V2.10.7 package.
+Use it to remove the V2.10.8 admin/backend changes and return the backend + PWA/web source
+to the V2.10.7 state that was working before the Q Admin rebuild.
+
+IMPORTANT
+Do NOT delete the entire C:\Users\pc\LEMMIQ\backend folder.
+Your existing backend folder may contain Dockerfile, requirements.txt, .dockerignore,
+Render configuration or other deployment files that are not part of the release package.
+
+Replace ONLY:
+  backend\app
+  backend\web
+  backend\migrations
+
+The database is NOT rolled back. Extra V2.10.8 tables/columns can remain in PostgreSQL;
+V2.10.7 simply does not use them.
+
+STEP 1 — BACK UP CURRENT BACKEND
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web','backend\migrations' -DestinationPath '.\BACKUP_BEFORE_V2107_BACKEND_RECOVERY.zip' -Force"
+
+STEP 2 — EXTRACT THIS RECOVERY ZIP
+Extract LEMMIQ_V2.10.7_BACKEND_RECOVERY.zip somewhere convenient.
+
+Inside it you will find:
+  LEMMIQ_V2.10.7_BACKEND_RECOVERY\backend\app
+  LEMMIQ_V2.10.7_BACKEND_RECOVERY\backend\web
+  LEMMIQ_V2.10.7_BACKEND_RECOVERY\backend\migrations
+
+STEP 3 — REMOVE ONLY THE THREE CURRENT SOURCE FOLDERS
+cd /d C:\Users\pc\LEMMIQ
+
+rmdir /s /q backend\app
+rmdir /s /q backend\web
+rmdir /s /q backend\migrations
+
+STEP 4 — COPY THE THREE V2.10.7 FOLDERS INTO C:\Users\pc\LEMMIQ\backend
+After copying, you should again have:
+  C:\Users\pc\LEMMIQ\backend\app
+  C:\Users\pc\LEMMIQ\backend\web
+  C:\Users\pc\LEMMIQ\backend\migrations
+
+Keep your existing backend\Dockerfile and backend\requirements.txt.
+
+STEP 5 — VERIFY BEFORE PUSH
+cd /d C:\Users\pc\LEMMIQ
+git status
+git diff --stat
+
+You should see V2.10.8 admin files removed/reverted, including:
+  backend\app\v2108.py
+  backend\app\admin_permissions.py
+and browser files restored to V2.10.7.
+
+STEP 6 — COMMIT AND PUSH
+git add -A backend
+git commit -m "Restore LEMMIQ backend and web to stable V2.10.7"
+git push origin main
+
+STEP 7 — RENDER
+Wait for Render to finish deploying.
+
+Check:
+  https://lemmiq-api.onrender.com/app-config
+
+Expected backend version:
+  2.10.7
+
+STEP 8 — CLEAR OLD PWA CACHE
+On every browser used for testing:
+  1. Close all LEMMIQ tabs.
+  2. Reopen:
+     https://lemmiq-api.onrender.com/web/
+  3. Press Ctrl+Shift+R.
+  4. If V2.10.8 UI still appears, clear site data for lemmiq-api.onrender.com once and sign in again.
+
+STEP 9 — TEST
+Test in this order:
+  - Login
+  - More
+  - Q Admin
+  - Q Economy
+  - Q Predict
+  - Chats
+  - Voice call
+  - Video call
+  - Q Personal Assistant
+
+EXPECTED TRADE-OFF
+This rollback intentionally removes the V2.10.8 backend/admin additions for now:
+  - new per-section Admin RBAC
+  - V2.10.8 Q Usage Analytics panel
+  - AUTO_MESSAGE admin analytics additions
+  - V2.10.8 wallet-matrix enhancements
+  - V2.10.8 call-heartbeat/stuck-call backend recovery
+
+Existing V2.10.8 database additions can remain and will not be deleted.
+
+After V2.10.7 is confirmed stable again, re-add the above features one small tested update at a time.

@@ -32,7 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import coil.compose.AsyncImage
 import com.twilio.audioswitch.AudioDevice
 import io.livekit.android.LiveKit
-import io.livekit.android.compose.VideoRenderer
+import io.livekit.android.compose.ui.VideoTrackView
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
@@ -123,7 +123,7 @@ class LemmiqCallActivity:ComponentActivity(){
         Box(Modifier.fillMaxSize().background(Color(0xFF090A10))){
             val r=room
             if(r!=null && remoteVideo.value!=null){
-                VideoRenderer(room=r,videoTrack=remoteVideo.value,modifier=Modifier.fillMaxSize(),mirror=false)
+                VideoTrackView(videoTrack=remoteVideo.value,modifier=Modifier.fillMaxSize(),mirror=false)
             }else{
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF17102D),Color(0xFF080A16)))),contentAlignment=Alignment.Center){
                     Column(horizontalAlignment=Alignment.CenterHorizontally){
@@ -139,7 +139,7 @@ class LemmiqCallActivity:ComponentActivity(){
                     modifier=Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(14.dp).size(width=116.dp,height=164.dp),
                     shape=RoundedCornerShape(18.dp),shadowElevation=8.dp,color=Color.Black
                 ){
-                    VideoRenderer(room=r,videoTrack=localVideo.value,modifier=Modifier.fillMaxSize(),mirror=true)
+                    VideoTrackView(videoTrack=localVideo.value,modifier=Modifier.fillMaxSize(),mirror=true)
                 }
             }
             Column(

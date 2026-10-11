@@ -1,0 +1,20 @@
+LEMMIQ V2.10.7.4 — BUILD VALIDATION
+
+Validated before packaging:
+- Python compile: all backend/app/*.py PASS
+- FastAPI import: PASS, reports 2.10.7.4
+- Required routes registered: PASS
+- Browser extension JavaScript syntax (node --check): PASS
+- Shared TRC20/BEP20 ALL_PACKS save: PASS in integration test
+- Q Withdrawal switch OFF blocks requests: PASS
+- Withdrawal ON + 300 Q at $0.05 => 30 Q fee / 13.5 USDT payout: PASS
+- Withdrawal approve + mark paid + TX hash: PASS
+- Outgoing-USDT CSV export: PASS
+- Q + USDT Starter rebuy: 80 Q ($4) + 6 USDT: PASS
+- Hybrid payment approval creates new ACTIVE package cycle: PASS
+- AI charging OFF => no wallet debit: PASS
+- AI charging ON => Q Vision 2 Q debit: PASS
+- Failed Trust Check fee refund: PASS
+- Referral reward can cross package ceiling and marks package COMPLETED while fully crediting reward: PASS
+
+Network-based Q Predict trend-draft calls were unavailable in the isolated test environment; they are unrelated to this patch and the app import continued.
