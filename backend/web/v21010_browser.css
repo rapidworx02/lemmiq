@@ -1,0 +1,60 @@
+/* LEMMIQ V2.10.10 — app-like light browser + optional dark */
+html[data-theme="light"]{
+  --bg:#f7f7fb;--panel:#ffffff;--panel2:#f1eefb;--text:#17182a;--muted:#7e8095;
+  --line:rgba(43,38,73,.10);--purple:#6c4dff;--pink:#ff4f9a;--cyan:#2678f4;--green:#16ab90;
+  --danger:#d63c57;--shadow:0 10px 28px rgba(43,38,73,.08)
+}
+html[data-theme="light"] body{background:#f7f7fb;color:var(--text)}
+html[data-theme="light"] .orb{opacity:.06}
+html[data-theme="light"] .glass{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);backdrop-filter:none}
+html[data-theme="light"] .sidebar nav button{color:#575a70}
+html[data-theme="light"] .sidebar nav button.active{background:#eee8ff;color:#5f45d8;border-color:transparent}
+html[data-theme="light"] .topbar,html[data-theme="light"] .conversation-list,html[data-theme="light"] .chat-pane{background:#fff}
+html[data-theme="light"] .chat-row:hover,html[data-theme="light"] .chat-row.active{background:#f2effb}
+html[data-theme="light"] input,html[data-theme="light"] textarea,html[data-theme="light"] select{background:#fbfbfe;color:#17182a;border-color:#d9d8e1}
+html[data-theme="light"] label{color:#55586c}
+html[data-theme="light"] .ghost{background:#f3f0fb;color:#3e4052;border-color:#e2deef}
+html[data-theme="light"] .mini{background:#f3f1f8;color:#46485b;border-color:#e1deea}
+html[data-theme="light"] .msg.theirs{background:#fff;border:1px solid #e3e1e8;color:#17182a;box-shadow:0 2px 7px rgba(32,30,51,.05)}
+html[data-theme="light"] .msg.mine{background:#6c4dff;color:#fff}
+html[data-theme="light"] .msg.theirs .meta{color:#8c8e9e}
+html[data-theme="light"] .msg.mine .meta{color:rgba(255,255,255,.72)}
+html[data-theme="light"] .empty-state h3{color:#25263a}
+html[data-theme="light"] .composer{background:#fff;border-top:1px solid #eceaf1}
+html[data-theme="light"] .attach-btn{background:#f4f1fb;border-color:#e2deef;color:#6c4dff}
+html[data-theme="light"] .assist-bar,html[data-theme="light"] .suggestion{background:#f2ecff;border-color:#dfd2ff;color:#302d45}
+html[data-theme="light"] .more-card,html[data-theme="light"] .card{background:#fff;color:#17182a;border-color:#e6e3ed}
+html[data-theme="light"] .eyebrow{color:#684cd8}
+html[data-theme="light"] .answer-box,html[data-theme="light"] .kb{background:#f8f7fb;color:#25263a}
+html[data-theme="light"] .date-separator span{background:#eeeaf8;color:#818397}
+
+/* The chat composer always fits the mobile viewport. Send sits before Q as requested. */
+.composer{grid-template-columns:auto auto minmax(0,1fr) auto auto!important;gap:6px!important;align-items:center!important;max-width:100%;overflow:hidden}
+.composer textarea{min-width:0;width:100%}
+.composer .attach-btn,.composer .voice-btn,.composer .qbtn,.composer .send{width:44px;min-width:44px;max-width:44px;padding:0}
+@media(max-width:680px){
+  .composer{padding:8px!important;gap:5px!important;grid-template-columns:40px 40px minmax(0,1fr) 42px 42px!important}
+  .composer .attach-btn,.composer .voice-btn,.composer .qbtn,.composer .send{width:40px;min-width:40px;max-width:40px;height:42px}
+  .composer textarea{padding-left:11px;padding-right:11px}
+}
+@media(max-width:410px){
+  .composer{grid-template-columns:36px 36px minmax(0,1fr) 40px 40px!important;gap:4px!important;padding:7px!important}
+  .composer .attach-btn,.composer .voice-btn{width:36px;min-width:36px;max-width:36px}
+  .composer .qbtn,.composer .send{width:40px;min-width:40px;max-width:40px}
+}
+
+/* Authenticated chat photo previews. */
+.chat-photo-preview{display:block;width:min(420px,100%);padding:0;margin:7px 0 3px;border:0;border-radius:15px;overflow:hidden;background:rgba(0,0,0,.12);position:relative;cursor:zoom-in;min-height:110px;color:inherit}
+.chat-photo-preview img{display:none;width:100%;max-height:520px;object-fit:cover;background:#101117}
+.chat-photo-preview.loaded{min-height:0}.chat-photo-preview.loaded img{display:block}.chat-photo-preview.loaded .chat-photo-loading{display:none}
+.chat-photo-loading{display:grid;place-items:center;min-height:110px;padding:18px;font-size:11px;color:var(--muted)}
+.chat-photo-preview.failed{cursor:default}
+.chat-photo-viewer{position:fixed;inset:0;z-index:260;background:rgba(0,0,0,.96);display:flex;flex-direction:column;color:#fff}
+.chat-photo-viewer.hidden{display:none}
+.chat-photo-viewer-head{height:60px;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(0,0,0,.5)}
+.chat-photo-viewer-head button{width:44px;height:44px;border:0;border-radius:50%;font-size:30px;line-height:1;background:rgba(255,255,255,.12);color:#fff}
+.chat-photo-viewer-stage{flex:1;min-height:0;display:grid;place-items:center;overflow:auto;padding:12px}
+.chat-photo-viewer-stage img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center}
+
+/* Keep everyday messenger surfaces app-like; premium feature cards may retain their own gradients. */
+html[data-theme="light"] .q28-hero,html[data-theme="light"] .q29-hero{box-shadow:0 10px 30px rgba(88,68,190,.12)}

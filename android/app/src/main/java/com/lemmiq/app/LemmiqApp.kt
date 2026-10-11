@@ -19,6 +19,7 @@ import android.provider.ContactsContract
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -103,6 +104,9 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
             }
         }
     }
+    BackHandler(enabled=vm.authenticated && (vm.active!=null || vm.activeGroup!=null)){
+        vm.close()
+    }
     when{
         !vm.authenticated->Auth(vm)
         vm.activeGroup!=null->V24GroupChat(vm)
@@ -124,7 +128,7 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){prompt=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalk: () -> Unit = {
+    val startTalk={
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
@@ -215,6 +219,18 @@ private fun Home(vm:LemmiqViewModel){
     var qSheet by remember{mutableStateOf(false)}
     var qFullScreen by remember{mutableStateOf(false)}
     var qThreadOpen by remember{mutableStateOf(false)}
+    BackHandler(enabled=qSheet || newChat || newGroup || qFullScreen || qThreadOpen || showMore || tab!=0){
+        when{
+            qSheet->qSheet=false
+            newChat->newChat=false
+            newGroup->newGroup=false
+            qFullScreen->qFullScreen=false
+            qThreadOpen->{qThreadOpen=false;vm.refreshQThread(markRead=true)}
+            showMore && morePage!=null->morePage=null
+            showMore->{showMore=false;morePage=null;tab=0}
+            tab!=0->tab=0
+        }
+    }
     LaunchedEffect(Unit){
         vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict();vm.refreshQThread()
     }
@@ -381,15 +397,19 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
                                 color=Muted,fontSize=10.sp
                             )
                         }
-                        FilledTonalButton(onClick={
-                            val launchCall:(CallJoinDto)->Unit={join->
-                                ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
-                                    putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
-                                    putExtra("person",other.display_name);putExtra("avatar_url",other.avatar_url);putExtra("incoming",false);putExtra("call_type",join.call.call_type)
-                                })
-                            }
-                            if(isVideo)vm.startVideoCall(c.chat_id,launchCall) else vm.startVoiceCall(c.chat_id,launchCall)
-                        }){Text(if(isVideo)"🎥" else "📞")}
+                        if(status in listOf("RINGING","CONNECTING","CONNECTED")){
+                            TextButton(onClick={vm.endStuckCall(c.id)}){Text("End stuck",fontSize=10.sp,color=Color(0xFFD63C57))}
+                        }else{
+                            FilledTonalButton(onClick={
+                                val launchCall:(CallJoinDto)->Unit={join->
+                                    ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
+                                        putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
+                                        putExtra("person",other.display_name);putExtra("avatar_url",other.avatar_url);putExtra("incoming",false);putExtra("call_type",join.call.call_type)
+                                    })
+                                }
+                                if(isVideo)vm.startVideoCall(c.chat_id,launchCall) else vm.startVoiceCall(c.chat_id,launchCall)
+                            }){Text(if(isVideo)"🎥" else "📞")}
+                        }
                     }
                 }
             }
@@ -1187,7 +1207,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){q=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalkToQ: () -> Unit = {
+    val startTalkToQ={
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
@@ -1197,6 +1217,9 @@ private fun ChatAgent(vm:LemmiqViewModel){
     }
 
     LaunchedEffect(Unit){vm.refreshAgent()}
+    val qChatPrice=vm.qFeatureCatalog.firstOrNull{it.feature_key.equals("Q_CHAT",true)}
+    val qVisionPrice=vm.qFeatureCatalog.firstOrNull{it.feature_key.equals("Q_VISION",true)}
+    val qChargingOn=vm.qFeatureCatalog.any{it.charging_enabled}
 
     LazyColumn(
         Modifier.fillMaxSize().background(Bg),
@@ -1235,6 +1258,15 @@ private fun ChatAgent(vm:LemmiqViewModel){
                         FilledTonalButton(onClick=startTalkToQ){Text("🎙 Talk")}
                         Spacer(Modifier.weight(1f))
                         Button(onClick={vm.askAgent(q);q=""},enabled=q.isNotBlank()&&!vm.agentBusy){Text("Ask Q")}
+                    }
+                    if(qChatPrice!=null || qVisionPrice!=null){
+                        val chatCost=qChatPrice?.configured_q_cost ?: 0.0
+                        val visionCost=qVisionPrice?.configured_q_cost ?: 0.0
+                        Text(
+                            if(qChargingOn)"AI Q charging ON · Q Chat ${String.format(Locale.US,"%.2f",chatCost)} Q · Q Vision ${String.format(Locale.US,"%.2f",visionCost)} Q"
+                            else "AI Q charging OFF · configured: Q Chat ${String.format(Locale.US,"%.2f",chatCost)} Q · Q Vision ${String.format(Locale.US,"%.2f",visionCost)} Q",
+                            fontSize=9.sp,color=Muted,modifier=Modifier.padding(top=7.dp)
+                        )
                     }
                     if(vm.visionBusy)LinearProgressIndicator(Modifier.fillMaxWidth().padding(top=8.dp))
                 }

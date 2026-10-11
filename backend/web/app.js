@@ -309,6 +309,71 @@ async function openChat(cid,mark=true){
   renderMessages();renderChats();
   if(mark&&location.hash!==`#chat-${cid}`)history.pushState({view:"chats",chatId:cid},"",`#chat-${cid}`);
 }
+const lemmiqMediaObjectUrls=new Map();
+function isBrowserImageAttachment(a){
+  if(!a)return false;
+  const kind=String(a.kind||"").toUpperCase();
+  const mime=String(a.mime_type||"").toLowerCase();
+  const name=String(a.name||"").toLowerCase();
+  return kind==="PHOTO"||kind==="IMAGE"||mime.startsWith("image/")||/\.(jpe?g|png|webp|gif)$/i.test(name);
+}
+function browserImageAttachmentHtml(messageId,a,isGroup=false){
+  const safeName=escapeHtml(a?.name||"Photo");
+  return `<button class="chat-photo-preview" type="button" onclick="openBrowserChatImage(${messageId},${isGroup?"true":"false"},'${escapeHtml((a?.name||"Photo").replace(/'/g,""))}')">
+    <span class="chat-photo-loading">Loading photo…</span>
+    <img data-chat-photo="${messageId}" data-group-photo="${isGroup?"1":"0"}" alt="${safeName}">
+  </button>`;
+}
+async function hydrateBrowserChatPhotos(scope=document){
+  const imgs=[...scope.querySelectorAll("img[data-chat-photo]")];
+  for(const img of imgs){
+    if(img.dataset.loaded==="1")continue;
+    const id=Number(img.dataset.chatPhoto),isGroup=img.dataset.groupPhoto==="1";
+    const key=`${isGroup?"g":"d"}:${id}`;
+    try{
+      let url=lemmiqMediaObjectUrls.get(key);
+      if(!url){
+        const endpoint=isGroup?`/v24/group-media/${id}`:`/media/${id}`;
+        const r=await fetch(endpoint,{headers:authHeaders()});
+        if(!r.ok)throw new Error(`Photo HTTP ${r.status}`);
+        const blob=await r.blob();
+        if(!String(blob.type||"").startsWith("image/"))throw new Error("Attachment is not an image");
+        url=URL.createObjectURL(blob);lemmiqMediaObjectUrls.set(key,url);
+      }
+      img.src=url;img.dataset.loaded="1";
+      img.closest(".chat-photo-preview")?.classList.add("loaded");
+    }catch(e){
+      const host=img.closest(".chat-photo-preview");
+      if(host){host.classList.add("failed");const text=host.querySelector(".chat-photo-loading");if(text)text.textContent="Photo unavailable · tap menu to download";}
+    }
+  }
+}
+async function openBrowserChatImage(id,isGroup=false,name="Photo"){
+  const key=`${isGroup?"g":"d"}:${id}`;
+  try{
+    let url=lemmiqMediaObjectUrls.get(key);
+    if(!url){
+      const endpoint=isGroup?`/v24/group-media/${id}`:`/media/${id}`;
+      const r=await fetch(endpoint,{headers:authHeaders()});
+      if(!r.ok)throw new Error(`Photo HTTP ${r.status}`);
+      const blob=await r.blob();url=URL.createObjectURL(blob);lemmiqMediaObjectUrls.set(key,url);
+    }
+    let viewer=document.getElementById("chatPhotoViewer");
+    if(!viewer){
+      viewer=document.createElement("div");viewer.id="chatPhotoViewer";viewer.className="chat-photo-viewer hidden";
+      viewer.innerHTML=`<div class="chat-photo-viewer-head"><strong id="chatPhotoViewerName">Photo</strong><button id="chatPhotoViewerClose" aria-label="Close">×</button></div><div class="chat-photo-viewer-stage"><img id="chatPhotoViewerImage" alt="Chat photo"></div>`;
+      document.body.appendChild(viewer);
+      viewer.querySelector("#chatPhotoViewerClose").onclick=()=>viewer.classList.add("hidden");
+      viewer.onclick=e=>{if(e.target===viewer||e.target.classList.contains("chat-photo-viewer-stage"))viewer.classList.add("hidden")};
+      document.addEventListener("keydown",e=>{if(e.key==="Escape")viewer.classList.add("hidden")});
+    }
+    viewer.querySelector("#chatPhotoViewerName").textContent=name||"Photo";
+    viewer.querySelector("#chatPhotoViewerImage").src=url;
+    viewer.classList.remove("hidden");
+  }catch(e){toast(e.message||String(e),true)}
+}
+window.openBrowserChatImage=openBrowserChatImage;
+
 function renderMessages(){
   const me=state.user?.id,items=[];
   (state.messages||[]).forEach(m=>items.push({type:"message",at:m.created_at,m}));
@@ -329,6 +394,7 @@ function renderMessages(){
     const m=item.m,mine=m.sender_id===me,a=m.attachment;let attach="";
     if(a?.kind==="CONTACT")attach=`<div class="answer-box">👤 <strong>${escapeHtml(a.contact_name)}</strong><br><small>${escapeHtml(a.contact_phone)}</small></div>`;
     else if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},false,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button><button class="mini" onclick="voiceAI(${m.id})">Q</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
+    else if(a?.media_id&&isBrowserImageAttachment(a))attach=browserImageAttachmentHtml(m.id,a,false);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
     const quote=m.reply_to?`<div class="reply-quote">${escapeHtml(m.reply_to.text||"")}</div>`:"";
     const reactions=(m.reactions||[]).map(r=>`<button class="reaction-pill" onclick="reactMessage(${m.id},'${escapeHtml(r.emoji)}')">${escapeHtml(r.emoji)} ${r.count}</button>`).join("");
@@ -342,6 +408,7 @@ function renderMessages(){
     </div>`;
   }
   $("messageList").innerHTML=html;
+  hydrateBrowserChatPhotos($("messageList"));
   setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
 }
 async function sendMessage(){
@@ -807,10 +874,11 @@ function renderGroupMessages(){
     const d=friendlyDay(m.created_at);if(d!==day){html+=`<div class="date-separator"><span>${escapeHtml(d)}</span></div>`;day=d}
     const mine=m.sender_id===me,a=m.attachment;let attach="";
     if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
+    else if(a?.media_id&&isBrowserImageAttachment(a))attach=browserImageAttachmentHtml(m.id,a,true);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadGroupMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
     html+=`<div class="msg ${mine?"mine":"theirs"}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div><div>${escapeHtml(m.text)}</div>${attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
   }
-  $("groupMessageList").innerHTML=html;setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
+  $("groupMessageList").innerHTML=html;hydrateBrowserChatPhotos($("groupMessageList"));setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
 }
 async function sendGroupMessage(){const text=$("groupMessageInput").value.trim();if(!text||!state.activeGroup)return;$("groupMessageInput").value="";await api(`/v24/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text})});await openGroup(state.activeGroup.id)}
 async function groupSuggestReply(){
@@ -1464,7 +1532,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.7-r1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.6").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

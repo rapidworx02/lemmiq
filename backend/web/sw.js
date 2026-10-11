@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v21074-q-economy-1";
+const CACHE = "lemmiq-v21010-unified-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.7",
@@ -28,7 +28,9 @@ const SHELL = [
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",
-  "/web/brand-icon.png"
+  "/web/brand-icon.png",
+  "/web/v21010_browser.css?v=2.10.10",
+  "/web/v21010_browser.js?v=2.10.10"
 ];
 
 self.addEventListener("install", event => {
@@ -52,7 +54,7 @@ self.addEventListener("fetch", event => {
   if (apiPrefixes.some(x => url.pathname.startsWith(x))) return;
 
   if (url.pathname === "/web/" || url.pathname.endsWith("/index.html") ||
-      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css") || url.pathname.endsWith("/v210.css") || url.pathname.endsWith("/v2103.css") || url.pathname.endsWith("/v2104.css") || url.pathname.endsWith("/v2104.js") || url.pathname.endsWith("/v2105.css") || url.pathname.endsWith("/v2105.js") || url.pathname.endsWith("/v2106.css") || url.pathname.endsWith("/v2106.js") || url.pathname.endsWith("/v2107.css") || url.pathname.endsWith("/v21071_admin.css") || url.pathname.endsWith("/v21071_admin.js") || url.pathname.endsWith("/v21072_q_usage.css") || url.pathname.endsWith("/v21072_q_usage.js") || url.pathname.endsWith("/v21073_wallets.css") || url.pathname.endsWith("/v21073_wallets.js") || url.pathname.endsWith("/v21074_q_economy.css") || url.pathname.endsWith("/v21074_q_economy.js")) {
+      url.pathname.endsWith("/app.js") || url.pathname.endsWith("/v28.js") || url.pathname.endsWith("/v29.js") || url.pathname.endsWith("/styles.css") || url.pathname.endsWith("/v28.css") || url.pathname.endsWith("/v29.css") || url.pathname.endsWith("/v210.css") || url.pathname.endsWith("/v2103.css") || url.pathname.endsWith("/v2104.css") || url.pathname.endsWith("/v2104.js") || url.pathname.endsWith("/v2105.css") || url.pathname.endsWith("/v2105.js") || url.pathname.endsWith("/v2106.css") || url.pathname.endsWith("/v2106.js") || url.pathname.endsWith("/v2107.css") || url.pathname.endsWith("/v21071_admin.css") || url.pathname.endsWith("/v21071_admin.js") || url.pathname.endsWith("/v21072_q_usage.css") || url.pathname.endsWith("/v21072_q_usage.js") || url.pathname.endsWith("/v21073_wallets.css") || url.pathname.endsWith("/v21073_wallets.js") || url.pathname.endsWith("/v21074_q_economy.css") || url.pathname.endsWith("/v21074_q_economy.js") || url.pathname.endsWith("/v21010_browser.css") || url.pathname.endsWith("/v21010_browser.js")) {
     event.respondWith(
       fetch(req).then(res => {
         const copy=res.clone();

@@ -32,7 +32,7 @@ import androidx.lifecycle.lifecycleScope
 import coil.compose.AsyncImage
 import com.twilio.audioswitch.AudioDevice
 import io.livekit.android.LiveKit
-import io.livekit.android.compose.ui.VideoTrackView
+import io.livekit.android.compose.VideoRenderer
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
@@ -63,8 +63,12 @@ class LemmiqCallActivity:ComponentActivity(){
     private val muted=mutableStateOf(false)
     private val speaker=mutableStateOf(false)
     private val cameraEnabled=mutableStateOf(false)
+    private val frontCamera=mutableStateOf(true)
+    private val incomingControlsVisible=mutableStateOf(false)
     private val remoteVideo=mutableStateOf<VideoTrack?>(null)
     private val localVideo=mutableStateOf<LocalVideoTrack?>(null)
+    @Volatile private var cameraActionInProgress=false
+    @Volatile private var answeredLocally=false
 
     private val mediaPermission=registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){grants->
         val micOk=ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
@@ -83,6 +87,7 @@ class LemmiqCallActivity:ComponentActivity(){
         avatarUrl=intent.getStringExtra("avatar_url")?.takeIf{it.isNotBlank()}
         incoming=intent.getBooleanExtra("incoming",false)
         callType=intent.getStringExtra("call_type")?.uppercase()?.takeIf{it in setOf("VOICE","VIDEO")}?:"VOICE"
+        incomingControlsVisible.value=incoming && token.isBlank()
         status.value=if(incoming && token.isBlank())"Incoming ${if(isVideoCall())"video" else "voice"} call" else "Ringing…"
 
         configureDefaultAudioRoute()
@@ -123,7 +128,7 @@ class LemmiqCallActivity:ComponentActivity(){
         Box(Modifier.fillMaxSize().background(Color(0xFF090A10))){
             val r=room
             if(r!=null && remoteVideo.value!=null){
-                VideoTrackView(videoTrack=remoteVideo.value,modifier=Modifier.fillMaxSize(),mirror=false)
+                VideoRenderer(room=r,videoTrack=remoteVideo.value,modifier=Modifier.fillMaxSize(),mirror=false)
             }else{
                 Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF17102D),Color(0xFF080A16)))),contentAlignment=Alignment.Center){
                     Column(horizontalAlignment=Alignment.CenterHorizontally){
@@ -139,7 +144,7 @@ class LemmiqCallActivity:ComponentActivity(){
                     modifier=Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(14.dp).size(width=116.dp,height=164.dp),
                     shape=RoundedCornerShape(18.dp),shadowElevation=8.dp,color=Color.Black
                 ){
-                    VideoTrackView(videoTrack=localVideo.value,modifier=Modifier.fillMaxSize(),mirror=true)
+                    VideoRenderer(room=r,videoTrack=localVideo.value,modifier=Modifier.fillMaxSize(),mirror=frontCamera.value)
                 }
             }
             Column(
@@ -169,7 +174,7 @@ class LemmiqCallActivity:ComponentActivity(){
 
     @Composable
     private fun CallControls(video:Boolean){
-        if(incoming && token.isBlank()){
+        if(incomingControlsVisible.value){
             Row(horizontalArrangement=Arrangement.spacedBy(18.dp)){
                 Button(onClick={answer()}){Text(if(video)"Answer video" else "Answer")}
                 Button(onClick={decline()},colors=ButtonDefaults.buttonColors(containerColor=Color(0xFFD13B50))){Text("Decline")}
@@ -194,11 +199,15 @@ class LemmiqCallActivity:ComponentActivity(){
 
     private fun answer(){
         if(closing || CallDeclineV2102.isTerminal(callId))return
+        incomingControlsVisible.value=false
+        incoming=false
+        answeredLocally=true
+        status.value="Connecting…"
         stopTones();cancelCallNotification()
         lifecycleScope.launch{
             try{
                 val join=Api(SessionStore(this@LemmiqCallActivity)).joinCall(callId)
-                wsUrl=join.ws_url;token=join.token;callType=join.call.call_type.uppercase();incoming=false;status.value="Connecting…";ensureMediaPermissions()
+                wsUrl=join.ws_url;token=join.token;callType=join.call.call_type.uppercase();incoming=false;incomingControlsVisible.value=false;status.value="Connecting…";ensureMediaPermissions()
             }catch(e:Exception){
                 status.value=e.message?:"Call failed"
                 if((e.message?:"").contains("declined",true)||(e.message?:"").contains("ended",true)){
@@ -210,7 +219,7 @@ class LemmiqCallActivity:ComponentActivity(){
 
     private fun decline():()->Unit = {
         if(!closing){
-            closing=true;status.value="Declined";stopTones();stateJob?.cancel();timerJob?.cancel();timeoutJob?.cancel();cancelCallNotification()
+            closing=true;incomingControlsVisible.value=false;status.value="Declined";stopTones();stateJob?.cancel();timerJob?.cancel();timeoutJob?.cancel();cancelCallNotification()
             lifecycleScope.launch{
                 CallDeclineV2102.decline(
                     callId=callId,
@@ -263,7 +272,7 @@ class LemmiqCallActivity:ComponentActivity(){
                     localVideo.value=r.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
                 }
                 remoteVideo.value=r.remoteParticipants.values.firstOrNull()?.getTrackPublication(Track.Source.CAMERA)?.track as? VideoTrack
-                if(incoming || r.remoteParticipants.isNotEmpty())onAnswered()
+                if(answeredLocally || incoming || r.remoteParticipants.isNotEmpty())onAnswered()
                 else{
                     status.value="Ringing…";startOutgoingRingback();timeoutJob?.cancel();timeoutJob=lifecycleScope.launch{
                         delay(45000)
@@ -274,21 +283,60 @@ class LemmiqCallActivity:ComponentActivity(){
         }
     }
 
+    private suspend fun refreshLocalCameraTrack(r:Room,attempts:Int=10):LocalVideoTrack?{
+        repeat(attempts){
+            val track=r.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack
+            if(track!=null)return track
+            delay(80)
+        }
+        return null
+    }
+
     private fun toggleCamera():()->Unit={
         lifecycleScope.launch{
+            if(cameraActionInProgress)return@launch
             val r=room?:return@launch
-            if(ContextCompat.checkSelfPermission(this@LemmiqCallActivity,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){mediaPermission.launch(arrayOf(Manifest.permission.CAMERA));return@launch}
-            val next=!cameraEnabled.value
-            cameraEnabled.value=r.localParticipant.setCameraEnabled(next)
-            localVideo.value=if(cameraEnabled.value)r.localParticipant.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack else null
+            if(ContextCompat.checkSelfPermission(this@LemmiqCallActivity,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){
+                mediaPermission.launch(arrayOf(Manifest.permission.CAMERA));return@launch
+            }
+            cameraActionInProgress=true
+            try{
+                val turnOn=!cameraEnabled.value
+                val enabled=r.localParticipant.setCameraEnabled(turnOn)
+                if(turnOn && enabled){
+                    localVideo.value=refreshLocalCameraTrack(r)
+                    cameraEnabled.value=localVideo.value!=null
+                    if(!cameraEnabled.value)status.value="Camera unavailable"
+                }else{
+                    cameraEnabled.value=false
+                    localVideo.value=null
+                }
+            }catch(e:Exception){
+                status.value=e.message?:"Unable to change camera"
+            }finally{cameraActionInProgress=false}
         }
     }
+
     private fun flipCamera():()->Unit={
-        (room?.localParticipant?.getTrackPublication(Track.Source.CAMERA)?.track as? LocalVideoTrack)?.switchCamera()
+        lifecycleScope.launch{
+            if(cameraActionInProgress || !cameraEnabled.value)return@launch
+            val r=room?:return@launch
+            cameraActionInProgress=true
+            try{
+                val track=localVideo.value?:refreshLocalCameraTrack(r)
+                if(track==null){status.value="Camera unavailable";return@launch}
+                track.switchCamera()
+                frontCamera.value=!frontCamera.value
+                localVideo.value=track
+            }catch(e:Exception){
+                status.value=e.message?:"Unable to switch camera"
+            }finally{cameraActionInProgress=false}
+        }
     }
 
     private fun onAnswered(){
         if(closing || CallDeclineV2102.isTerminal(callId) || status.value=="Connected")return
+        incoming=false;incomingControlsVisible.value=false;answeredLocally=false
         stopTones();timeoutJob?.cancel();status.value="Connected";seconds.intValue=0
         timerJob?.cancel();timerJob=lifecycleScope.launch{while(true){delay(1000);seconds.intValue++}}
     }
@@ -324,7 +372,7 @@ class LemmiqCallActivity:ComponentActivity(){
         stateJob?.cancel();stateJob=lifecycleScope.launch{
             val api=Api(SessionStore(this@LemmiqCallActivity))
             while(!closing&&callId.isNotBlank()){
-                delay(900);runCatching{api.callHeartbeat(callId)};val current=runCatching{api.callDetail(callId)}.getOrNull()?:continue
+                delay(900);val current=runCatching{api.callDetail(callId)}.getOrNull()?:continue
                 callType=current.call_type.uppercase()
                 when(current.status.uppercase()){
                     "CONNECTED" -> if(!incoming && status.value!="Connected")onAnswered()
@@ -342,7 +390,7 @@ class LemmiqCallActivity:ComponentActivity(){
         val r=room
         runCatching{r?.localParticipant?.setCameraEnabled(false)}
         runCatching{r?.localParticipant?.setMicrophoneEnabled(false)}
-        remoteVideo.value=null;localVideo.value=null;cameraEnabled.value=false
+        remoteVideo.value=null;localVideo.value=null;cameraEnabled.value=false;incomingControlsVisible.value=false
         runCatching{r?.disconnect()};room=null
     }
 

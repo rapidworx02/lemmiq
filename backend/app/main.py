@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.10.7.4")
+app = FastAPI(title="LEMMIQ Server", version="2.10.10")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.on_event("startup")
@@ -219,7 +219,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.4"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.10"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -994,7 +994,7 @@ def download_android():
 def app_config():
     """Public install metadata for the LEMMIQ web/PWA shell."""
     return {
-        "version": "2.10.7.4",
+        "version": "2.10.10",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1033,7 +1033,7 @@ register_v29(app,current_user,get_db)
 from .v2104_predict_router import register_v2104_predict_compat
 register_v2104_predict_compat(app,current_user,get_db)
 
-# V2.10.7.4 server-authoritative global Q feature pricing (same price for every package).
+# V2.10.10 server-authoritative global Q feature pricing (same price for every package).
 from .v2105_q_features import register_v2105_q_features
 register_v2105_q_features(app,current_user,get_db)
 

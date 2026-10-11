@@ -24,6 +24,13 @@
   <link rel="stylesheet" href="/web/v21072_q_usage.css?v=2.10.7.2">
   <link rel="stylesheet" href="/web/v21073_wallets.css?v=2.10.7.3">
   <link rel="stylesheet" href="/web/v21074_q_economy.css?v=2.10.7.4">
+  <link rel="stylesheet" href="/web/v21010_browser.css?v=2.10.10">
+  <script>
+    (function(){
+      var saved=localStorage.getItem("lemmiq_theme");
+      document.documentElement.dataset.theme=saved==="dark"?"dark":"light";
+    })();
+  </script>
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -122,7 +129,7 @@
               <div id="assistBar" class="assist-bar hidden"><button id="assistBarBtn" class="ghost">✨ Suggest reply</button><span>ASSIST drafts only — you choose what to send.</span></div>
               <div id="suggestionCard" class="suggestion hidden"></div>
               <div id="replyPreview" class="reply-preview hidden"></div>
-              <div class="composer"><label class="attach-btn">＋<input id="fileInput" type="file" hidden></label><button id="voiceBtn" class="ghost voice-btn">🎙</button><textarea id="messageInput" rows="1" placeholder="Message"></textarea><button id="suggestBtn" class="ghost qbtn">Q</button><button id="sendBtn" class="primary send">➤</button></div>
+              <div class="composer"><label class="attach-btn">＋<input id="fileInput" type="file" hidden></label><button id="voiceBtn" class="ghost voice-btn">🎙</button><textarea id="messageInput" rows="1" placeholder="Message"></textarea><button id="sendBtn" class="primary send">➤</button><button id="suggestBtn" class="ghost qbtn">Q</button></div>
             </div>
             <div id="activeGroup" class="hidden chat-inner">
               <div class="chat-head"><div class="chat-person"><div id="groupAvatar" class="avatar big"></div><div><strong id="groupName">Group</strong><small id="groupMeta">LEMMIQ group</small></div></div>
@@ -353,6 +360,7 @@
           <button data-more-view="activity" class="more-card"><span>◈</span><strong>Activity</strong><small>Detected notification intelligence</small></button>
           <button data-more-view="money" class="more-card"><span>💳</span><strong>Money</strong><small>Review detected payments and corrections</small></button>
           <button data-more-view="me" class="more-card"><span>🙂</span><strong>Me / Profile</strong><small>Photo, account, privacy and sign out</small></button>
+          <button id="themeToggleCard" class="more-card"><span id="themeToggleIcon">🌙</span><strong id="themeToggleTitle">Dark mode</strong><small>Switch between light and dark appearance</small></button>
           <button id="moreAndroidDownloadBtn" class="more-card"><span>📱</span><strong>Download Android app</strong><small>Install the native LEMMIQ companion</small></button>
         </div>
       </section>
@@ -526,5 +534,6 @@
   <script src="/web/v21072_q_usage.js?v=2.10.7.2" defer></script>
   <script src="/web/v21073_wallets.js?v=2.10.7.3" defer></script>
   <script src="/web/v21074_q_economy.js?v=2.10.7.4" defer></script>
+  <script src="/web/v21010_browser.js?v=2.10.10" defer></script>
 </body>
 </html>
