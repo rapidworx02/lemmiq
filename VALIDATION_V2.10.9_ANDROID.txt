@@ -1,0 +1,37 @@
+LEMMIQ V2.10.9 ANDROID — BUILD-TIME VALIDATION PERFORMED
+
+Source baseline:
+- Full stable V2.10.7 Android app module.
+
+Integrated backend contract:
+- V2.10.7.4 Q Economy user routes.
+
+Static checks completed:
+- versionCode 59 confirmed.
+- versionName 2.10.9 confirmed.
+- Kotlin delimiter/bracket balance checked on modified Kotlin files.
+- Kotlin parser diagnostic scan found no 'expecting', unclosed-token or syntax-style parser errors.
+- V2.10.7 6-tab Android navigation retained.
+- V2.10.7 main-Q Q Predict implementation retained.
+- V2.10.8 heartbeat/active-clear call endpoints are NOT required by this Android release.
+- Stuck-call recovery uses the current call-end API.
+
+Modified integration files relative to the stable V2.10.7 Android baseline:
+- build.gradle.kts
+- Api.kt
+- Models.kt
+- LemmiqViewModel.kt
+- V28Q.kt
+- LemmiqApp.kt
+
+Important limitation:
+A full Android Gradle/Compose build was not executed in this packaging environment
+because the packaged source context contains the app module rather than the user's
+complete local Android root/wrapper/toolchain. The authoritative build test is:
+
+cd /d C:\Users\pc\LEMMIQ\android
+gradlew clean
+gradlew assembleDebug
+
+If Gradle reports a Kotlin/Compose error, provide the first compile error and the
+release can be corrected without rolling back the working V2.10.7.4 backend.

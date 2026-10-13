@@ -1,0 +1,156 @@
+LEMMIQ V2.10.9 ANDROID — INSTALL / BUILD
+
+REQUIRED
+- Your backend/web V2.10.7.4 is already deployed and working.
+- Your local repository is:
+  C:\Users\pc\LEMMIQ
+
+This ZIP contains a FULL android\app overlay based on the stable V2.10.7 Android app.
+
+============================================================
+1. BACK UP YOUR CURRENT ANDROID APP MODULE
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'android\app' -DestinationPath '.\BACKUP_BEFORE_V2109_ANDROID.zip' -Force"
+
+============================================================
+2. EXTRACT V2.10.9
+============================================================
+
+Extract:
+LEMMIQ_V2.10.9_ANDROID_INTEGRATION.zip
+
+Inside it you will see:
+LEMMIQ_V2.10.9_ANDROID_INTEGRATION\android\app\
+
+Copy/merge the `android` folder into:
+
+C:\Users\pc\LEMMIQ\
+
+Allow Windows to overwrite files.
+
+IMPORTANT:
+Do not delete your Android root project files such as:
+android\gradlew
+android\gradlew.bat
+android\gradle\
+android\settings.gradle.kts
+
+The package replaces/merges only android\app.
+
+============================================================
+3. VERIFY VERSION
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+findstr /n /i "versionCode=59" android\app\build.gradle.kts
+findstr /n /i "versionName=\"2.10.9\"" android\app\build.gradle.kts
+
+git status --short android
+
+Expected version:
+versionCode=59
+versionName="2.10.9"
+
+============================================================
+4. REVIEW CHANGED ANDROID FILES
+============================================================
+
+Main V2.10.9 integration files are:
+
+android\app\build.gradle.kts
+android\app\src\main\java\com\lemmiq\app\Api.kt
+android\app\src\main\java\com\lemmiq\app\Models.kt
+android\app\src\main\java\com\lemmiq\app\LemmiqViewModel.kt
+android\app\src\main\java\com\lemmiq\app\V28Q.kt
+android\app\src\main\java\com\lemmiq\app\LemmiqApp.kt
+
+Because this is a full app overlay from the stable V2.10.7 Android source,
+you may also see repository differences if your local Android source is older.
+
+============================================================
+5. COMMIT
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+git add android\app
+git status
+
+git commit -m "LEMMIQ V2.10.9 integrate Q Economy into Android"
+git push origin main
+
+============================================================
+6. BUILD DEBUG APK
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ\android
+
+gradlew clean
+gradlew assembleDebug
+
+Expected APK:
+
+C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+============================================================
+7. INSTALL ON PHONE
+============================================================
+
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+If you receive a SIGNATURE MISMATCH only:
+
+adb uninstall com.lemmiq.app
+adb install app\build\outputs\apk\debug\app-debug.apk
+
+WARNING:
+adb uninstall com.lemmiq.app removes the locally stored app/session data.
+Use uninstall only when a signing-key mismatch requires it.
+
+============================================================
+8. FIRST LAUNCH
+============================================================
+
+Login normally.
+
+Confirm bottom navigation is exactly:
+
+Chats · Updates · Q Economy · Q Predict · Calls · More
+
+Confirm Q Predict uses Q, NOT Predict Credits.
+
+Open Q Economy and allow the first refresh to finish.
+
+============================================================
+9. IF THE ANDROID BUILD FAILS
+============================================================
+
+Do NOT randomly replace Kotlin files.
+
+Copy the full Gradle error beginning at:
+
+> Task :app:compileDebugKotlin FAILED
+
+through the first:
+e: file:///...
+
+and send it back for a targeted V2.10.9 correction.
+
+============================================================
+ROLLBACK
+============================================================
+
+If needed, restore:
+
+BACKUP_BEFORE_V2109_ANDROID.zip
+
+over:
+C:\Users\pc\LEMMIQ\android\app
+
+or revert the Git commit.
+
+The V2.10.7 Android source remains the stable pre-V2.10.9 baseline.

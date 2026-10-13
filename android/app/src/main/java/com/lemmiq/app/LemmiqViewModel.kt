@@ -78,6 +78,13 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var qMarketListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
     var qMyListings by mutableStateOf<List<QMarketListingDto>>(emptyList())
     var qMarketOrders by mutableStateOf<List<QMarketOrderDto>>(emptyList())
+    var qEarningCycles by mutableStateOf(QEarningCyclesDto())
+    var qWeeklyActive by mutableStateOf(QWeeklyActiveDto())
+    var qRebuyOptions by mutableStateOf(QRebuyOptionsDto())
+    var qRebuyOrders by mutableStateOf<List<QRebuyOrderDto>>(emptyList())
+    var qWithdrawalConfig by mutableStateOf(QWithdrawalConfigDto())
+    var qWithdrawals by mutableStateOf<List<QWithdrawalDto>>(emptyList())
+    var qFeatureCatalog by mutableStateOf<List<QFeatureTierRuleDto>>(emptyList())
     var qEconomyBusy by mutableStateOf(false)
     var visionHistory by mutableStateOf<List<VisionMemoryDto>>(emptyList())
     var activeVision by mutableStateOf<VisionMemoryDto?>(null)
@@ -169,7 +176,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();qEarningCycles=QEarningCyclesDto();qWeeklyActive=QWeeklyActiveDto();qRebuyOptions=QRebuyOptionsDto();qRebuyOrders=emptyList();qWithdrawalConfig=QWithdrawalConfigDto();qWithdrawals=emptyList();qFeatureCatalog=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
@@ -468,12 +475,19 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             qMarketListings=api.qMarketListings()
             qMyListings=api.qMyListings()
             qMarketOrders=api.qMarketOrders()
+            qEarningCycles=runCatching{api.qEarningCycles()}.getOrDefault(QEarningCyclesDto())
+            qWeeklyActive=runCatching{api.qWeeklyActive()}.getOrDefault(QWeeklyActiveDto())
+            qRebuyOptions=runCatching{api.qRebuyOptions()}.getOrDefault(QRebuyOptionsDto())
+            qRebuyOrders=runCatching{api.qRebuyOrders()}.getOrDefault(emptyList())
+            qWithdrawalConfig=runCatching{api.qWithdrawalConfig()}.getOrDefault(QWithdrawalConfigDto())
+            qWithdrawals=runCatching{api.qWithdrawals()}.getOrDefault(emptyList())
+            qFeatureCatalog=runCatching{api.qFeatureCatalog()}.getOrDefault(emptyList())
         }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
     fun qClaimDaily()=viewModelScope.launch{
         qEconomyBusy=true;error=null
-        try{qWallet=api.qClaimDaily();qLedger=api.qLedger()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+        try{qWallet=api.qClaimDaily();qLedger=api.qLedger();qEarningCycles=runCatching{api.qEarningCycles()}.getOrDefault(qEarningCycles)}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
     fun qTransfer(username:String,amount:Double)=viewModelScope.launch{
@@ -496,10 +510,50 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun qSubmitPayment(orderId:Int,txHash:String,note:String="")=viewModelScope.launch{
         if(txHash.length<20)return@launch
         qEconomyBusy=true;error=null
-        try{activeQPaymentOrder=api.qSubmitPayment(orderId,txHash.trim(),note);qPaymentOrders=api.qPaymentOrders()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+        try{activeQPaymentOrder=api.qSubmitPayment(orderId,txHash.trim(),note);qPaymentOrders=api.qPaymentOrders();qRebuyOrders=runCatching{api.qRebuyOrders()}.getOrDefault(qRebuyOrders)}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
     }
 
     fun qDismissPayment(){activeQPaymentOrder=null}
+
+    fun qClaimWeeklyActive()=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{qWeeklyActive=api.qClaimWeeklyActive();refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qCreateRebuyOrder(packageCode:String,network:String,qAmount:Double)=viewModelScope.launch{
+        if(packageCode.isBlank()||network.isBlank()||qAmount<=0)return@launch
+        qEconomyBusy=true;error=null
+        try{
+            val order=api.qCreateRebuyOrder(packageCode,network,qAmount)
+            qRebuyOrders=api.qRebuyOrders()
+            qPaymentOrders=api.qPaymentOrders()
+            activeQPaymentOrder=order.payment
+            qWallet=api.qWallet()
+            qLedger=api.qLedger()
+            qRebuyOptions=api.qRebuyOptions()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qCancelRebuyOrder(id:Int)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qCancelRebuyOrder(id);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qCreateWithdrawal(amountQ:Double,network:String,address:String)=viewModelScope.launch{
+        if(amountQ<=0||network.isBlank()||address.isBlank())return@launch
+        qEconomyBusy=true;error=null
+        try{
+            api.qCreateWithdrawal(amountQ,network,address.trim())
+            qWithdrawals=api.qWithdrawals()
+            qWithdrawalConfig=api.qWithdrawalConfig()
+            qWallet=api.qWallet();qLedger=api.qLedger()
+        }catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
+
+    fun qCancelWithdrawal(id:Int)=viewModelScope.launch{
+        qEconomyBusy=true;error=null
+        try{api.qCancelWithdrawal(id);refreshQEconomy()}catch(e:Exception){error=e.message}finally{qEconomyBusy=false}
+    }
 
     fun qCreateListing(title:String,description:String,priceQ:Double,inventory:Int=1)=viewModelScope.launch{
         if(title.isBlank()||priceQ<=0)return@launch
@@ -599,6 +653,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             qCoordination=runCatching{api.qCoordinationV27()}.getOrDefault(QCoordinationListDto())
             qThread=runCatching{api.qThreadV2106()}.getOrDefault(QThreadDto())
             visionHistory=runCatching{api.visionList()}.getOrDefault(emptyList())
+            qFeatureCatalog=runCatching{api.qFeatureCatalog()}.getOrDefault(qFeatureCatalog)
             if(!autoSocialScanned){
                 autoSocialScanned=true
                 runCatching{api.scanSocial()}
@@ -621,6 +676,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 agentAnswer=api.askAgent(question.trim(),30,context)
                 qDoAnswer=null
             }
+            // V2.10.9: feature charging is server-authoritative. Refresh the
+            // main Q wallet/activity after a successful AI action so any Q
+            // debit is visible immediately when charging is enabled.
+            runCatching{api.qWallet()}.onSuccess{qWallet=it}
+            qLedger=runCatching{api.qLedger()}.getOrDefault(qLedger)
         }catch(e:Exception){error=e.message}finally{agentBusy=false}
     }
 
@@ -664,7 +724,16 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         return safeName to mime
     }
 
-    private fun qVisionFriendlyError():String = "Q Vision couldn't analyse this image. Tap Ask Q Vision again to retry."
+    private fun qVisionFriendlyError(e:Exception?=null):String {
+        val raw=e?.message.orEmpty()
+        // Preserve wallet/price failures from the server. Hiding an insufficient-Q
+        // response behind a generic Vision error would make paid AI confusing.
+        if(raw.contains("Not enough Q",ignoreCase=true) ||
+           raw.contains("insufficient",ignoreCase=true) ||
+           raw.contains("Q balance",ignoreCase=true) ||
+           raw.contains("requires",ignoreCase=true) && raw.contains(" Q",ignoreCase=true)) return raw
+        return "Q Vision couldn't analyse this image. Tap Ask Q Vision again to retry."
+    }
 
     fun refreshVision()=viewModelScope.launch{
         runCatching{visionHistory=api.visionList();qHome=api.qHome()}.onFailure{error=it.message}
@@ -683,7 +752,9 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             }
             activeVision=api.visionScan(data.first,data.second,data.third,question)
             visionHistory=api.visionList();qHome=api.qHome()
-        }catch(e:Exception){error=qVisionFriendlyError()}finally{visionBusy=false}
+            runCatching{api.qWallet()}.onSuccess{qWallet=it}
+            qLedger=runCatching{api.qLedger()}.getOrDefault(qLedger)
+        }catch(e:Exception){error=qVisionFriendlyError(e)}finally{visionBusy=false}
     }
 
     fun scanVisionBytes(bytes:ByteArray,question:String="What is in this image? Give me the useful details.",sourceMessageId:Int?=null){
@@ -696,8 +767,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 if(bytes.size>15*1024*1024)throw IllegalArgumentException("Q Vision image exceeds 15 MB")
                 val detected=detectedVisionType("q-vision",null,bytes)
                 val result=api.visionScan(detected.first,detected.second,bytes,question)
-                if(generation==visionGeneration){activeVision=result;visionHistory=api.visionList();qHome=api.qHome()}
-            }catch(e:Exception){if(generation==visionGeneration)error=qVisionFriendlyError()}finally{if(generation==visionGeneration){visionBusy=false;visionSourceMessageId=null}}
+                if(generation==visionGeneration){
+                    activeVision=result;visionHistory=api.visionList();qHome=api.qHome()
+                    runCatching{api.qWallet()}.onSuccess{qWallet=it}
+                    qLedger=runCatching{api.qLedger()}.getOrDefault(qLedger)
+                }
+            }catch(e:Exception){if(generation==visionGeneration)error=qVisionFriendlyError(e)}finally{if(generation==visionGeneration){visionBusy=false;visionSourceMessageId=null}}
         }
     }
     fun cancelVision(){visionGeneration++;visionJob?.cancel();visionJob=null;visionBusy=false;visionSourceMessageId=null}
@@ -706,8 +781,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         val v=activeVision?:return@launch
         if(question.isBlank())return@launch
         visionBusy=true;error=null
-        try{activeVision=api.visionAsk(v.id,question.trim());visionHistory=api.visionList()}
-        catch(e:Exception){error=e.message}finally{visionBusy=false}
+        try{
+            activeVision=api.visionAsk(v.id,question.trim());visionHistory=api.visionList()
+            runCatching{api.qWallet()}.onSuccess{qWallet=it}
+            qLedger=runCatching{api.qLedger()}.getOrDefault(qLedger)
+        }catch(e:Exception){error=e.message}finally{visionBusy=false}
     }
 
     fun openVision(v:VisionMemoryDto){activeVision=v}
@@ -1004,18 +1082,17 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         callStarting=true;busy=true;error=null
         try{onReady(api.startCall(cid,type))}
         catch(e:Exception){
-            if((e.message?:"").contains("Call already active",ignoreCase=true)){
-                runCatching{api.activeCall()}.onSuccess{state->
-                    val c=state.call
-                    val stale=c!=null && c.ended_at==null
-                    if(stale){
-                        runCatching{api.clearStuckCall()}
-                        runCatching{api.startCall(cid,type)}.onSuccess{onReady(it)}.onFailure{error=it.message}
-                    }else error=e.message
-                }.onFailure{error=e.message}
-            }else error=e.message
+            error=if((e.message?:"").contains("Call already active",ignoreCase=true) || (e.message?:"").contains("already in another call",ignoreCase=true))
+                "A call is still active on the server. Open Calls and tap End stuck call if you are no longer in that call."
+            else e.message
         }
         finally{busy=false;callStarting=false}
+    }
+
+    fun endStuckCall(callId:String)=viewModelScope.launch{
+        if(callId.isBlank())return@launch
+        busy=true;error=null
+        try{api.endCall(callId);refreshCalls()}catch(e:Exception){error=e.message}finally{busy=false}
     }
 
     fun refreshQThread(markRead:Boolean=false)=viewModelScope.launch{

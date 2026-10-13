@@ -1,0 +1,206 @@
+LEMMIQ V2.10.10 PERFORMANCE + UI — INSTALL
+
+BASE REQUIRED
+Your backend/browser V2.10.7.4 should already be deployed and working.
+Android V2.10.9 is separate and does not need to be replaced for this browser/backend release.
+
+============================================================
+1) BACK UP
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web' -DestinationPath '.\BACKUP_BEFORE_V21010_PERFORMANCE_UI.zip' -Force"
+
+============================================================
+2) EXTRACT
+============================================================
+
+Extract:
+LEMMIQ_V2.10.10_PERFORMANCE_UI.zip
+
+Copy its `backend` folder into:
+
+C:\Users\pc\LEMMIQ\
+
+Allow overwrite.
+
+IMPORTANT:
+Do NOT delete stable:
+backend\web\v28.js
+backend\web\v29.js
+
+This patch does not contain or replace them.
+
+============================================================
+3) VERIFY
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+dir backend\web\v21010.css
+dir backend\web\v21010.js
+
+findstr /n /i "2.10.10" backend\app\main.py
+
+git status --short backend
+
+============================================================
+4) STAGE ONLY V2.10.10 FILES
+============================================================
+
+git add backend\app\main.py
+git add backend\app\v24.py
+git add backend\app\migrations.py
+git add backend\app\push_service.py
+git add backend\app\v210.py
+git add backend\web\index.html
+git add backend\web\app.js
+git add backend\web\sw.js
+git add backend\web\v21010.css
+git add backend\web\v21010.js
+
+git status
+
+git commit -m "LEMMIQ V2.10.10 performance and browser UI"
+
+git push origin main
+
+============================================================
+5) RENDER
+============================================================
+
+Wait for deployment.
+
+Open:
+https://lemmiq-api.onrender.com/app-config
+
+Expected:
+2.10.10
+
+The first V2.10.10 startup also creates the performance indexes.
+No destructive database migration is included.
+
+============================================================
+6) BROWSER CACHE
+============================================================
+
+Close every LEMMIQ browser/PWA tab.
+
+Open:
+https://app.lemmiq.com/web/#chats
+
+Press:
+Ctrl + Shift + R
+
+On a phone, close Chrome/PWA fully and reopen it.
+
+If the old UI remains:
+Chrome > Site settings > app.lemmiq.com > Clear site data
+Then sign in once again.
+
+============================================================
+7) UI TEST
+============================================================
+
+A. Login/front page
+- Light theme is default.
+- Headline is dark/readable on the light background.
+- Logo is clean (no oversized white logo box).
+- Login card is balanced.
+- Dark toggle works and persists.
+
+B. Chat composer
+On a narrow phone browser confirm:
++ | Mic | Message | Q | Send
+All five controls stay inside the screen.
+Send must not be clipped.
+
+C. Photos
+Open old and new image messages.
+Expected:
+- actual image thumbnail, not only .jpg filename
+- tap photo -> full-screen dark image viewer
+- close with X / outside tap / Escape on desktop
+
+D. Performance
+- Open a long chat: only latest messages load first.
+- “Load older messages” appears for long history.
+- Send a message: it appears immediately without a full-chat reload.
+- Receive a message: open chat updates without a visible full refresh.
+
+============================================================
+8) OPTIONAL PWA NOTIFICATIONS
+============================================================
+
+If you only want UI/performance now, skip this section.
+The rest of V2.10.10 works without PWA push variables.
+
+Because Android FCM already uses your Firebase project, add a Firebase Web App in the same project.
+
+Firebase Console:
+Project settings > General > Your apps > Add app > Web
+
+Copy the Firebase web config JSON.
+
+Then:
+Project settings > Cloud Messaging > Web Push certificates
+Generate/copy the public VAPID key.
+
+In Render > lemmiq-api > Environment add:
+
+FIREBASE_WEB_CONFIG_JSON
+
+Value example (USE YOUR REAL FIREBASE VALUES):
+{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}
+
+FIREBASE_WEB_VAPID_KEY
+
+Value:
+your public Web Push certificate/VAPID key
+
+Keep your existing Firebase Admin credential:
+FIREBASE_SERVICE_ACCOUNT_JSON
+or FIREBASE_SERVICE_ACCOUNT_B64
+
+Redeploy Render.
+
+Then sign into LEMMIQ PWA:
+More > Browser notifications > tap to enable
+
+Allow notifications in Chrome.
+
+Test by sending a message from another LEMMIQ account while the PWA is in the background.
+
+============================================================
+9) PERFORMANCE CHECK
+============================================================
+
+In Chrome DevTools > Network, API responses now include:
+
+Server-Timing
+X-LEMMIQ-Server-Ms
+
+Render logs will also show:
+Slow request ... ms METHOD /path
+
+for backend requests taking 750 ms or longer.
+
+This helps identify whether remaining slowness is:
+- Render/server
+- PostgreSQL
+- AI/provider calls
+- browser rendering
+
+============================================================
+ROLLBACK
+============================================================
+
+git log --oneline -5
+git revert <V2.10.10 commit hash>
+git push origin main
+
+or restore:
+BACKUP_BEFORE_V21010_PERFORMANCE_UI.zip
+
+V2.10.7.4 remains the backend/browser fallback baseline.

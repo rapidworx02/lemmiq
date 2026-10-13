@@ -8,6 +8,12 @@ const state = {
   messages: [],
   groupMessages: [],
   chatCalls: [],
+  messagePageSize: 60,
+  chatHasMore: false,
+  groupHasMore: false,
+  chatListLoadedAt: 0,
+  chatListInflight: null,
+  mediaBlobUrls: new Map(),
   chatFilterMode: "ALL",
   statuses: [],
   statusStoryIds: [],
@@ -188,16 +194,20 @@ function connectSocket(){
     try{
       const p=JSON.parse(ev.data);
       if(p.type==="message"){
-        await loadChats();
-        if(state.activeChat&&p.data?.chat_id===state.activeChat.id)await openChat(state.activeChat.id,false);
+        if(state.activeChat&&p.data?.chat_id===state.activeChat.id&&p.data?.id&&!state.messages.some(m=>m.id===p.data.id)){
+          state.messages.push(p.data);renderMessages(true);
+        }
+        scheduleChatListRefresh();
       }else if(p.type==="message_update"){
         if(state.activeChat&&p.data?.chat_id===state.activeChat.id){
-          state.messages=state.messages.map(m=>m.id===p.data.id?p.data:m);renderMessages();
+          state.messages=state.messages.map(m=>m.id===p.data.id?p.data:m);renderMessages(false);
         }
-        await loadChats();
+        scheduleChatListRefresh();
       }else if(p.type==="group_message"){
-        await loadChats();
-        if(state.activeGroup&&p.group_id===state.activeGroup.id)await openGroup(state.activeGroup.id,false);
+        if(state.activeGroup&&p.group_id===state.activeGroup.id&&p.data?.id&&!state.groupMessages.some(m=>m.id===p.data.id)){
+          state.groupMessages.push(p.data);renderGroupMessages();
+        }
+        scheduleChatListRefresh();
       }else if(["q_coordination_request","q_coordination_response","q_coordination_closed"].includes(p.type)){
         await loadQThread();
         if(!$("activeQThread")?.classList.contains("hidden"))renderQThread();
@@ -221,9 +231,23 @@ async function loadQThread(){
   state.qThread=await api("/v2106/q/thread").catch(()=>({unread_count:0,items:[]}));
   return state.qThread;
 }
-async function loadChats(){
-  const [chats,groups,qThread]=await Promise.all([api("/chats"),api("/v24/groups"),loadQThread()]);
-  state.chats=chats;state.groups=groups;state.qThread=qThread||state.qThread;renderChats();
+async function loadChats(force=false){
+  const now=Date.now();
+  if(!force && state.chatListLoadedAt && (now-state.chatListLoadedAt)<2500){
+    renderChats();return;
+  }
+  if(state.chatListInflight)return state.chatListInflight;
+  state.chatListInflight=(async()=>{
+    const [chats,groups,qThread]=await Promise.all([api("/chats"),api("/v24/groups"),loadQThread()]);
+    state.chats=chats;state.groups=groups;state.qThread=qThread||state.qThread;
+    state.chatListLoadedAt=Date.now();
+    renderChats();
+  })();
+  try{await state.chatListInflight}finally{state.chatListInflight=null}
+}
+function scheduleChatListRefresh(){
+  clearTimeout(window.__lemmiqChatListRefresh);
+  window.__lemmiqChatListRefresh=setTimeout(()=>loadChats(true).catch(()=>{}),220);
 }
 function renderChats(){
   const query=($("chatFilter")?.value||"").toLowerCase().trim();
@@ -295,8 +319,11 @@ async function openChat(cid,mark=true){
   if(!chat)return;
   state.activeGroup=null;state.activeChat=chat;state.replyTo=null;
   $("globalQOrb")?.classList.add("q2106-hide-orb");
-  const [messages,calls]=await Promise.all([api(`/chats/${cid}/messages`),api(`/v24/chats/${cid}/calls`).catch(()=>[])]);
-  state.messages=messages;state.chatCalls=calls;
+  const [messages,calls]=await Promise.all([
+    api(`/chats/${cid}/messages?limit=${state.messagePageSize}`),
+    api(`/v24/chats/${cid}/calls`).catch(()=>[])
+  ]);
+  state.messages=messages;state.chatHasMore=messages.length>=state.messagePageSize;state.chatCalls=calls;
   if(mark)api(`/chats/${cid}/read`,{method:"POST"}).catch(()=>{});
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
   $("chatName").textContent=chat.other_user.display_name;
@@ -309,72 +336,65 @@ async function openChat(cid,mark=true){
   renderMessages();renderChats();
   if(mark&&location.hash!==`#chat-${cid}`)history.pushState({view:"chats",chatId:cid},"",`#chat-${cid}`);
 }
-const lemmiqMediaObjectUrls=new Map();
-function isBrowserImageAttachment(a){
-  if(!a)return false;
-  const kind=String(a.kind||"").toUpperCase();
-  const mime=String(a.mime_type||"").toLowerCase();
-  const name=String(a.name||"").toLowerCase();
-  return kind==="PHOTO"||kind==="IMAGE"||mime.startsWith("image/")||/\.(jpe?g|png|webp|gif)$/i.test(name);
+function isImageAttachment(a){
+  const mime=String(a?.mime_type||"").toLowerCase(),name=String(a?.name||"").toLowerCase();
+  return a?.kind==="PHOTO" || mime.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/i.test(name);
 }
-function browserImageAttachmentHtml(messageId,a,isGroup=false){
-  const safeName=escapeHtml(a?.name||"Photo");
-  return `<button class="chat-photo-preview" type="button" onclick="openBrowserChatImage(${messageId},${isGroup?"true":"false"},'${escapeHtml((a?.name||"Photo").replace(/'/g,""))}')">
-    <span class="chat-photo-loading">Loading photo…</span>
-    <img data-chat-photo="${messageId}" data-group-photo="${isGroup?"1":"0"}" alt="${safeName}">
+function mediaPreviewHtml(messageId,a,isGroup=false){
+  const name=escapeHtml(a?.name||"Photo");
+  const endpoint=isGroup?`/v24/group-media/${messageId}`:`/media/${messageId}`;
+  return `<button class="lemmiq-media-preview" data-media-endpoint="${escapeHtml(endpoint)}" data-media-name="${name}">
+    <span class="lemmiq-media-loading">Loading photo…</span>
   </button>`;
 }
-async function hydrateBrowserChatPhotos(scope=document){
-  const imgs=[...scope.querySelectorAll("img[data-chat-photo]")];
-  for(const img of imgs){
-    if(img.dataset.loaded==="1")continue;
-    const id=Number(img.dataset.chatPhoto),isGroup=img.dataset.groupPhoto==="1";
-    const key=`${isGroup?"g":"d"}:${id}`;
+async function hydrateMediaPreviews(hostId){
+  const host=$(hostId);if(!host)return;
+  const buttons=[...host.querySelectorAll(".lemmiq-media-preview:not([data-loaded])")];
+  for(const btn of buttons){
+    btn.dataset.loaded="1";
+    const endpoint=btn.dataset.mediaEndpoint;
     try{
-      let url=lemmiqMediaObjectUrls.get(key);
-      if(!url){
-        const endpoint=isGroup?`/v24/group-media/${id}`:`/media/${id}`;
+      let src=state.mediaBlobUrls.get(endpoint);
+      if(!src){
         const r=await fetch(endpoint,{headers:authHeaders()});
-        if(!r.ok)throw new Error(`Photo HTTP ${r.status}`);
+        if(!r.ok)throw new Error(`HTTP ${r.status}`);
         const blob=await r.blob();
-        if(!String(blob.type||"").startsWith("image/"))throw new Error("Attachment is not an image");
-        url=URL.createObjectURL(blob);lemmiqMediaObjectUrls.set(key,url);
+        if(!String(blob.type||"").startsWith("image/"))throw new Error("Not an image");
+        src=URL.createObjectURL(blob);state.mediaBlobUrls.set(endpoint,src);
       }
-      img.src=url;img.dataset.loaded="1";
-      img.closest(".chat-photo-preview")?.classList.add("loaded");
-    }catch(e){
-      const host=img.closest(".chat-photo-preview");
-      if(host){host.classList.add("failed");const text=host.querySelector(".chat-photo-loading");if(text)text.textContent="Photo unavailable · tap menu to download";}
+      btn.innerHTML=`<img src="${src}" alt="${escapeHtml(btn.dataset.mediaName||"Photo")}" loading="lazy">`;
+      btn.onclick=()=>openMediaLightbox(src,btn.dataset.mediaName||"Photo");
+    }catch{
+      btn.classList.add("failed");
+      btn.innerHTML=`<span>📎 ${escapeHtml(btn.dataset.mediaName||"Attachment")}</span>`;
+      btn.onclick=()=>{};
     }
   }
 }
-async function openBrowserChatImage(id,isGroup=false,name="Photo"){
-  const key=`${isGroup?"g":"d"}:${id}`;
-  try{
-    let url=lemmiqMediaObjectUrls.get(key);
-    if(!url){
-      const endpoint=isGroup?`/v24/group-media/${id}`:`/media/${id}`;
-      const r=await fetch(endpoint,{headers:authHeaders()});
-      if(!r.ok)throw new Error(`Photo HTTP ${r.status}`);
-      const blob=await r.blob();url=URL.createObjectURL(blob);lemmiqMediaObjectUrls.set(key,url);
-    }
-    let viewer=document.getElementById("chatPhotoViewer");
-    if(!viewer){
-      viewer=document.createElement("div");viewer.id="chatPhotoViewer";viewer.className="chat-photo-viewer hidden";
-      viewer.innerHTML=`<div class="chat-photo-viewer-head"><strong id="chatPhotoViewerName">Photo</strong><button id="chatPhotoViewerClose" aria-label="Close">×</button></div><div class="chat-photo-viewer-stage"><img id="chatPhotoViewerImage" alt="Chat photo"></div>`;
-      document.body.appendChild(viewer);
-      viewer.querySelector("#chatPhotoViewerClose").onclick=()=>viewer.classList.add("hidden");
-      viewer.onclick=e=>{if(e.target===viewer||e.target.classList.contains("chat-photo-viewer-stage"))viewer.classList.add("hidden")};
-      document.addEventListener("keydown",e=>{if(e.key==="Escape")viewer.classList.add("hidden")});
-    }
-    viewer.querySelector("#chatPhotoViewerName").textContent=name||"Photo";
-    viewer.querySelector("#chatPhotoViewerImage").src=url;
-    viewer.classList.remove("hidden");
-  }catch(e){toast(e.message||String(e),true)}
+function openMediaLightbox(src,name="Photo"){
+  let box=$("lemmiqMediaLightbox");
+  if(!box){
+    box=document.createElement("div");box.id="lemmiqMediaLightbox";box.className="lemmiq-media-lightbox hidden";
+    box.innerHTML=`<button class="lemmiq-media-close" aria-label="Close">×</button><img alt="">`;
+    document.body.appendChild(box);
+    box.querySelector(".lemmiq-media-close").onclick=()=>box.classList.add("hidden");
+    box.onclick=e=>{if(e.target===box)box.classList.add("hidden")};
+    document.addEventListener("keydown",e=>{if(e.key==="Escape")box.classList.add("hidden")});
+  }
+  box.querySelector("img").src=src;box.querySelector("img").alt=name;box.classList.remove("hidden");
 }
-window.openBrowserChatImage=openBrowserChatImage;
-
-function renderMessages(){
+async function loadOlderMessages(){
+  if(!state.activeChat||!state.chatHasMore||!state.messages.length)return;
+  const host=$("messageList"),beforeHeight=host?.scrollHeight||0,before=state.messages[0].id;
+  const rows=await api(`/chats/${state.activeChat.id}/messages?limit=${state.messagePageSize}&before_id=${before}`);
+  state.chatHasMore=rows.length>=state.messagePageSize;
+  const known=new Set(state.messages.map(x=>x.id));
+  state.messages=[...rows.filter(x=>!known.has(x.id)),...state.messages];
+  renderMessages(false);
+  requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
+}
+window.loadOlderMessages=loadOlderMessages;
+function renderMessages(scrollToBottom=true){
   const me=state.user?.id,items=[];
   (state.messages||[]).forEach(m=>items.push({type:"message",at:m.created_at,m}));
   (state.chatCalls||[]).forEach(c=>items.push({type:"call",at:c.started_at,c}));
@@ -394,7 +414,7 @@ function renderMessages(){
     const m=item.m,mine=m.sender_id===me,a=m.attachment;let attach="";
     if(a?.kind==="CONTACT")attach=`<div class="answer-box">👤 <strong>${escapeHtml(a.contact_name)}</strong><br><small>${escapeHtml(a.contact_phone)}</small></div>`;
     else if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},false,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button><button class="mini" onclick="voiceAI(${m.id})">Q</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
-    else if(a?.media_id&&isBrowserImageAttachment(a))attach=browserImageAttachmentHtml(m.id,a,false);
+    else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,false);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
     const quote=m.reply_to?`<div class="reply-quote">${escapeHtml(m.reply_to.text||"")}</div>`:"";
     const reactions=(m.reactions||[]).map(r=>`<button class="reaction-pill" onclick="reactMessage(${m.id},'${escapeHtml(r.emoji)}')">${escapeHtml(r.emoji)} ${r.count}</button>`).join("");
@@ -407,19 +427,20 @@ function renderMessages(){
       <div class="meta"><span>${timeOnly(m.created_at)}</span>${mine?`<span>${m.read_at?"✓✓":"✓"}</span>`:""}</div>
     </div>`;
   }
+  if(state.chatHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderMessages()">↑ Load older messages</button></div>`+html;
   $("messageList").innerHTML=html;
-  hydrateBrowserChatPhotos($("messageList"));
-  setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
+  hydrateMediaPreviews("messageList");
+  if(scrollToBottom)setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
 }
 async function sendMessage(){
   const text=$("messageInput").value.trim();if(!state.activeChat||!text)return;
   $("messageInput").value="";
   try{
-    if(state.replyTo)await api(`/v24/chats/${state.activeChat.id}/reply`,{method:"POST",body:JSON.stringify({text,reply_to_message_id:state.replyTo.id})});
-    else await api(`/chats/${state.activeChat.id}/messages`,{method:"POST",body:JSON.stringify({text})});
-    clearReplyPreview();
-    await saveDraft("");
-    await openChat(state.activeChat.id,false);
+    const sent=state.replyTo
+      ? await api(`/v24/chats/${state.activeChat.id}/reply`,{method:"POST",body:JSON.stringify({text,reply_to_message_id:state.replyTo.id})})
+      : await api(`/chats/${state.activeChat.id}/messages`,{method:"POST",body:JSON.stringify({text})});
+    if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);
+    clearReplyPreview();await saveDraft("");renderMessages(true);scheduleChatListRefresh();
   }catch(e){toast(e.message,true)}
 }
 
@@ -478,8 +499,12 @@ window.downloadMedia=downloadMedia;
 async function uploadAttachment(file){
   if(!state.activeChat||!file)return;
   const fd=new FormData();fd.append("file",file);
-  try{toast("Uploading…");await api(`/chats/${state.activeChat.id}/attachments`,{method:"POST",body:fd});await openChat(state.activeChat.id,false);toast("Sent")}
-  catch(e){toast(e.message,true)}
+  try{
+    toast("Uploading…");
+    const sent=await api(`/chats/${state.activeChat.id}/attachments`,{method:"POST",body:fd});
+    if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);
+    renderMessages(true);scheduleChatListRefresh();toast("Sent");
+  }catch(e){toast(e.message,true)}
 }
 async function showNewChat(){
   openModal(`<h3>Start a new chat</h3><input id="userSearch" placeholder="Search username or name"><div id="userResults" class="modal-results"></div>`);
@@ -860,7 +885,11 @@ async function showNewGroup(){
 async function openGroup(gid,pushHistory=true){
   state.activeChat=null;state.replyTo=null;
   $("globalQOrb")?.classList.add("q2106-hide-orb");
-  const g=await api(`/v24/groups/${gid}`);state.activeGroup=g;state.groupMessages=await api(`/v24/groups/${gid}/messages`);await api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
+  const g=await api(`/v24/groups/${gid}`);
+  state.activeGroup=g;
+  state.groupMessages=await api(`/v24/groups/${gid}/messages?limit=${state.messagePageSize}`);
+  state.groupHasMore=state.groupMessages.length>=state.messagePageSize;
+  await api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
@@ -874,13 +903,33 @@ function renderGroupMessages(){
     const d=friendlyDay(m.created_at);if(d!==day){html+=`<div class="date-separator"><span>${escapeHtml(d)}</span></div>`;day=d}
     const mine=m.sender_id===me,a=m.attachment;let attach="";
     if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
-    else if(a?.media_id&&isBrowserImageAttachment(a))attach=browserImageAttachmentHtml(m.id,a,true);
+    else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,true);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadGroupMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
     html+=`<div class="msg ${mine?"mine":"theirs"}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div><div>${escapeHtml(m.text)}</div>${attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
   }
-  $("groupMessageList").innerHTML=html;hydrateBrowserChatPhotos($("groupMessageList"));setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
+  if(state.groupHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderGroupMessages()">↑ Load older messages</button></div>`+html;
+  $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
 }
-async function sendGroupMessage(){const text=$("groupMessageInput").value.trim();if(!text||!state.activeGroup)return;$("groupMessageInput").value="";await api(`/v24/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text})});await openGroup(state.activeGroup.id)}
+async function loadOlderGroupMessages(){
+  if(!state.activeGroup||!state.groupHasMore||!state.groupMessages.length)return;
+  const host=$("groupMessageList"),beforeHeight=host?.scrollHeight||0,before=state.groupMessages[0].id;
+  const rows=await api(`/v24/groups/${state.activeGroup.id}/messages?limit=${state.messagePageSize}&before_id=${before}`);
+  state.groupHasMore=rows.length>=state.messagePageSize;
+  const known=new Set(state.groupMessages.map(x=>x.id));
+  state.groupMessages=[...rows.filter(x=>!known.has(x.id)),...state.groupMessages];
+  renderGroupMessages();
+  requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
+}
+window.loadOlderGroupMessages=loadOlderGroupMessages;
+async function sendGroupMessage(){
+  const text=$("groupMessageInput").value.trim();if(!text||!state.activeGroup)return;
+  $("groupMessageInput").value="";
+  try{
+    const sent=await api(`/v24/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text})});
+    if(sent?.id&&!state.groupMessages.some(x=>x.id===sent.id))state.groupMessages.push(sent);
+    renderGroupMessages();scheduleChatListRefresh();
+  }catch(e){toast(e.message,true)}
+}
 async function groupSuggestReply(){
   if(!state.activeGroup)return;const r=await api(`/v24/groups/${state.activeGroup.id}/suggest`,{method:"POST"});const el=$("groupSuggestionCard");
   el.classList.remove("hidden");el.innerHTML=`<strong>Q group suggestion</strong><p></p><div class="suggestion-actions"><button class="ghost" data-a="d">Discard</button><button class="ghost" data-a="e">Edit</button><button class="primary" data-a="s">Send</button></div>`;el.querySelector("p").textContent=r.reply;
@@ -1499,7 +1548,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   $("groupVoiceBtn").onclick=()=>toggleVoice("group");$("groupSendBtn").onclick=sendGroupMessage;
   $("groupMessageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendGroupMessage()}});
-  $("groupFileInput").onchange=async e=>{const f=e.target.files[0];if(f&&state.activeGroup){const fd=new FormData();fd.append("file",f);try{await api(`/v24/groups/${state.activeGroup.id}/attachments`,{method:"POST",body:fd});await openGroup(state.activeGroup.id)}catch(err){toast(err.message,true)}}e.target.value=""};
+  $("groupFileInput").onchange=async e=>{const f=e.target.files[0];if(f&&state.activeGroup){const fd=new FormData();fd.append("file",f);try{const sent=await api(`/v24/groups/${state.activeGroup.id}/attachments`,{method:"POST",body:fd});if(sent?.id&&!state.groupMessages.some(x=>x.id===sent.id))state.groupMessages.push(sent);renderGroupMessages();scheduleChatListRefresh()}catch(err){toast(err.message,true)}}e.target.value=""};
   $("groupSuggestBtn").onclick=groupSuggestReply;$("groupSuggestTop").onclick=groupSuggestReply;$("groupCatchupBtn").onclick=groupCatchup;$("groupQBtn").onclick=groupAsk;$("groupSettingsBtn").onclick=groupSettings;
 
   $("muteCallBtn").onclick=toggleCallMute;$("cameraCallBtn").onclick=toggleCallCamera;$("flipCameraBtn").onclick=flipCallCamera;$("endCallBtn").onclick=()=>endVoiceCall(true);$("speakerCallBtn").onclick=()=>toast("Browser speaker routing follows your device/browser audio output.");
@@ -1532,7 +1581,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.6").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.10.10").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

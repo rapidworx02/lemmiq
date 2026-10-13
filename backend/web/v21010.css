@@ -1,0 +1,181 @@
+/* LEMMIQ V2.10.10 — Performance + UI
+   Default app-like light theme, optional dark mode, media previews and responsive composer. */
+
+html[data-theme="light"]{
+  --bg:#f7f6fb;--panel:#ffffff;--panel2:#f0edf8;--text:#1d1b25;--muted:#777486;
+  --line:#e5e1ec;--purple:#704cff;--pink:#ef4da2;--cyan:#2ba8e6;--green:#22a873;
+  --danger:#dc4961;--shadow:0 14px 44px rgba(55,44,88,.09);
+  color-scheme:light;
+}
+html[data-theme="light"] body{
+  background:
+    radial-gradient(circle at 8% 8%,rgba(112,76,255,.07),transparent 30%),
+    radial-gradient(circle at 92% 86%,rgba(239,77,162,.05),transparent 26%),
+    #f8f7fb;
+  color:var(--text);
+}
+html[data-theme="light"] .orb{opacity:.08;filter:blur(100px)}
+html[data-theme="light"] .glass{
+  background:rgba(255,255,255,.94);
+  border-color:var(--line);
+  box-shadow:var(--shadow);
+  backdrop-filter:blur(18px);
+}
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select{
+  background:#fbfaff;color:var(--text);border-color:#dcd7e5;
+}
+html[data-theme="light"] .ghost,
+html[data-theme="light"] .upload{
+  background:#f5f2fa;color:#373241;border-color:#e2ddeb;
+}
+html[data-theme="light"] .micro,
+html[data-theme="light"] .chat-row small,
+html[data-theme="light"] .topbar p,
+html[data-theme="light"] .platform-note span,
+html[data-theme="light"] .more-card small{color:var(--muted)}
+html[data-theme="light"] .sidebar nav button{color:#615d6a}
+html[data-theme="light"] .sidebar nav button.active{
+  background:#eee8ff;color:#5f42dd;border-color:#dfd4ff
+}
+html[data-theme="light"] .chat-row:hover,
+html[data-theme="light"] .chat-row.active{background:#f3effb}
+html[data-theme="light"] .empty-state h3{color:var(--text)}
+html[data-theme="light"] .messages{background:#f7f6fb}
+html[data-theme="light"] .msg.theirs{
+  background:#fff;border-color:#e5e1ea;color:#25222d;box-shadow:0 2px 7px rgba(28,24,42,.04)
+}
+html[data-theme="light"] .msg.theirs .meta{color:#918d9b}
+html[data-theme="light"] .msg.mine{color:#fff}
+html[data-theme="light"] .mini{background:#f5f2fa;color:#50495c;border-color:#e2ddec}
+html[data-theme="light"] .composer{
+  background:#fff;border-color:#e5e1ea
+}
+html[data-theme="light"] .attach-btn{background:#f4f1f9;border-color:#e2ddec;color:#6648eb}
+html[data-theme="light"] .assist-bar,
+html[data-theme="light"] .suggestion{background:#f1ebff}
+html[data-theme="light"] .date-separator span{background:#efebf5;color:#7f798b}
+html[data-theme="light"] .more-card{background:#fff;border-color:#e6e1ec}
+html[data-theme="light"] .more-card:hover{background:#f7f3ff}
+html[data-theme="light"] dialog::backdrop{background:rgba(30,25,43,.35)}
+html[data-theme="light"] .modal-close{background:#f3eff8;color:#3d3747}
+html[data-theme="light"] .toast{background:#fff;color:#24202c;border-color:#e1dce8}
+html[data-theme="light"] .q28-tabs button,
+html[data-theme="light"] .q2106-period-filters button,
+html[data-theme="light"] .q2104-activity-filters button,
+html[data-theme="light"] .q2106-wallet-period button{
+  color:#5f596b;background:#fff
+}
+
+/* Do not wash out the darker specialist workspaces in light mode. */
+html[data-theme="light"] #view-q-predict,
+html[data-theme="light"] #view-q-admin{color-scheme:dark}
+html[data-theme="light"] #view-q-predict .glass,
+html[data-theme="light"] #view-q-admin .glass{
+  --text:#f7f8ff;--muted:#a8aec7;--line:rgba(255,255,255,.10);
+}
+
+/* Login/front page redesign */
+.auth-shell{
+  max-width:1280px!important;
+  grid-template-columns:minmax(0,1.05fr) minmax(360px,440px)!important;
+  gap:clamp(46px,7vw,100px)!important;
+  padding:clamp(32px,5vw,70px)!important;
+}
+.auth-brand{max-width:690px}
+.auth-logo-row{display:flex;align-items:center;gap:14px;margin-bottom:30px}
+.auth-logo-row img{width:70px!important;height:70px!important;object-fit:cover!important;border-radius:20px;box-shadow:0 12px 35px rgba(112,76,255,.18)}
+.auth-wordmark{font-size:38px;font-weight:800;letter-spacing:-.055em;line-height:.9}
+.auth-wordmark span{background:linear-gradient(135deg,#704cff,#ef4da2);-webkit-background-clip:text;color:transparent}
+.auth-logo-row small{display:block;margin-top:7px;color:var(--muted);font-size:13px}
+.auth-kicker{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.13em;color:#704cff;margin-bottom:14px}
+.auth-brand h1{
+  color:var(--text)!important;
+  background:none!important;
+  -webkit-text-fill-color:initial!important;
+  font-size:clamp(46px,5.8vw,78px)!important;
+  line-height:1.02!important;
+  letter-spacing:-.045em;
+  margin:0 0 20px!important;
+  max-width:760px!important;
+}
+.auth-brand p{font-size:18px!important;line-height:1.55!important;color:var(--muted)!important;max-width:650px!important}
+.auth-brand .hero-pills span{color:var(--text);background:rgba(112,76,255,.055);border-color:rgba(112,76,255,.14)}
+.auth-simple-flow{display:flex;align-items:center;gap:10px;margin-top:22px;color:#645d70;font-size:13px;font-weight:700}
+.auth-simple-flow span{padding:8px 12px;background:rgba(112,76,255,.07);border-radius:999px}
+.auth-simple-flow b{color:#9f96aa}
+.auth-card{padding:26px!important;border-radius:26px!important}
+.auth-card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:18px}
+.auth-card-head strong{display:block;font-size:20px}
+.auth-card-head small{display:block;color:var(--muted);font-size:12px;margin-top:4px}
+.theme-toggle{white-space:nowrap}
+html[data-theme="dark"] .auth-brand h1{color:#fff!important}
+html[data-theme="dark"] .auth-brand .hero-pills span{color:#dfe2ff}
+html[data-theme="dark"] .auth-simple-flow{color:#c8c6d4}
+html[data-theme="dark"] .auth-simple-flow span{background:rgba(255,255,255,.06)}
+
+/* Media previews */
+.lemmiq-media-preview{
+  display:block;width:min(390px,100%);max-width:100%;padding:0;margin-top:8px;border:0;border-radius:15px;
+  overflow:hidden;background:#eceaf0;cursor:zoom-in;text-align:left
+}
+.lemmiq-media-preview img{display:block;width:100%;max-height:520px;object-fit:cover;background:#e8e6ec}
+.lemmiq-media-loading{display:grid;min-height:130px;place-items:center;color:#817b8b;font-size:12px}
+.lemmiq-media-preview.failed{padding:9px 11px;cursor:default}
+.msg:has(.lemmiq-media-preview){padding:7px}
+.msg:has(.lemmiq-media-preview)>div:not(.lemmiq-media-preview):empty{display:none}
+.lemmiq-media-lightbox{
+  position:fixed;inset:0;z-index:240;background:rgba(5,5,10,.95);display:grid;place-items:center;padding:34px
+}
+.lemmiq-media-lightbox.hidden{display:none}
+.lemmiq-media-lightbox img{max-width:min(1100px,96vw);max-height:92vh;object-fit:contain}
+.lemmiq-media-close{
+  position:fixed;right:18px;top:18px;width:44px;height:44px;border:0;border-radius:50%;font-size:30px;
+  background:rgba(255,255,255,.12);color:#fff;z-index:1
+}
+.load-older-wrap{display:flex;justify-content:center;padding:3px 0 9px}
+.load-older-btn{font-size:12px!important;padding:8px 13px!important}
+
+/* Responsive composer: + · mic · input · Q · Send. Send must never leave viewport. */
+.chat-pane,.chat-inner,.composer{min-width:0!important;max-width:100%!important}
+.composer{
+  display:grid!important;
+  grid-template-columns:44px 44px minmax(0,1fr) 44px 48px!important;
+  align-items:end!important;
+  gap:6px!important;
+  padding:9px max(9px,env(safe-area-inset-right,0px)) calc(9px + env(safe-area-inset-bottom,0px)) max(9px,env(safe-area-inset-left,0px))!important;
+  overflow:hidden!important;
+}
+.composer .attach-btn,.composer .voice-btn,.composer .qbtn,.composer .send{
+  width:100%!important;min-width:0!important;max-width:none!important;flex:none!important;
+}
+.composer textarea{width:100%!important;min-width:0!important}
+.composer .qbtn{display:grid!important}
+.composer .send{font-size:18px!important}
+@media(max-width:430px){
+  .composer{grid-template-columns:40px 40px minmax(0,1fr) 40px 44px!important;gap:5px!important}
+  .composer .attach-btn,.composer .voice-btn,.composer .qbtn,.composer .send{height:42px!important}
+}
+
+/* Cleaner everyday browser layout */
+@media(min-width:901px){
+  html[data-theme="light"] .app-shell{gap:12px;padding:12px}
+  html[data-theme="light"] .sidebar{border-radius:20px}
+  html[data-theme="light"] .topbar{border-radius:18px}
+  html[data-theme="light"] .conversation-list,
+  html[data-theme="light"] .chat-pane{border-radius:18px}
+}
+@media(max-width:900px){
+  .auth-shell{grid-template-columns:1fr!important;max-width:650px!important;gap:28px!important}
+  .auth-brand{text-align:center;margin:auto}.auth-logo-row{justify-content:center}.auth-brand p{margin-inline:auto}
+  .hero-pills,.auth-simple-flow{justify-content:center}
+  .auth-card{max-width:520px;width:100%;margin:auto}
+}
+@media(max-width:560px){
+  .auth-shell{padding:22px 16px 30px!important}
+  .auth-logo-row{margin-bottom:20px}.auth-logo-row img{width:58px!important;height:58px!important}
+  .auth-wordmark{font-size:32px}.auth-brand h1{font-size:40px!important}
+  .auth-brand p{font-size:15px!important}.auth-simple-flow{display:none}
+  .auth-card-head{align-items:center}.auth-card-head strong{font-size:17px}
+}

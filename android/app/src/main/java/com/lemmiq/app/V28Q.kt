@@ -20,6 +20,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,7 +54,10 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 Spacer(Modifier.height(8.dp))
                 Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)
-                if(w?.cashout_enabled!=true)Text("Cash-out is not enabled",color=Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp))
+                Text(
+                    if(vm.qWithdrawalConfig.enabled)"Q → USDT withdrawal is available" else "Q → USDT withdrawal is currently OFF",
+                    color=if(vm.qWithdrawalConfig.enabled)Color(0xFF77E1B7) else Color(0xFFFFC763),fontSize=10.sp,modifier=Modifier.padding(top=5.dp)
+                )
             }
         }
         LazyRow(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),contentPadding=PaddingValues(end=8.dp)){
@@ -60,6 +65,10 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 val i=listOf("Wallet","Packages","Market","Refer","Activity").indexOf(label)
                 FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp,maxLines=1)},modifier=Modifier.widthIn(min=92.dp))
             }
+        }
+        if(vm.qEconomyBusy)LinearProgressIndicator(Modifier.fillMaxWidth(),color=Q28Purple)
+        vm.error?.takeIf{it.isNotBlank()}?.let{msg->
+            Surface(color=Color(0xFFFFE8EC),modifier=Modifier.fillMaxWidth()){Text(msg,Modifier.padding(horizontal=14.dp,vertical=8.dp),color=Color(0xFFA2263B),fontSize=10.sp)}
         }
         Box(Modifier.weight(1f)){
             when(tab){
@@ -108,9 +117,14 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
 @Composable
 private fun Q28WalletTab(vm:LemmiqViewModel){
     val w=vm.qWallet
+    val withdrawCfg=vm.qWithdrawalConfig
     var user by remember{mutableStateOf("")}
     var amount by remember{mutableStateOf("")}
     var period by remember{mutableStateOf("TODAY")}
+    var showWithdraw by remember{mutableStateOf(false)}
+    var withdrawQ by remember{mutableStateOf("")}
+    var withdrawNetwork by remember(withdrawCfg.networks){mutableStateOf(withdrawCfg.networks.firstOrNull()?:"TRC20")}
+    var withdrawAddress by remember{mutableStateOf("")}
     val now=OffsetDateTime.now(ZoneOffset.UTC)
     val cutoff=when(period){
         "TODAY"->now.toLocalDate().atStartOfDay().atOffset(ZoneOffset.UTC)
@@ -130,6 +144,67 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
                     Text(if(w?.basic_claimed_today==true)"Today's basic Q is claimed." else "Claim up to ${q28Q(w?.basic_daily_q?:0.0)} Q today.",color=Q28Muted,fontSize=12.sp)
                     Spacer(Modifier.height(10.dp))
                     Button(onClick={vm.qClaimDaily()},enabled=w?.basic_claimed_today!=true&&!vm.qEconomyBusy){Text(if(w?.basic_claimed_today==true)"Claimed" else "Claim daily Q")}
+                }
+            }
+        }
+        if(vm.qWeeklyActive.enabled)item{
+            Card(shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFF0ECFF))){
+                Column(Modifier.padding(16.dp)){
+                    Text("Weekly active Q",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                    Text("${q28Q(vm.qWeeklyActive.weekly_q)} Q · ${vm.qWeeklyActive.week_key}",color=Q28Muted,fontSize=11.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick={vm.qClaimWeeklyActive()},enabled=!vm.qWeeklyActive.claimed&&!vm.qEconomyBusy){Text(if(vm.qWeeklyActive.claimed)"Claimed this week" else "Claim weekly Q")}
+                }
+            }
+        }
+        item{
+            Card(shape=RoundedCornerShape(18.dp)){
+                Column(Modifier.padding(16.dp)){
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                        Column(Modifier.weight(1f)){
+                            Text("Q → USDT withdrawal",fontWeight=FontWeight.Bold,fontSize=18.sp)
+                            Text(if(withdrawCfg.enabled)"Available · ${q28Q(withdrawCfg.fee_percent)}% fee" else "Currently turned off by Admin",color=if(withdrawCfg.enabled)Q28Mint else Q28Muted,fontSize=11.sp)
+                        }
+                        Surface(shape=RoundedCornerShape(999.dp),color=if(withdrawCfg.enabled)Color(0xFFE4F8EF) else Color(0xFFECECF2)){
+                            Text(if(withdrawCfg.enabled)"ON" else "OFF",Modifier.padding(horizontal=10.dp,vertical=5.dp),fontSize=10.sp,fontWeight=FontWeight.Black,color=if(withdrawCfg.enabled)Q28Mint else Q28Muted)
+                        }
+                    }
+                    if(withdrawCfg.enabled){
+                        Text("Minimum final payout ${q28Usd(withdrawCfg.minimum_net_usdt)} · current reference 1 Q ≈ ${q28Usd(withdrawCfg.q_reference_usd)}",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(top=6.dp))
+                        Spacer(Modifier.height(9.dp))
+                        Button(onClick={showWithdraw=true},modifier=Modifier.fillMaxWidth(),enabled=!vm.qEconomyBusy){Text("Request withdrawal")}
+                    }
+                    if(vm.qWithdrawals.isNotEmpty()){
+                        HorizontalDivider(Modifier.padding(vertical=10.dp))
+                        Text("Recent withdrawals",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                        vm.qWithdrawals.take(4).forEach{x->
+                            Row(Modifier.fillMaxWidth().padding(vertical=5.dp),verticalAlignment=Alignment.CenterVertically){
+                                Column(Modifier.weight(1f)){
+                                    Text("${q28Q(x.requested_q)} Q → ${q28Q(x.payout_usdt)} USDT",fontSize=11.sp,fontWeight=FontWeight.Bold)
+                                    Text("${x.network} · ${x.request_id} · ${x.status}",fontSize=9.sp,color=Q28Muted,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                }
+                                if(x.status=="PENDING")TextButton(onClick={vm.qCancelWithdrawal(x.id)},enabled=!vm.qEconomyBusy){Text("Cancel",fontSize=10.sp)}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if(vm.qFeatureCatalog.isNotEmpty())item{
+            Card(shape=RoundedCornerShape(18.dp)){
+                Column(Modifier.padding(16.dp)){
+                    val charging=vm.qFeatureCatalog.any{it.charging_enabled}
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                        Column(Modifier.weight(1f)){Text("AI feature Q rates",fontWeight=FontWeight.Bold,fontSize=18.sp);Text("One global price for every package",fontSize=10.sp,color=Q28Muted)}
+                        Text(if(charging)"CHARGING ON" else "CHARGING OFF",fontSize=9.sp,fontWeight=FontWeight.Black,color=if(charging)Q28Mint else Color(0xFFB7791F))
+                    }
+                    vm.qFeatureCatalog.filter{it.enabled}.take(12).forEach{f->
+                        Row(Modifier.fillMaxWidth().padding(top=7.dp),verticalAlignment=Alignment.CenterVertically){
+                            Text(f.feature_name,modifier=Modifier.weight(1f),fontSize=11.sp)
+                            Text("${q28Q(if(f.configured_q_cost>0)f.configured_q_cost else f.q_cost)} Q",fontWeight=FontWeight.Bold,fontSize=11.sp,color=Q28Purple)
+                        }
+                    }
+                    Text(if(charging)"The Q fee is deducted from your main Q Wallet when a paid AI action succeeds." else "Rates are configured but real AI Q charging is currently OFF.",fontSize=9.sp,color=Q28Muted,modifier=Modifier.padding(top=8.dp))
                 }
             }
         }
@@ -165,6 +240,27 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
                 }
             }
         }
+    }
+
+    if(showWithdraw){
+        val gross=withdrawQ.toDoubleOrNull()?:0.0
+        val fee=gross*withdrawCfg.fee_percent/100.0
+        val net=(gross-fee).coerceAtLeast(0.0)
+        val payout=net*withdrawCfg.q_reference_usd
+        AlertDialog(
+            onDismissRequest={showWithdraw=false},
+            title={Text("Withdraw Q to USDT")},
+            text={LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                item{Text("The reference rate is locked when you submit the request. Admin manually reviews and sends USDT.",fontSize=11.sp,color=Q28Muted)}
+                item{OutlinedTextField(withdrawQ,{withdrawQ=it.filter{ch->ch.isDigit()||ch=='.'}},label={Text("Q amount")},singleLine=true,modifier=Modifier.fillMaxWidth())}
+                item{Text("Network",fontWeight=FontWeight.Bold,fontSize=12.sp);Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){(withdrawCfg.networks.ifEmpty{listOf("TRC20","BEP20")}).forEach{n->FilterChip(selected=withdrawNetwork==n,onClick={withdrawNetwork=n},label={Text(n)})}}}
+                item{OutlinedTextField(withdrawAddress,{withdrawAddress=it.trim()},label={Text("Your USDT $withdrawNetwork wallet address")},singleLine=true,modifier=Modifier.fillMaxWidth())}
+                item{Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFF4F1FF))){Column(Modifier.padding(12.dp)){Text("Requested: ${q28Q(gross)} Q",fontSize=11.sp);Text("Fee (${q28Q(withdrawCfg.fee_percent)}%): ${q28Q(fee)} Q",fontSize=11.sp);Text("Net converted: ${q28Q(net)} Q",fontSize=11.sp);Text("You receive ≈ ${q28Q(payout)} USDT",fontWeight=FontWeight.Black,fontSize=15.sp,color=Q28Purple)}}}
+                item{Text("Minimum final payout: ${q28Usd(withdrawCfg.minimum_net_usdt)}. Requested Q is locked immediately and released if the request is cancelled/rejected/failed.",fontSize=9.sp,color=Q28Muted)}
+            }},
+            confirmButton={Button(onClick={vm.qCreateWithdrawal(gross,withdrawNetwork,withdrawAddress);showWithdraw=false;withdrawQ="";withdrawAddress=""},enabled=gross>0&&payout+1e-9>=withdrawCfg.minimum_net_usdt&&withdrawAddress.length>=20&&!vm.qEconomyBusy){Text("Submit request")}},
+            dismissButton={TextButton(onClick={showWithdraw=false}){Text("Cancel")}}
+        )
     }
 }
 
@@ -251,6 +347,10 @@ private fun Q28ActivityTab(vm:LemmiqViewModel){
 
 @Composable
 private fun Q28PackagesTab(vm:LemmiqViewModel,onBuy:(QPlanDto)->Unit){
+    var rebuyPlan by remember{mutableStateOf<QRebuyPlanDto?>(null)}
+    var rebuyQ by remember{mutableStateOf("")}
+    var rebuyNetwork by remember(vm.qRebuyOptions.networks){mutableStateOf(vm.qRebuyOptions.networks.firstOrNull()?:"TRC20")}
+    val cycles=if(vm.qEarningCycles.cycles.isNotEmpty())vm.qEarningCycles.cycles else (vm.qWallet?.packages?:emptyList())
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         item{Text("Q subscription packages",fontWeight=FontWeight.Black,fontSize=20.sp)}
         items(vm.qWallet?.plans?:emptyList(),key={it.code}){p->
@@ -262,28 +362,107 @@ private fun Q28PackagesTab(vm:LemmiqViewModel,onBuy:(QPlanDto)->Unit){
                     }
                     Spacer(Modifier.height(7.dp))
                     Text("≈ ${q28Q(p.daily_q_at_current_reference)} Q/day at current Q reference",fontSize=12.sp)
-                    Text("Maximum package ceiling: ${q28Usd(p.cap_usd)} · valid up to 365 days",fontSize=11.sp,color=Q28Muted)
+                    Text("200% earning capacity: ${q28Usd(p.cap_usd)} · valid up to 365 days",fontSize=11.sp,color=Q28Muted)
                     Spacer(Modifier.height(9.dp))
                     Button(onClick={onBuy(p)},modifier=Modifier.fillMaxWidth()){Text("Buy with USDT")}
                 }
             }
         }
-        item{Text("My packages",fontWeight=FontWeight.Black,fontSize=20.sp,modifier=Modifier.padding(top=5.dp))}
-        if((vm.qWallet?.packages?:emptyList()).isEmpty())item{Text("No paid Q packages yet.",color=Q28Muted)}
-        items(vm.qWallet?.packages?:emptyList(),key={it.id}){p->
+
+        item{Text("My active & previous packages",fontWeight=FontWeight.Black,fontSize=20.sp,modifier=Modifier.padding(top=5.dp))}
+        if(cycles.isEmpty())item{Text("No paid Q packages yet.",color=Q28Muted)}
+        items(cycles,key={it.id}){p->
+            val cap=if(p.earning_cap_usd>0)p.earning_cap_usd else p.cap_usd
+            val used=if(p.earning_cap_usd>0)p.earning_cap_used_usd else p.accrued_usd_reference
+            val remaining=if(p.earning_cap_usd>0)p.earning_cap_remaining_usd else p.remaining_cap_usd
+            val progress=if(cap>0)(used/cap).toFloat().coerceIn(0f,1f) else 0f
             Card(shape=RoundedCornerShape(18.dp)){
                 Column(Modifier.padding(15.dp)){
-                    Row(Modifier.fillMaxWidth()){Text(p.package_name,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));Text(p.status,color=if(p.status=="ACTIVE")Q28Mint else Q28Muted,fontSize=11.sp,fontWeight=FontWeight.Bold)}
-                    Text("${q28Q(p.accrued_q)} Q accrued · ${q28Usd(p.accrued_usd_reference)} / ${q28Usd(p.cap_usd)} reference cap",fontSize=12.sp)
-                    Text("Remaining cap: ${q28Usd(p.remaining_cap_usd)} · expires ${p.expires_at.take(10)}",fontSize=10.sp,color=Q28Muted)
+                    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                        Text(p.package_name,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+                        Text(p.status,color=if(p.status=="ACTIVE")Q28Mint else if(p.status=="COMPLETED")Q28Purple else Q28Muted,fontSize=11.sp,fontWeight=FontWeight.Bold)
+                    }
+                    Text("${q28Q(p.accrued_q)} Q accumulated",fontSize=12.sp,modifier=Modifier.padding(top=4.dp))
+                    Text("Earning capacity: ${q28Usd(used)} / ${q28Usd(cap)}",fontSize=11.sp,color=Q28Muted)
+                    LinearProgressIndicator(progress={progress},modifier=Modifier.fillMaxWidth().padding(vertical=7.dp),color=Q28Purple)
+                    Text("${String.format(Locale.US,"%.1f",progress*100)}% of the 200% cycle used · ${q28Usd(remaining)} remaining",fontSize=10.sp,color=Q28Muted)
+                    if(p.earning_cap_breakdown.isNotEmpty()){
+                        HorizontalDivider(Modifier.padding(vertical=8.dp))
+                        p.earning_cap_breakdown.entries.sortedByDescending{it.value.usd_reference}.forEach{(source,v)->
+                            Row(Modifier.fillMaxWidth().padding(vertical=2.dp)){Text(source.replace("_"," ").lowercase().replaceFirstChar{it.uppercase()},fontSize=9.sp,color=Q28Muted,modifier=Modifier.weight(1f));Text("${q28Q(v.q)} Q · ${q28Usd(v.usd_reference)}",fontSize=9.sp,fontWeight=FontWeight.Bold)}
+                        }
+                    }
+                    Text("Started ${p.started_at.take(10)} · expires ${p.expires_at.take(10)}",fontSize=9.sp,color=Q28Muted,modifier=Modifier.padding(top=5.dp))
                 }
             }
         }
+        if(vm.qEarningCycles.unassigned_rewards_q>0)item{
+            Surface(color=Color(0xFFFFF5D9),shape=RoundedCornerShape(14.dp)){
+                Text("${q28Q(vm.qEarningCycles.unassigned_rewards_q)} Q of qualifying rewards are waiting for the next package earning cycle.",Modifier.padding(12.dp),fontSize=10.sp,color=Color(0xFF795A16))
+            }
+        }
+
+        item{
+            Card(shape=RoundedCornerShape(18.dp),colors=CardDefaults.cardColors(containerColor=Color(0xFFF0ECFF))){
+                Column(Modifier.padding(16.dp)){
+                    Text("Rebuy / Upgrade with Q + USDT",fontWeight=FontWeight.Black,fontSize=18.sp)
+                    when{
+                        !vm.qRebuyOptions.enabled->Text("Hybrid rebuy is currently disabled.",fontSize=11.sp,color=Q28Muted)
+                        vm.qRebuyOptions.blocked_by_active_cycle->Text("Complete your current earning cycle before rebuying or upgrading.",fontSize=11.sp,color=Q28Muted)
+                        !vm.qRebuyOptions.can_rebuy->Text("A completed or expired package is required before using Q + USDT rebuy.",fontSize=11.sp,color=Q28Muted)
+                        else->{
+                            Text("Use accumulated Q for part of a new package and pay the balance in USDT. The old package stays in history.",fontSize=10.sp,color=Q28Muted,modifier=Modifier.padding(bottom=8.dp))
+                            vm.qRebuyOptions.plans.forEach{plan->
+                                Row(Modifier.fillMaxWidth().padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically){
+                                    Column(Modifier.weight(1f)){Text("${plan.action.lowercase().replaceFirstChar{it.uppercase()}} · ${plan.name}",fontWeight=FontWeight.Bold,fontSize=11.sp);Text("US$${q28Q(plan.price_usd)} · up to ${q28Q(plan.max_q_percent)}% in Q",fontSize=9.sp,color=Q28Muted)}
+                                    OutlinedButton(onClick={rebuyPlan=plan;rebuyQ=""}){Text(if(plan.action=="UPGRADE")"Upgrade" else "Rebuy",fontSize=10.sp)}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if(vm.qRebuyOrders.isNotEmpty()){
+            item{Text("Q + USDT rebuy orders",fontWeight=FontWeight.Black,fontSize=17.sp,modifier=Modifier.padding(top=4.dp))}
+            items(vm.qRebuyOrders.take(20),key={"rebuy-${it.id}"}){o->
+                Card(shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(13.dp)){
+                    Row(Modifier.fillMaxWidth()){Text("${o.action} · ${o.target_package_name}",fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));Text(o.status,fontSize=10.sp,fontWeight=FontWeight.Bold)}
+                    Text("${q28Q(o.q_locked)} Q + ${q28Q(o.usdt_due)} USDT · ${o.rebuy_code}",fontSize=10.sp,color=Q28Muted)
+                    if(o.status in listOf("CREATED"))TextButton(onClick={vm.qCancelRebuyOrder(o.id)},enabled=!vm.qEconomyBusy){Text("Cancel & release Q",fontSize=10.sp)}
+                }}
+            }
+        }
+
         item{Text("USDT payment orders",fontWeight=FontWeight.Black,fontSize=20.sp,modifier=Modifier.padding(top=5.dp))}
         if(vm.qPaymentOrders.isEmpty())item{Text("No payment orders.",color=Q28Muted)}
         items(vm.qPaymentOrders,key={it.id}){o->
-            Card(shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(13.dp)){Row(Modifier.fillMaxWidth()){Text(o.package_name,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));Text(o.status,fontWeight=FontWeight.Bold,fontSize=11.sp)};Text("${o.expected_usdt} USDT · ${o.network} · ${o.order_code}",fontSize=10.sp,color=Q28Muted)}}
+            Card(shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(13.dp)){
+                Row(Modifier.fillMaxWidth()){Text(o.package_name,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f));Text(o.status,fontWeight=FontWeight.Bold,fontSize=11.sp)}
+                Text("${q28Q(o.expected_usdt)} USDT · ${o.network} · ${o.order_code}",fontSize=10.sp,color=Q28Muted)
+                if(o.status in listOf("CREATED","REJECTED"))TextButton(onClick={vm.activeQPaymentOrder=o}){Text("Open payment order",fontSize=10.sp)}
+            }}
         }
+    }
+
+    rebuyPlan?.let{plan->
+        val qAmount=rebuyQ.toDoubleOrNull()?:0.0
+        val qUsd=qAmount*vm.qRebuyOptions.q_reference_usd
+        val due=(plan.price_usd-qUsd).coerceAtLeast(0.0)
+        AlertDialog(
+            onDismissRequest={rebuyPlan=null},
+            title={Text("${plan.action.lowercase().replaceFirstChar{it.uppercase()}} ${plan.name}")},
+            text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
+                Text("Package price ${q28Usd(plan.price_usd)}",fontWeight=FontWeight.Bold)
+                Text("Wallet balance: ${q28Q(vm.qRebuyOptions.wallet_balance_q)} Q · 1 Q ≈ ${q28Usd(vm.qRebuyOptions.q_reference_usd)}",fontSize=10.sp,color=Q28Muted)
+                OutlinedTextField(rebuyQ,{rebuyQ=it.filter{ch->ch.isDigit()||ch=='.'}},label={Text("Q to use (max ${q28Q(plan.max_q_at_current_reference)} Q)")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                Text("Network",fontWeight=FontWeight.Bold,fontSize=12.sp)
+                Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){(vm.qRebuyOptions.networks.ifEmpty{listOf("TRC20","BEP20")}).forEach{n->FilterChip(selected=rebuyNetwork==n,onClick={rebuyNetwork=n},label={Text(n)})}}
+                Card(colors=CardDefaults.cardColors(containerColor=Color(0xFFF7F7FB))){Column(Modifier.padding(12.dp)){Text("Q applied: ${q28Q(qAmount)} Q ≈ ${q28Usd(qUsd)}",fontSize=11.sp);Text("USDT to pay: ${q28Q(due)} USDT",fontSize=15.sp,fontWeight=FontWeight.Black,color=Q28Purple);Text("A new independent 200% earning cycle starts after Admin approves the USDT payment.",fontSize=9.sp,color=Q28Muted,modifier=Modifier.padding(top=5.dp))}}
+            }},
+            confirmButton={Button(onClick={vm.qCreateRebuyOrder(plan.package_code,rebuyNetwork,qAmount);rebuyPlan=null},enabled=qAmount>0&&qAmount<=plan.max_q_at_current_reference+1e-9&&qAmount<=vm.qRebuyOptions.wallet_balance_q+1e-9&&due>0&&!vm.qEconomyBusy){Text("Create payment order")}},
+            dismissButton={TextButton(onClick={rebuyPlan=null}){Text("Cancel")}}
+        )
     }
 }
 
@@ -331,12 +510,20 @@ private fun Q28PaymentDialog(vm:LemmiqViewModel,o:QPaymentOrderDto){
         dismissButton={if(!pending)TextButton(onClick={vm.qDismissPayment()}){Text("Cancel")}}
     )
     if(enlarged){
-        AlertDialog(
-            onDismissRequest={enlarged=false},
-            title={Text("${o.network} QR")},
-            text={o.wallet?.let{w->AsyncImage(model=vm.serverUrl+w.qr_url,contentDescription="Large payment QR",modifier=Modifier.fillMaxWidth().aspectRatio(1f))}},
-            confirmButton={TextButton(onClick={enlarged=false}){Text("Close")}}
-        )
+        Dialog(onDismissRequest={enlarged=false},properties=DialogProperties(usePlatformDefaultWidth=false)){
+            Box(Modifier.fillMaxSize().background(Color(0xEE070812)).clickable{enlarged=false},contentAlignment=Alignment.Center){
+                Card(Modifier.fillMaxWidth().padding(18.dp).clickable{/* consume taps inside QR card */},shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=Color.White)){
+                    Column(Modifier.padding(16.dp),horizontalAlignment=Alignment.CenterHorizontally){
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("USDT ${o.network} QR",fontWeight=FontWeight.Black,fontSize=20.sp,modifier=Modifier.weight(1f));TextButton(onClick={enlarged=false}){Text("✕")}}
+                        o.wallet?.let{w->
+                            AsyncImage(model=vm.serverUrl+w.qr_url,contentDescription="Large payment QR",modifier=Modifier.fillMaxWidth().aspectRatio(1f).padding(8.dp))
+                            Text(w.address,fontSize=10.sp,color=Q28Muted,modifier=Modifier.fillMaxWidth().padding(vertical=8.dp))
+                            Button(onClick={clipboard.setText(AnnotatedString(w.address));enlarged=false},modifier=Modifier.fillMaxWidth()){Text("Copy address")}}
+                        Text("Tap outside or ✕ to close",fontSize=9.sp,color=Q28Muted,modifier=Modifier.padding(top=8.dp))
+                    }
+                }
+            }
+        }
     }
 }
 

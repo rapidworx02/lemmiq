@@ -156,8 +156,15 @@ def register_routes(current_user):
         g,_=gmember(db,gid,u.id);return gjson(db,g,u.id)
 
     @router.get("/v24/groups/{gid}/messages")
-    def group_messages(gid:int,u=Depends(current_user),db:Session=Depends(dep_db)):
-        gmember(db,gid,u.id);rows=db.scalars(select(GroupMessage).where(GroupMessage.group_id==gid).order_by(GroupMessage.id.asc()).limit(800)).all();return [gmjson(db,m) for m in rows]
+    def group_messages(gid:int,limit:int=800,before_id:int|None=None,u=Depends(current_user),db:Session=Depends(dep_db)):
+        gmember(db,gid,u.id)
+        limit=max(1,min(int(limit or 800),800))
+        stmt=select(GroupMessage).where(GroupMessage.group_id==gid)
+        if before_id is not None:
+            stmt=stmt.where(GroupMessage.id<int(before_id))
+        rows=db.scalars(stmt.order_by(GroupMessage.id.desc()).limit(limit)).all()
+        rows=list(reversed(rows))
+        return [gmjson(db,m) for m in rows]
 
     @router.post("/v24/groups/{gid}/read")
     def group_read(gid:int,u=Depends(current_user),db:Session=Depends(dep_db)):

@@ -1,0 +1,98 @@
+LEMMIQ V2.10.9 ANDROID — TEST CHECKLIST
+
+A. VERSION / NAVIGATION
+[ ] App reports/builds as 2.10.9
+[ ] Bottom navigation has 6 tabs:
+    Chats · Updates · Q Economy · Q Predict · Calls · More
+[ ] More opens normally
+[ ] Q Predict uses Q, not Predict Credits
+
+B. Q ECONOMY — WALLET
+[ ] Q wallet balance loads
+[ ] Basic/daily Q works as before
+[ ] Weekly Active Q card loads
+[ ] Weekly Active claim works when backend enables it
+[ ] Q Activity loads
+
+C. AI Q PRICING
+[ ] Q Economy shows AI Feature Q Rates
+[ ] Q home shows Q Chat / Q Vision configured global prices
+[ ] All packages use the same AI feature price
+[ ] With backend AI charging OFF: AI actions do NOT reduce wallet balance
+[ ] With backend AI charging ON: successful AI action reduces main Q wallet
+[ ] AI feature debit appears in Q Activity
+[ ] Insufficient Q produces a clear error
+[ ] Failed server-side AI action does not permanently consume Q / backend refunds it
+
+D. 200% EARNING CYCLE
+[ ] Active package appears under Packages
+[ ] Shows earning-cap used / total cap
+[ ] Shows progress bar
+[ ] Shows remaining earning capacity
+[ ] Shows reward-source breakdown when available
+[ ] A completed package displays COMPLETED
+[ ] Old completed cycle remains visible
+[ ] Unassigned qualifying rewards are shown if backend reports them
+
+E. REBUY / UPGRADE WITH Q + USDT
+[ ] Rebuy is blocked while an active earning cycle exists
+[ ] Completed/expired cycle unlocks rebuy options
+[ ] Same-package rebuy uses backend max Q percentage
+[ ] Upgrade uses backend max Q percentage
+[ ] Q amount cannot exceed wallet or backend maximum
+[ ] TRC20 / BEP20 selection works
+[ ] Q USD-equivalent preview is correct
+[ ] Remaining USDT due is correct
+[ ] Create payment order succeeds
+[ ] Q is locked by backend
+[ ] Cancel before submission releases Q
+[ ] Approved hybrid payment activates a new package cycle
+[ ] Old completed package remains unchanged
+
+F. PACKAGE PAYMENT QR
+[ ] Shared TRC20 address is correct
+[ ] Shared BEP20 address is correct
+[ ] Tap QR enlarges it full screen
+[ ] X closes enlarged QR
+[ ] Copy address works
+[ ] Copy amount works
+[ ] Copy Order ID works
+[ ] Transaction hash submission works
+
+G. Q → USDT WITHDRAWAL
+[ ] Admin Withdrawal OFF -> Android shows OFF and cannot submit
+[ ] Admin turns Withdrawal ON -> Android refresh shows ON
+[ ] User enters Q amount
+[ ] 10% fee preview matches backend setting
+[ ] Net Q is shown
+[ ] Estimated USDT payout uses current reference rate
+[ ] Final payout below 10 USDT is blocked with current defaults
+[ ] TRC20 wallet destination works
+[ ] BEP20 wallet destination works
+[ ] Valid request becomes PENDING
+[ ] Requested Q is locked by backend
+[ ] Withdrawal history appears
+[ ] User cancel of PENDING request works
+[ ] Cancel releases/refunds locked Q
+[ ] Admin approval / paid status appears after refresh
+[ ] TX hash appears for a paid request
+
+H. CALLS
+[ ] Voice call starts normally
+[ ] Video call starts normally
+[ ] Decline / End still works
+[ ] Completed call history is not shown as active
+[ ] RINGING / CONNECTING / CONNECTED stale row shows End stuck
+[ ] End stuck terminates server call state
+[ ] A new call can start afterward
+
+I. REGRESSION
+[ ] Chats work
+[ ] Groups work
+[ ] Photos/media work
+[ ] Updates/Status work
+[ ] Q Thread works
+[ ] Q Vision works
+[ ] Notifications still work
+[ ] More screen works
+[ ] App does not revert to old 5-tab navigation

@@ -132,11 +132,10 @@ data class GroupAskDto(val answer:String="",val references:List<String> = emptyL
 data class VoiceAiDto(val transcript:String="",val summary:String="",val suggested_reply:String="")
 data class CallDto(
     val id:String="",val chat_id:Int=0,val caller_id:Int=0,val callee_id:Int=0,val other_user:UserDto?=null,
-    val status:String="",val call_type:String="VOICE",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null,val last_heartbeat_at:String?=null
+    val status:String="",val call_type:String="VOICE",val duration_seconds:Int=0,val started_at:String="",val answered_at:String?=null,val ended_at:String?=null
 )
 data class CallJoinDto(val call:CallDto=CallDto(),val ws_url:String="",val token:String="",val incoming:Boolean=false)
 data class CallStatusDto(val configured:Boolean=false,val provider:String="LiveKit",val voice:Boolean=true,val video:Boolean=false)
-data class ActiveCallDto(val active:Boolean=false,val call:CallDto?=null)
 
 data class StatusDto(
     val id:Int=0,val user:UserDto=UserDto(0,"",""),val kind:String="TEXT",val text:String="",
@@ -235,10 +234,14 @@ data class QPlanDto(
     val daily_usd_reference:Double=0.0,val daily_q_at_current_reference:Double=0.0,
     val valid_days:Int=365,val cap_percent:Int=200,val cap_usd:Double=0.0,val cap_q_at_current_reference:Double=0.0
 )
+data class QEarningCapBreakdownDto(val q:Double=0.0,val usd_reference:Double=0.0)
 data class QSubscriptionDto(
     val id:Int=0,val package_code:String="",val package_name:String="",val purchase_usd:Double=0.0,
     val daily_rate_percent:Double=0.0,val accrued_usd_reference:Double=0.0,val accrued_q:Double=0.0,
+    val earned_percent:Double=0.0,val cap_percent:Double=200.0,val progress_to_cap_percent:Double=0.0,
     val cap_usd:Double=0.0,val remaining_cap_usd:Double=0.0,val status:String="ACTIVE",
+    val earning_cap_used_usd:Double=0.0,val earning_cap_usd:Double=0.0,val earning_cap_remaining_usd:Double=0.0,
+    val earning_cap_breakdown:Map<String,QEarningCapBreakdownDto> = emptyMap(),
     val started_at:String="",val expires_at:String="",val last_accrual_date:String="",val current_q_reference_usd:Double=0.05
 )
 data class QWalletDto(
@@ -257,9 +260,48 @@ data class QLedgerDto(
 
 data class QFeatureTierRuleDto(
     val feature_key:String="",val feature_name:String="",val tier_key:String="FREE",
-    val q_cost:Double=0.0,val enabled:Boolean=true,val charging_enabled:Boolean=false,
+    val pricing_model:String="GLOBAL",val q_cost:Double=0.0,val configured_q_cost:Double=0.0,
+    val enabled:Boolean=true,val charging_enabled:Boolean=false,
     val included_uses_daily:Int?=null,val included_uses_monthly:Int?=null,val updated_at:String=""
 )
+// LEMMIQ V2.10.9 — Android integration for V2.10.7.4 Q Economy
+data class QEarningCyclesDto(
+    val cycles:List<QSubscriptionDto> = emptyList(),
+    val unassigned_rewards_q:Double=0.0,val unassigned_rewards_usd_reference:Double=0.0,
+    val qualifying_sources:List<String> = emptyList()
+)
+data class QWeeklyActiveDto(
+    val enabled:Boolean=false,val weekly_q:Double=0.0,val week_key:String="",val claimed:Boolean=false
+)
+data class QRebuyPlanDto(
+    val package_code:String="",val name:String="",val price_usd:Double=0.0,val action:String="REBUY",
+    val max_q_percent:Double=0.0,val max_q_at_current_reference:Double=0.0
+)
+data class QRebuyOptionsDto(
+    val enabled:Boolean=false,val can_rebuy:Boolean=false,val blocked_by_active_cycle:Boolean=false,
+    val source_cycle:QSubscriptionDto?=null,val wallet_balance_q:Double=0.0,val q_reference_usd:Double=0.05,
+    val plans:List<QRebuyPlanDto> = emptyList(),val networks:List<String> = emptyList()
+)
+data class QRebuyOrderDto(
+    val id:Int=0,val rebuy_code:String="",val action:String="REBUY",
+    val target_package_code:String="",val target_package_name:String="",val source_lot_id:Int=0,
+    val q_locked:Double=0.0,val q_value_usd:Double=0.0,val usdt_due:Double=0.0,val q_reference_usd:Double=0.05,
+    val status:String="",val payment:QPaymentOrderDto?=null,val created_at:String="",val finalized_at:String?=null
+)
+data class QWithdrawalConfigDto(
+    val enabled:Boolean=false,val fee_percent:Double=10.0,val minimum_net_usdt:Double=10.0,
+    val minimum_gross_q_at_current_reference:Double=0.0,val q_reference_usd:Double=0.05,
+    val wallet_balance_q:Double=0.0,val networks:List<String> = emptyList()
+)
+data class QWithdrawalUserDto(val id:Int=0,val username:String="",val display_name:String="")
+data class QWithdrawalDto(
+    val id:Int=0,val request_id:String="",val user:QWithdrawalUserDto?=null,
+    val requested_q:Double=0.0,val fee_q:Double=0.0,val net_q:Double=0.0,
+    val q_reference_usd:Double=0.05,val payout_usdt:Double=0.0,val network:String="",
+    val destination_address:String="",val status:String="PENDING",val requested_at:String="",
+    val reviewed_at:String?=null,val paid_at:String?=null,val tx_hash:String?=null,val admin_note:String=""
+)
+
 data class QReferralEventDto(
     val type:String="",val label:String="",val package_code:String?=null,val reward_q:Double=0.0,
     val status:String="",val created_at:String="",val paid_at:String?=null

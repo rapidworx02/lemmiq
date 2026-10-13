@@ -484,10 +484,6 @@ class Api(private val store:SessionStore){
     suspend fun joinCall(id:String):CallJoinDto =
         gson.fromJson(req(b("$base/v24/calls/$id/join").post("{}".toRequestBody(json)).build()),CallJoinDto::class.java)
     suspend fun declineCall(id:String){req(b("$base/v24/calls/$id/decline").post("{}".toRequestBody(json)).build())}
-    suspend fun callHeartbeat(id:String){req(b("$base/v24/calls/$id/heartbeat").post("{}".toRequestBody(json)).build())}
-    suspend fun activeCall():ActiveCallDto =
-        gson.fromJson(req(b("$base/v24/calls/active/me").get().build()),ActiveCallDto::class.java)
-    suspend fun clearStuckCall(){req(b("$base/v24/calls/active/clear").post("{}".toRequestBody(json)).build())}
     suspend fun endCall(id:String){req(b("$base/v24/calls/$id/end").post("{}".toRequestBody(json)).build())}
     suspend fun chatCalls(cid:Int):List<CallDto>{
         val t=req(b("$base/v24/chats/$cid/calls").get().build())
@@ -641,6 +637,51 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("tx_hash" to txHash,"note" to note)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v28/payments/orders/$orderId/submit").post(rb).build()),QPaymentOrderDto::class.java)
     }
+
+    // ---------- LEMMIQ V2.10.9 / V2.10.7.4 Q Economy integration ----------
+    suspend fun qEarningCycles():QEarningCyclesDto =
+        gson.fromJson(req(b("$base/v21074/earning-cycles").get().build()),QEarningCyclesDto::class.java)
+
+    suspend fun qWeeklyActive():QWeeklyActiveDto =
+        gson.fromJson(req(b("$base/v21074/weekly-active").get().build()),QWeeklyActiveDto::class.java)
+
+    suspend fun qClaimWeeklyActive():QWeeklyActiveDto{
+        req(b("$base/v21074/weekly-active/claim").post("{}".toRequestBody(json)).build())
+        return qWeeklyActive()
+    }
+
+    suspend fun qRebuyOptions():QRebuyOptionsDto =
+        gson.fromJson(req(b("$base/v21074/packages/rebuy/options").get().build()),QRebuyOptionsDto::class.java)
+
+    suspend fun qRebuyOrders():List<QRebuyOrderDto>{
+        val t=req(b("$base/v21074/packages/rebuy/orders").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QRebuyOrderDto>>(){}.type)
+    }
+
+    suspend fun qCreateRebuyOrder(packageCode:String,network:String,qAmount:Double):QRebuyOrderDto{
+        val rb=gson.toJson(mapOf("target_package_code" to packageCode,"network" to network,"q_amount" to qAmount)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v21074/packages/rebuy/orders").post(rb).build()),QRebuyOrderDto::class.java)
+    }
+
+    suspend fun qCancelRebuyOrder(id:Int){
+        req(b("$base/v21074/packages/rebuy/orders/$id/cancel").post("{}".toRequestBody(json)).build())
+    }
+
+    suspend fun qWithdrawalConfig():QWithdrawalConfigDto =
+        gson.fromJson(req(b("$base/v21074/withdrawals/config").get().build()),QWithdrawalConfigDto::class.java)
+
+    suspend fun qWithdrawals():List<QWithdrawalDto>{
+        val t=req(b("$base/v21074/withdrawals").get().build())
+        return gson.fromJson(t,object:TypeToken<List<QWithdrawalDto>>(){}.type)
+    }
+
+    suspend fun qCreateWithdrawal(amountQ:Double,network:String,address:String):QWithdrawalDto{
+        val rb=gson.toJson(mapOf("amount_q" to amountQ,"network" to network,"destination_address" to address)).toRequestBody(json)
+        return gson.fromJson(req(b("$base/v21074/withdrawals").post(rb).build()),QWithdrawalDto::class.java)
+    }
+
+    suspend fun qCancelWithdrawal(id:Int):QWithdrawalDto =
+        gson.fromJson(req(b("$base/v21074/withdrawals/$id/cancel").post("{}".toRequestBody(json)).build()),QWithdrawalDto::class.java)
 
     suspend fun qMarketListings(q:String=""):List<QMarketListingDto>{
         val url="$base/v28/market/listings"+if(q.isBlank())"" else "?q=${URLEncoder.encode(q,"UTF-8")}"

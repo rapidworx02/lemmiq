@@ -1,0 +1,54 @@
+LEMMIQ V2.10.10 TEST CHECKLIST
+
+FRONTPAGE
+[ ] Light default is readable
+[ ] LEMMIQ icon/wordmark display cleanly
+[ ] Headline is not washed out
+[ ] Login works
+[ ] Create account works
+[ ] Android download button works
+[ ] Dark toggle works
+[ ] Theme persists after refresh
+
+CHAT UI
+[ ] Send button fully visible on narrow mobile browser
+[ ] Composer order: + / Mic / Message / Q / Send
+[ ] Direct JPG/JPEG/PNG/WebP/GIF shows inline preview
+[ ] Group image shows inline preview
+[ ] Old image messages also show previews
+[ ] Tap photo opens full-screen viewer
+[ ] Non-image files retain filename/download fallback
+
+PERFORMANCE
+[ ] Long direct chat initially loads latest 60
+[ ] Load older direct messages works
+[ ] Long group chat initially loads latest 60
+[ ] Load older group messages works
+[ ] Direct send appears immediately
+[ ] Direct photo send appears immediately
+[ ] Group send appears immediately
+[ ] Incoming WebSocket direct message does not full-reload open chat
+[ ] Incoming WebSocket group message does not full-reload open group
+[ ] Chat list still updates unread/latest preview
+[ ] Server-Timing header appears
+[ ] Startup migration creates indexes without error
+
+PWA PUSH (ONLY IF FIREBASE WEB ENV IS CONFIGURED)
+[ ] More > Browser notifications reports available
+[ ] Permission prompt appears only after user taps
+[ ] Enable succeeds
+[ ] /push/status shows registered_web_devices >= 1
+[ ] Background direct message shows notification
+[ ] Notification tap opens correct chat
+[ ] Background group event shows notification
+[ ] Existing Android FCM notifications still work
+
+REGRESSION
+[ ] Q Economy works
+[ ] Q Predict works
+[ ] Q Admin works
+[ ] Q Usage Analytics works
+[ ] Shared USDT wallets work
+[ ] Withdrawals work
+[ ] Calls still work in browser
+[ ] Chats/groups/status/Q features still work

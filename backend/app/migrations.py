@@ -20,6 +20,14 @@ def _add_column_if_missing(engine, table: str, column: str, ddl: str) -> bool:
     return True
 
 
+
+def _create_index_if_missing(engine, name: str, table: str, columns: str):
+    existing = set(inspect(engine).get_table_names())
+    if table not in existing:
+        return
+    with engine.begin() as conn:
+        conn.execute(text(f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({columns})'))
+
 def apply_compat_migrations(engine):
     # Earlier voice-note compatibility migrations.
     _add_column_if_missing(engine, "voice_notes", "transcribed_at", "TIMESTAMP")
@@ -55,3 +63,9 @@ def apply_compat_migrations(engine):
                 conn.execute(text(
                     "UPDATE q_predict_config SET real_q_enabled=TRUE, test_mode=FALSE"
                 ))
+
+    # V2.10.10: hot-path indexes for messenger/PWA performance.
+    _create_index_if_missing(engine, "ix_messages_chat_id_id", "messages", '"chat_id","id"')
+    _create_index_if_missing(engine, "ix_group_messages_group_id_id", "group_messages", '"group_id","id"')
+    _create_index_if_missing(engine, "ix_call_records_chat_started", "call_records", '"chat_id","started_at"')
+    _create_index_if_missing(engine, "ix_push_devices_user_id_fast", "push_devices", '"user_id"')
