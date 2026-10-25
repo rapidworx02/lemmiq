@@ -126,13 +126,13 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){prompt=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalk={
+    val startTalk: () -> Unit = {
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
         }
-        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}
+        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}; Unit
     }
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
         SmallFloatingActionButton(
@@ -1218,13 +1218,13 @@ private fun ChatAgent(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){q=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalkToQ={
+    val startTalkToQ: () -> Unit = {
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
         }
-        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}
+        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}; Unit
     }
 
     LaunchedEffect(Unit){vm.refreshAgent()}

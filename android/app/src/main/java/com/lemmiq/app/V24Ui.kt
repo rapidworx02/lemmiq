@@ -1,5 +1,7 @@
 package com.lemmiq.app
 
+import androidx.compose.foundation.Image
+
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
