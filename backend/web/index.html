@@ -3,10 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#f7f6fb">
-  <script>
-    try{document.documentElement.dataset.theme=localStorage.getItem("lemmiq_theme")||"light"}catch(e){document.documentElement.dataset.theme="light"}
-  </script>
+  <meta name="theme-color" content="#6c4cff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="LEMMIQ">
@@ -27,7 +24,8 @@
   <link rel="stylesheet" href="/web/v21072_q_usage.css?v=2.10.7.2">
   <link rel="stylesheet" href="/web/v21073_wallets.css?v=2.10.7.3">
   <link rel="stylesheet" href="/web/v21074_q_economy.css?v=2.10.7.4">
-  <link rel="stylesheet" href="/web/v21010.css?v=2.10.10">
+  <link rel="stylesheet" href="/web/v21011.css?v=2.10.11">
+  <link rel="stylesheet" href="/web/v212_image_gen.css?v=2.12.0">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -36,20 +34,14 @@
 
   <section id="authView" class="auth-shell">
     <div class="auth-brand">
-      <div class="auth-logo-row">
-        <img src="/web/brand-icon.png" alt="LEMMIQ">
-        <div><div class="auth-wordmark">lemmi<span>Q</span></div><small>Messaging with social IQ.</small></div>
-      </div>
-      <span class="auth-kicker">PRIVATE BETA · WEB + ANDROID</span>
-      <h1>Message people. Ask Q when you need help.</h1>
-      <p>Simple messaging, voice/video calls and built-in AI assistance — all from the same LEMMIQ account.</p>
+      <img src="/web/brand-full.png" alt="LEMMIQ" onerror="this.src='/web/brand-icon.png'">
+      <h1>Messaging with social IQ.</h1>
+      <p>Chat. Verify. Ask Q. Run your Business Agent — from any browser.</p>
       <div class="hero-pills">
-        <span>💬 Chats & groups</span><span>Q AI help</span><span>📞 Voice & video</span><span>🛡 Fact / Scam Check</span>
+        <span>💬 Realtime chat</span><span>Q AI Agent</span><span>🛡 Trust</span><span>💼 Business</span>
       </div>
-      <div class="auth-simple-flow"><span>Message</span><b>→</b><span>Ask Q</span><b>→</b><span>Get help</span></div>
     </div>
     <div class="auth-card glass">
-      <div class="auth-card-head"><div><strong>Welcome to LEMMIQ</strong><small>Use your account on any browser.</small></div><button id="themeTogglePublic" class="ghost theme-toggle" type="button">☾ Dark</button></div>
       <div class="segmented">
         <button id="loginTab" class="active">Login</button>
         <button id="registerTab">Create account</button>
@@ -99,7 +91,6 @@
           <p id="pageSub">Your conversations, understood by Q.</p>
         </div>
         <div class="top-actions">
-          <button id="themeToggleApp" class="ghost theme-toggle" title="Switch appearance">☾</button>
           <button id="androidBtnTop" class="ghost hidden">📱 Android app</button>
           <button id="installBtn" class="ghost hidden">🌐 Install web app</button>
           <button id="profileMenuBtn" class="ghost" title="Profile and more">☰</button><button id="refreshBtn" class="ghost">↻</button>
@@ -364,7 +355,6 @@
           <button data-more-view="activity" class="more-card"><span>◈</span><strong>Activity</strong><small>Detected notification intelligence</small></button>
           <button data-more-view="money" class="more-card"><span>💳</span><strong>Money</strong><small>Review detected payments and corrections</small></button>
           <button data-more-view="me" class="more-card"><span>🙂</span><strong>Me / Profile</strong><small>Photo, account, privacy and sign out</small></button>
-          <button id="pwaNotifyCard" class="more-card"><span>🔔</span><strong>Browser notifications</strong><small id="pwaNotifyStatus">Check notification status</small></button>
           <button id="moreAndroidDownloadBtn" class="more-card"><span>📱</span><strong>Download Android app</strong><small>Install the native LEMMIQ companion</small></button>
         </div>
       </section>
@@ -528,7 +518,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.10.10" defer></script>
+  <script src="/web/app.js?v=2.10.7" defer></script>
   <script src="/web/v28.js?v=2.10.7" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
@@ -538,6 +528,9 @@
   <script src="/web/v21072_q_usage.js?v=2.10.7.2" defer></script>
   <script src="/web/v21073_wallets.js?v=2.10.7.3" defer></script>
   <script src="/web/v21074_q_economy.js?v=2.10.7.4" defer></script>
-  <script src="/web/v21010.js?v=2.10.10" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js" defer></script>
+  <script src="/web/v21011.js?v=2.10.11" defer></script>
+  <script src="/web/v212_image_gen.js?v=2.12.0" defer></script>
 </body>
 </html>

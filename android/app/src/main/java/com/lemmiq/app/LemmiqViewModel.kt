@@ -154,11 +154,14 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     val detectedIncomingCents:Long get()=localEvents.filter{it.category=="MONEY"&&it.direction=="IN"}.sumOf{it.amount_cents?:0L}
 
 
-    init{if(authenticated){refreshMe();connect();refreshChats();refreshGroups();refreshStatuses();refreshTrustHistory();refreshSocialIq();registerPush();refreshExternal();refreshBusiness();refreshPrivacy()}}
+    init{if(authenticated){
+        refreshMe();connect();refreshChats();refreshGroups();registerPush();refreshBusiness();refreshPrivacy()
+    }}
 
     private fun auth(a:AuthResponse){
         store.token=a.token;store.userId=a.user.id;store.username=a.user.username;store.displayName=a.user.display_name
-        currentUser=a.user;predictAnalysisHistory=PredictAnalysisHistoryV2104.list(appCtx,store.userId);authenticated=true;connect();refreshChats();refreshGroups();refreshStatuses();refreshTrustHistory();refreshSocialIq();refreshInsights();refreshExternal();refreshBusiness();refreshPrivacy();registerPush()
+        currentUser=a.user;predictAnalysisHistory=PredictAnalysisHistoryV2104.list(appCtx,store.userId);authenticated=true
+        connect();refreshChats();refreshGroups();refreshBusiness();refreshPrivacy();registerPush()
     }
     fun register(u:String,n:String,p:String,referralCode:String="")=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p,referralCode.trim()))}}
     fun login(u:String,p:String)=viewModelScope.launch{action{auth(api.login(u.trim().lowercase(),p))}}
@@ -1066,10 +1069,13 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 Triple(name,cr.getType(uri)?:"image/jpeg",bytes)
             }
             currentUser=api.uploadProfilePhoto(data.first,data.second,data.third)
-            refreshChats();refreshGroups();refreshStatuses()
+            // Versioned avatar URLs force Coil to display the new photo immediately everywhere.
+            refreshMe();refreshChats();refreshGroups();refreshStatuses();refreshCalls()
         }catch(e:Exception){error=e.message}
     }
-    fun removeProfilePhoto()=viewModelScope.launch{runCatching{currentUser=api.removeProfilePhoto();refreshChats()}.onFailure{error=it.message}}
+    fun removeProfilePhoto()=viewModelScope.launch{runCatching{
+        currentUser=api.removeProfilePhoto();refreshMe();refreshChats();refreshGroups();refreshStatuses();refreshCalls()
+    }.onFailure{error=it.message}}
     fun refreshPrivacy()=viewModelScope.launch{runCatching{api.privacy()}.onSuccess{privacy=it}}
     fun savePrivacy(p:PrivacyDto)=viewModelScope.launch{runCatching{privacy=api.savePrivacy(p)}.onFailure{error=it.message}}
 

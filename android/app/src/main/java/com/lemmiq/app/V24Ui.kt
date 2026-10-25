@@ -7,7 +7,6 @@ import android.provider.OpenableColumns
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -46,12 +45,22 @@ private val V24Bg=Color(0xFFF7F7FB)
 private val V24Muted=Color(0xFF7E8095)
 private val V24Ink=Color(0xFF17182A)
 
+private fun v24AvatarUrl(user:UserDto):String?{
+    val raw=user.avatar_url?.let{if(it.startsWith("http"))it else "${BuildConfig.API_BASE_URL.trimEnd('/')}$it"}?:return null
+    if("v=" in raw)return raw
+    val version=user.avatar?.hashCode()?.toUInt()?.toString(16)?:return raw
+    return raw + (if('?' in raw)"&" else "?") + "v=" + version
+}
+
 @Composable
 fun V24Avatar(user:UserDto,size:Int=50){
     val ctx=LocalContext.current
-    val url=user.avatar_url?.let{if(it.startsWith("http"))it else "${BuildConfig.API_BASE_URL.trimEnd('/')}$it"}
+    val url=v24AvatarUrl(user)
     Box(Modifier.size(size.dp).clip(CircleShape).background(V24Soft),contentAlignment=Alignment.Center){
-        if(url!=null)AsyncImage(model=url,contentDescription=user.display_name,modifier=Modifier.fillMaxSize())
+        if(url!=null)AsyncImage(
+            model=ImageRequest.Builder(ctx).data(url).memoryCacheKey(url).diskCacheKey(url).crossfade(true).build(),
+            contentDescription=user.display_name,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop
+        )
         else Text(user.display_name.firstOrNull()?.uppercase()?:"?",color=V24Purple,fontWeight=FontWeight.Bold,fontSize=(size*.36).sp)
     }
 }
@@ -116,7 +125,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
                         Text(qPreview?.body?:"Q requests, results and coordination updates",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                     }
                     Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
-                        qPreview?.created_at?.takeIf{it.isNotBlank()}?.let{Text(v24Time(it),fontSize=10.sp,color=if(vm.qThread.unread_count>0)V24Purple else V24Muted)}
+                        qPreview?.created_at?.takeIf{it.isNotBlank()}?.let{Text(v24InboxStamp(it),fontSize=10.sp,color=if(vm.qThread.unread_count>0)V24Purple else V24Muted)}
                         if(vm.qThread.unread_count>0)Badge{Text("${vm.qThread.unread_count}")}
                     }
                 }
@@ -131,7 +140,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
                             Text(if(c.draft_text.isNotBlank())"Draft: ${c.draft_text}" else c.last_message?:"Start chatting",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                         Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
-                            if(!c.updated_at.isNullOrBlank())Text(v24Time(c.updated_at),fontSize=10.sp,color=if(c.unread>0)V24Purple else V24Muted)
+                            if(!c.updated_at.isNullOrBlank())Text(v24InboxStamp(c.updated_at),fontSize=10.sp,color=if(c.unread>0)V24Purple else V24Muted)
                             Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)){
                                 if(!c.muted_until.isNullOrBlank())Text("🔕",fontSize=10.sp)
                                 if(c.unread>0)Badge{Text("${c.unread}")}
@@ -145,7 +154,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
                         Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)){Text(g.name,fontWeight=FontWeight.Bold);Text("${g.member_count} members · ${g.last_message?:"New group"}",color=V24Muted,fontSize=12.sp,maxLines=1)}
                         Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
-                            if(!g.updated_at.isNullOrBlank())Text(v24Time(g.updated_at),fontSize=10.sp,color=if(g.unread>0)V24Purple else V24Muted)
+                            if(!g.updated_at.isNullOrBlank())Text(v24InboxStamp(g.updated_at),fontSize=10.sp,color=if(g.unread>0)V24Purple else V24Muted)
                             if(g.unread>0)Badge{Text("${g.unread}")}
                         }
                     }
@@ -711,6 +720,17 @@ fun V24DateSeparator(label:String){
 
 fun v24Time(iso:String):String=runCatching{
     OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("h:mm a",Locale.getDefault()))
+}.getOrElse{""}
+
+fun v24InboxStamp(iso:String):String=runCatching{
+    val z=OffsetDateTime.parse(iso).atZoneSameInstant(ZoneId.systemDefault())
+    val d=z.toLocalDate();val now=java.time.LocalDate.now(ZoneId.systemDefault())
+    when{
+        d==now -> z.format(DateTimeFormatter.ofPattern("h:mm a",Locale.getDefault()))
+        d==now.minusDays(1) -> "Yesterday"
+        d.isAfter(now.minusDays(7)) -> d.format(DateTimeFormatter.ofPattern("EEEE",Locale.getDefault()))
+        else -> d.format(DateTimeFormatter.ofPattern("d/M/yy",Locale.getDefault()))
+    }
 }.getOrElse{""}
 
 fun v24FriendlyDay(iso:String):String=runCatching{

@@ -129,7 +129,8 @@ def register_routes(current_user):
     def profile_avatar_get(uid:int,db:Session=Depends(dep_db)):
         x=db.get(User,uid)
         if not x or not x.avatar:raise HTTPException(404,"Profile photo not found")
-        return StreamingResponse(media_store.stream(x.avatar),media_type="image/jpeg",headers={"Cache-Control":"private,max-age=300"})
+        # avatar_url is versioned from the storage key, so a replacement gets a new URL immediately.
+        return StreamingResponse(media_store.stream(x.avatar),media_type="image/jpeg",headers={"Cache-Control":"private,max-age=86400"})
 
     # -------- groups --------
     @router.get("/v24/groups")
@@ -156,15 +157,13 @@ def register_routes(current_user):
         g,_=gmember(db,gid,u.id);return gjson(db,g,u.id)
 
     @router.get("/v24/groups/{gid}/messages")
-    def group_messages(gid:int,limit:int=800,before_id:int|None=None,u=Depends(current_user),db:Session=Depends(dep_db)):
+    def group_messages(gid:int,limit:int=800,before:int|None=None,u=Depends(current_user),db:Session=Depends(dep_db)):
         gmember(db,gid,u.id)
-        limit=max(1,min(int(limit or 800),800))
-        stmt=select(GroupMessage).where(GroupMessage.group_id==gid)
-        if before_id is not None:
-            stmt=stmt.where(GroupMessage.id<int(before_id))
-        rows=db.scalars(stmt.order_by(GroupMessage.id.desc()).limit(limit)).all()
-        rows=list(reversed(rows))
-        return [gmjson(db,m) for m in rows]
+        safe_limit=max(20,min(int(limit or 800),800))
+        q=select(GroupMessage).where(GroupMessage.group_id==gid)
+        if before is not None and before>0:q=q.where(GroupMessage.id<before)
+        rows=db.scalars(q.order_by(GroupMessage.id.desc()).limit(safe_limit)).all()
+        return [gmjson(db,m) for m in reversed(rows)]
 
     @router.post("/v24/groups/{gid}/read")
     def group_read(gid:int,u=Depends(current_user),db:Session=Depends(dep_db)):

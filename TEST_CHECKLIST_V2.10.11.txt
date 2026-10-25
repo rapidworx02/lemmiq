@@ -1,0 +1,72 @@
+LEMMIQ V2.10.11 TEST CHECKLIST
+
+ANDROID NAVIGATION
+[ ] Direct chat edge-swipe Back -> Chats
+[ ] Group edge-swipe Back -> Chats
+[ ] More subpage Back -> More
+[ ] Q Thread Back -> Chats
+[ ] Full Q Back -> previous shell
+[ ] Q Economy / Q Predict / Calls Back -> Chats before app exits
+[ ] Root Chats Back can leave/background app normally
+
+ANDROID VIDEO CALL
+[ ] Incoming Answer/Decline visible only while ringing
+[ ] Answer -> incoming controls disappear immediately
+[ ] Camera OFF -> ON works repeatedly
+[ ] Reverse camera front/rear works repeatedly
+[ ] Local preview mirroring follows front/rear
+[ ] Audio stays connected while camera changes
+[ ] End/decline clears room/tracks/UI state
+
+PROFILE PHOTO
+[ ] Upload photo -> Me/Profile updates immediately
+[ ] Chats/groups/calls/status refresh
+[ ] Replace photo -> no stale Coil cache image
+[ ] Remove photo -> fallback avatar returns
+[ ] Another user sees replacement after refresh
+[ ] Browser profile/chat avatar uses new versioned URL
+
+CHAT TIMESTAMPS
+[ ] Today -> local time
+[ ] Yesterday -> Yesterday
+[ ] Last 7 days -> weekday
+[ ] Older -> d/M/yy
+[ ] Direct and group lists use same rules
+[ ] Open-chat bubbles keep individual time and day separators
+
+BROWSER MEDIA
+[ ] Direct JPG/JPEG/PNG/WebP/GIF preview
+[ ] Group image preview
+[ ] Existing/history media preview
+[ ] New sent media preview
+[ ] Full-screen viewer
+[ ] Non-image file fallback/download
+
+BROWSER PERFORMANCE
+[ ] Latest 60 direct messages first
+[ ] Load older direct messages
+[ ] Latest 60 group messages first
+[ ] Load older group messages
+[ ] Send appends returned message without full history reload
+[ ] Server-Timing header present
+[ ] No DB migration deletes data
+
+PWA PUSH (IF CONFIGURED)
+[ ] More > Enable browser notifications
+[ ] Permission prompt only after tap
+[ ] /push/status registered_web_devices >= 1
+[ ] Background direct message notification
+[ ] Background group notification
+[ ] Notification tap deep-links correctly
+[ ] Android FCM still works
+
+REGRESSION
+[ ] Q Economy
+[ ] Q Usage Analytics
+[ ] Shared TRC20/BEP20 wallet
+[ ] Q withdrawal admin
+[ ] Q Predict main Q wallet
+[ ] Calls
+[ ] Status/Updates
+[ ] Trust
+[ ] Business Agent

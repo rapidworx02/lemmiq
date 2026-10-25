@@ -1,0 +1,20 @@
+LEMMIQ V2.12.0 — Q Create Image
+============================
+
+1) Extract LEMMIQ_V2.12_AI_IMAGE_GENERATION.zip
+2) Run INSTALL_WINDOWS_V2.12.cmd from the extracted folder
+3) It checks compatibility and prompts before applying
+4) Review C:\Users\pc\LEMMIQ\git diff, then build Android:
+
+   cd /d C:\Users\pc\LEMMIQ\android
+   gradlew.bat clean
+   gradlew.bat assembleDebug
+
+5) After tests, commit updated files and git push origin main (details in README_FIRST.md)
+6) Render: configure OPENAI_API_KEY and existing private media storage.
+   Keep LEMMIQ_IMAGE_GEN_ENABLED=false until test deployment passes.
+7) Beta enable: LEMMIQ_IMAGE_GEN_ENABLED=true; redeploy.
+8) Q_IMAGE global price starts at 0 Q until admin changes it.
+
+Important: This is a source overlay, not a compiled APK or a fully tested production deploy.
+Q Exchange remains deferred.

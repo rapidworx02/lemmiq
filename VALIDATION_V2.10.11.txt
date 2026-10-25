@@ -1,0 +1,24 @@
+LEMMIQ V2.10.11 — VALIDATION
+
+BASELINES USED
+- Working backend/Q Economy baseline: V2.10.7.4 package.
+- Stable complete backend support files: V2.10.7 rollback package.
+- Android baseline: V2.10.9 Android integration package.
+
+AUTOMATED CHECKS RUN IN PACKAGING ENVIRONMENT
+- backend/app/main.py Python compile: PASS
+- backend/app/v24.py Python compile: PASS
+- backend/app/migrations.py Python compile: PASS
+- backend/app/push_service.py Python compile: PASS
+- backend/web/v21011.js JavaScript syntax (node --check): PASS
+- backend/web/sw.js JavaScript syntax (node --check): PASS
+- Version target: backend 2.10.11 / Android versionCode 61 / versionName 2.10.11
+- Stable v28.js / v29.js are NOT contained/replaced.
+- Database changes are additive indexes only; no destructive SQL.
+
+ANDROID BUILD NOTE
+The packaging environment has the app module source but not the user's complete Gradle project/wrapper and local Firebase configuration, so a full `gradlew assembleDebug` was not executed here.
+Run the supplied build commands in C:\Users\pc\LEMMIQ\android. If Gradle reports an error, copy from `:app:compileDebugKotlin FAILED` through the first `e: file:///...` line.
+
+PWA PUSH NOTE
+PWA push remains optional. It is inactive until FIREBASE_WEB_CONFIG_JSON and FIREBASE_WEB_VAPID_KEY are supplied on Render. Existing Android FCM configuration remains separate and compatible.

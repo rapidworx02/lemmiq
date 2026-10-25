@@ -18,8 +18,8 @@ import android.os.Build
 import android.provider.ContactsContract
 import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -104,9 +104,7 @@ fun LemmiqApp(vm:LemmiqViewModel= viewModel()){
             }
         }
     }
-    BackHandler(enabled=vm.authenticated && (vm.active!=null || vm.activeGroup!=null)){
-        vm.close()
-    }
+    BackHandler(enabled=vm.authenticated && (vm.active!=null || vm.activeGroup!=null)){vm.close()}
     when{
         !vm.authenticated->Auth(vm)
         vm.activeGroup!=null->V24GroupChat(vm)
@@ -128,7 +126,7 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){prompt=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalk: () -> Unit = {
+    val startTalk={
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
@@ -219,20 +217,28 @@ private fun Home(vm:LemmiqViewModel){
     var qSheet by remember{mutableStateOf(false)}
     var qFullScreen by remember{mutableStateOf(false)}
     var qThreadOpen by remember{mutableStateOf(false)}
-    BackHandler(enabled=qSheet || newChat || newGroup || qFullScreen || qThreadOpen || showMore || tab!=0){
+    LaunchedEffect(Unit){
+        // Keep launch fast: only load the messenger shell. Heavy tabs refresh when opened.
+        vm.refreshChats();vm.refreshGroups();vm.refreshQThread()
+    }
+    LaunchedEffect(tab,showMore,morePage){
         when{
-            qSheet->qSheet=false
-            newChat->newChat=false
-            newGroup->newGroup=false
-            qFullScreen->qFullScreen=false
-            qThreadOpen->{qThreadOpen=false;vm.refreshQThread(markRead=true)}
-            showMore && morePage!=null->morePage=null
-            showMore->{showMore=false;morePage=null;tab=0}
-            tab!=0->tab=0
+            !showMore && tab==1 -> {vm.refreshStatuses();vm.refreshMoments()}
+            !showMore && tab==3 -> vm.refreshPredict()
+            !showMore && tab==4 -> vm.refreshCalls()
+            showMore && morePage=="trust" -> vm.refreshTrustHistory()
+            showMore && morePage=="business" -> vm.refreshBusiness()
+            showMore && morePage=="me" -> {vm.refreshMe();vm.refreshPrivacy()}
         }
     }
-    LaunchedEffect(Unit){
-        vm.refreshChats();vm.refreshGroups();vm.refreshStatuses();vm.refreshTrustHistory();vm.refreshSocialIq();vm.refreshMoments();vm.refreshCalls();vm.refreshPredict();vm.refreshQThread()
+    BackHandler(enabled=qThreadOpen||qFullScreen||morePage!=null||showMore||tab!=0){
+        when{
+            qThreadOpen -> qThreadOpen=false
+            qFullScreen -> qFullScreen=false
+            morePage!=null -> morePage=null
+            showMore -> showMore=false
+            tab!=0 -> tab=0
+        }
     }
     val launchRoute=LemmiqLaunchRouterV2103.route.value
     LaunchedEffect(launchRoute,vm.chats,vm.groups){
@@ -588,6 +594,7 @@ private fun NewChat(vm:LemmiqViewModel,dismiss:()->Unit){
 private fun Chat(vm:LemmiqViewModel){
     val c=vm.active?:return
     var draft by remember(c.id){mutableStateOf(c.draft_text)}
+    var showAiImageV212 by remember(c.id){mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     var businessSettings by remember{mutableStateOf(false)}
     var showAttach by remember{mutableStateOf(false)}
@@ -729,6 +736,7 @@ private fun Chat(vm:LemmiqViewModel){
                             Text("Share in this chat",fontWeight=FontWeight.Bold,color=Purple)
                             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){
                                 TextButton({photoPicker.launch("image/*");showAttach=false}){Text("🖼 Photo")}
+                                TextButton({showAiImageV212=true;showAttach=false}){Text("🎨 Q Image")}
                                 TextButton({videoPicker.launch("video/*");showAttach=false}){Text("🎬 Video")}
                             }
                             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){
@@ -915,6 +923,8 @@ private fun Chat(vm:LemmiqViewModel){
             dismissButton={TextButton(onClick={vm.cancelVision()}){Text("Cancel")}}
         )
     }
+    if(showAiImageV212) V212ImageDialog(chatId=c.id, onClose={showAiImageV212=false},
+        onSent={vm.open(c)})
     vm.chatSummary?.let{s->ChatSummaryDialog(s){vm.clearChatSummary()}}
 }
 
@@ -1181,6 +1191,7 @@ private fun Moments(vm:LemmiqViewModel){
 private fun ChatAgent(vm:LemmiqViewModel){
     var q by remember{mutableStateOf("")}
     var showCoord by remember{mutableStateOf(false)}
+    var showQImageV212 by remember{mutableStateOf(false)}
     var showVisionHistory by remember{mutableStateOf(false)}
     var coordSearch by remember{mutableStateOf("")}
     var coordPrompt by remember{mutableStateOf("")}
@@ -1207,7 +1218,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
             if(spoken.isNotBlank()){q=spoken;vm.askAgent(spoken)}
         }
     }
-    val startTalkToQ: () -> Unit = {
+    val startTalkToQ={
         val intent=Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
@@ -1219,6 +1230,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
     LaunchedEffect(Unit){vm.refreshAgent()}
     val qChatPrice=vm.qFeatureCatalog.firstOrNull{it.feature_key.equals("Q_CHAT",true)}
     val qVisionPrice=vm.qFeatureCatalog.firstOrNull{it.feature_key.equals("Q_VISION",true)}
+    if(showQImageV212) V212ImageDialog(onClose={showQImageV212=false}, onSent={vm.refreshAgent()})
     val qChargingOn=vm.qFeatureCatalog.any{it.charging_enabled}
 
     LazyColumn(
@@ -1343,6 +1355,18 @@ private fun ChatAgent(vm:LemmiqViewModel){
                             Text("The server returned summary counts but no detailed items yet. Refresh Q Memory to rebuild Today details.",color=Color.White.copy(alpha=.68f),fontSize=10.sp)
                         }
                     }
+                }
+            }
+        }
+
+        item{
+            Card(Modifier.fillMaxWidth().padding(horizontal=20.dp),shape=RoundedCornerShape(20.dp)){
+                Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
+                    Column(Modifier.weight(1f)){
+                        Text("Q Create Image",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                        Text("Prompt Q to create an image; review before sharing.",fontSize=11.sp,color=Muted)
+                    }
+                    TextButton(onClick={showQImageV212=true}){Text("🎨 Create")}
                 }
             }
         }

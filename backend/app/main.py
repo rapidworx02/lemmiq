@@ -1,12 +1,12 @@
 from .trust import check_text, media_capabilities, unavailable_result
-import os, hashlib, hmac, secrets, logging, re, json, time as perf_time
+import os, hashlib, hmac, secrets, logging, re, json, time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
 import jwt
 from fastapi import FastAPI, HTTPException, Depends, Header, WebSocket, WebSocketDisconnect, UploadFile, File, Form, BackgroundTasks
 from pydantic import BaseModel, Field
-from fastapi.responses import StreamingResponse, RedirectResponse, FileResponse, Response
+from fastapi.responses import StreamingResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
@@ -24,26 +24,26 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.10.10")
+app = FastAPI(title="LEMMIQ Server", version="2.12.0")
 connections: Dict[int, Set[WebSocket]] = {}
+
+@app.middleware("http")
+async def lemmiq_server_timing(request, call_next):
+    started=time.perf_counter()
+    response=await call_next(request)
+    elapsed_ms=(time.perf_counter()-started)*1000
+    response.headers["Server-Timing"]=f"app;dur={elapsed_ms:.1f}"
+    response.headers["X-LEMMIQ-Server-Ms"]=f"{elapsed_ms:.1f}"
+    if elapsed_ms>=750:
+        logging.getLogger("lemmiq.performance").warning(
+            "Slow request %.1f ms %s %s", elapsed_ms, request.method, request.url.path
+        )
+    return response
 
 @app.on_event("startup")
 def startup():
     Base.metadata.create_all(bind=engine)
     apply_compat_migrations(engine)
-
-PERF_LOG = logging.getLogger("lemmiq.performance")
-
-@app.middleware("http")
-async def lemmiq_performance_headers(request, call_next):
-    started = perf_time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (perf_time.perf_counter() - started) * 1000.0
-    response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
-    response.headers["X-LEMMIQ-Server-Ms"] = f"{elapsed_ms:.1f}"
-    if elapsed_ms >= 750 and not request.url.path.startswith("/web/"):
-        PERF_LOG.warning("Slow request %.0f ms %s %s", elapsed_ms, request.method, request.url.path)
-    return response
 
 def get_db():
     db = SessionLocal()
@@ -85,7 +85,12 @@ def _q_feature_finish(db: Session, reservation: dict, success: bool, metadata: d
 
 
 def user_json(u: User):
-    return {"id": u.id, "username": u.username, "display_name": u.display_name, "avatar": u.avatar, "avatar_url": f"/v24/profile/avatar/{u.id}" if u.avatar else None}
+    avatar_version = hashlib.sha256((u.avatar or "").encode("utf-8")).hexdigest()[:12] if u.avatar else None
+    return {
+        "id": u.id, "username": u.username, "display_name": u.display_name, "avatar": u.avatar,
+        "avatar_url": f"/v24/profile/avatar/{u.id}?v={avatar_version}" if u.avatar else None,
+        "avatar_version": avatar_version,
+    }
 
 def ensure_member(db: Session, cid: int, uid: int):
     c = db.get(Chat, cid)
@@ -232,7 +237,7 @@ class AgentAskIn(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "name": "LEMMIQ", "version": "2.10.10"}
+    return {"ok": True, "name": "LEMMIQ", "version": "2.10.7.4"}
 
 @app.get("/me")
 def me(u: User = Depends(current_user)):
@@ -302,17 +307,15 @@ def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(
     return chat_json(db, c, u.id)
 
 @app.get("/chats/{cid}/messages")
-def messages(cid: int, limit: int = 700, before_id: int | None = None,
-             u: User = Depends(current_user), db: Session = Depends(get_db)):
+def messages(cid: int, limit: int = 700, before: int | None = None, u: User = Depends(current_user), db: Session = Depends(get_db)):
     ensure_member(db, cid, u.id)
-    limit = max(1, min(int(limit or 700), 700))
     hidden_ids = select(MessageHidden.message_id).where(MessageHidden.user_id == u.id)
-    stmt = select(Message).where(Message.chat_id == cid, ~Message.id.in_(hidden_ids))
-    if before_id is not None:
-        stmt = stmt.where(Message.id < int(before_id))
-    # Read newest rows efficiently then reverse to the normal chronological order.
-    rows = db.scalars(stmt.order_by(Message.id.desc()).limit(limit)).all()
-    rows = list(reversed(rows))
+    safe_limit=max(20,min(int(limit or 700),700))
+    q=select(Message).where(Message.chat_id == cid, ~Message.id.in_(hidden_ids))
+    if before is not None and before>0:
+        q=q.where(Message.id < before)
+    rows=db.scalars(q.order_by(Message.id.desc()).limit(safe_limit)).all()
+    rows=list(reversed(rows))
     return [msg_json(m, db) for m in rows]
 
 @app.post("/chats/{cid}/messages")
@@ -788,67 +791,28 @@ def private_media(message_id:int,u:User=Depends(current_user),db:Session=Depends
                  "Cache-Control":"private, no-store", "X-Content-Type-Options":"nosniff"})
 
 class PushRegister(BaseModel):
-    token: str = Field(min_length=20,max_length=280)
-    platform: str = Field(default="ANDROID", max_length=20)
-
-def _firebase_web_config():
-    raw = os.getenv("FIREBASE_WEB_CONFIG_JSON", "").strip()
-    vapid = os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
-    if not raw or not vapid:
-        return None, ""
-    try:
-        cfg = json.loads(raw)
-        if not isinstance(cfg, dict) or not cfg.get("apiKey") or not cfg.get("projectId") or not cfg.get("messagingSenderId") or not cfg.get("appId"):
-            return None, ""
-        return cfg, vapid
-    except Exception:
-        return None, ""
-
-@app.get("/push/web-config")
-def web_push_config():
-    cfg, vapid = _firebase_web_config()
-    return {"configured": bool(cfg and vapid), "firebase_config": cfg or {}, "vapid_key": vapid if cfg else ""}
-
-@app.get("/push/firebase-config.js", include_in_schema=False)
-def web_push_worker_config():
-    cfg, _vapid = _firebase_web_config()
-    payload = json.dumps(cfg or {}, separators=(",", ":"))
-    return Response(
-        content=f"self.__LEMMIQ_FIREBASE_CONFIG__={payload};",
-        media_type="application/javascript",
-        headers={"Cache-Control":"no-store"}
-    )
+    token: str = Field(min_length=20,max_length=300)
 
 @app.get("/push/status")
 def push_status(u:User=Depends(current_user),db:Session=Depends(get_db)):
-    tokens = [x.token for x in db.scalars(select(PushDevice).where(PushDevice.user_id==u.id)).all()]
-    cfg, vapid = _firebase_web_config()
+    tokens=[x.token for x in db.scalars(select(PushDevice).where(PushDevice.user_id==u.id)).all()]
     return {
         "firebase_configured": bool(push_service.configured()),
-        "web_push_configured": bool(cfg and vapid and push_service.configured()),
         "registered_devices": len(tokens),
-        "registered_web_devices": sum(1 for x in tokens if x.startswith("WEB:")),
+        "registered_web_devices": sum(1 for t in tokens if t.startswith("WEB:")),
+        "registered_android_devices": sum(1 for t in tokens if not t.startswith("WEB:")),
+        "web_push_configured": bool(os.getenv("FIREBASE_WEB_CONFIG_JSON","").strip() and os.getenv("FIREBASE_WEB_VAPID_KEY","").strip()),
     }
 
 @app.post("/push/register")
 def register_push(body:PushRegister,u:User=Depends(current_user),db:Session=Depends(get_db)):
-    platform=(body.platform or "ANDROID").strip().upper()
-    stored=("WEB:"+body.token) if platform=="WEB" else body.token
-    existing=db.scalar(select(PushDevice).where(PushDevice.token==stored))
+    existing=db.scalar(select(PushDevice).where(PushDevice.token==body.token))
     if existing:
         existing.user_id=u.id;existing.updated_at=datetime.now(timezone.utc)
     else:
-        db.add(PushDevice(user_id=u.id,token=stored))
+        db.add(PushDevice(user_id=u.id,token=body.token))
     db.commit()
-    return {"ok":True,"platform":platform}
-
-@app.post("/push/unregister-web")
-def unregister_web_push(u:User=Depends(current_user),db:Session=Depends(get_db)):
-    rows=db.scalars(select(PushDevice).where(PushDevice.user_id==u.id, PushDevice.token.like("WEB:%"))).all()
-    for row in rows:
-        db.delete(row)
-    db.commit()
-    return {"ok":True,"removed":len(rows)}
+    return {"ok":True}
 
 @app.delete("/push/unregister")
 def unregister_push(body:PushRegister,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -1053,9 +1017,15 @@ def download_android():
 
 @app.get("/app-config")
 def app_config():
-    """Public install metadata for the LEMMIQ web/PWA shell."""
+    """Public install + optional browser-push metadata for the LEMMIQ web/PWA shell."""
+    firebase_web_raw=os.getenv("FIREBASE_WEB_CONFIG_JSON", "").strip()
+    try:
+        firebase_web_config=json.loads(firebase_web_raw) if firebase_web_raw else None
+    except Exception:
+        firebase_web_config=None
+    vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "2.10.10",
+        "version": "2.12.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1065,7 +1035,9 @@ def app_config():
             or (Path(__file__).resolve().parents[1] / "web" / "downloads" / "LEMMIQ.apk").exists()
         ),
         "web_install_enabled": True,
-        "pwa_push_configured": bool(_firebase_web_config()[0] and _firebase_web_config()[1] and push_service.configured()),
+        "firebase_web_config": firebase_web_config,
+        "firebase_web_vapid_key": vapid,
+        "web_push_configured": bool(firebase_web_config and vapid),
     }
 
 # ---------------- LEMMIQ V2.4 feature routes ----------------
@@ -1109,6 +1081,10 @@ register_v21074_q_economy(app,current_user,get_db)
 # clients use the authenticated /v2105/q-features/catalog endpoint.
 from .v2104_q_features import router as v2104_q_features_router
 app.include_router(v2104_q_features_router)
+
+# ---------------- LEMMIQ V2.12 — Q AI Image Generation ----------------
+from .v212_image_gen import register_v212_images
+register_v212_images(app, current_user, get_db, push, msg_json, push_tokens, unread_count_for_user)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

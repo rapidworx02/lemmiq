@@ -1,0 +1,19 @@
+BACKEND
+backend/app/main.py
+backend/app/v24.py
+backend/app/migrations.py
+backend/app/push_service.py
+backend/web/index.html
+backend/web/sw.js
+backend/web/v21011.js        NEW
+backend/web/v21011.css       NEW
+
+ANDROID
+Full android/app overlay based on V2.10.9, with V2.10.11 changes in:
+- android/app/build.gradle.kts
+- android/app/src/main/java/com/lemmiq/app/LemmiqApp.kt
+- android/app/src/main/java/com/lemmiq/app/LemmiqCallActivity.kt
+- android/app/src/main/java/com/lemmiq/app/LemmiqViewModel.kt
+- android/app/src/main/java/com/lemmiq/app/V24Ui.kt
+
+Other Android app files are included unchanged so the overlay stays internally consistent.

@@ -31,84 +31,34 @@ def _app():
 def configured():
     return _app() is not None
 
+def _raw_token(token:str)->str:
+    return token[4:] if token.startswith("WEB:") else token
 
-def _token_parts(token: str):
-    if token.startswith("WEB:"):
-        return "WEB", token[4:]
-    return "ANDROID", token
 
 def notify(tokens:list[str],sender_name:str,chat_id:int,body:str="New message",unread_count:int=1):
     if not tokens or _app() is None:
         return
     from firebase_admin import messaging
-    for stored in tokens:
-        platform, token = _token_parts(stored)
+    for token in tokens:
         try:
-            data={
-                "type":"chat",
-                "chat_id":str(chat_id),
-                "sender_name":sender_name[:60],
-                "title":sender_name[:60] or "LEMMIQ",
-                "body":(body or "New message")[:180],
-                "unread_count":str(max(1,int(unread_count))),
-                "url":f"/web/#chat-{chat_id}",
-            }
-            if platform=="WEB":
-                messaging.send(messaging.Message(
-                    token=token,
-                    data=data,
-                    webpush=messaging.WebpushConfig(headers={"Urgency":"high"}),
-                ))
-            else:
-                messaging.send(messaging.Message(
-                    token=token,
-                    data=data,
-                    android=messaging.AndroidConfig(priority="high", ttl=3600),
-                ))
+            messaging.send(messaging.Message(
+                token=_raw_token(token),
+                data={"type":"chat", "chat_id":str(chat_id), "sender_name":sender_name[:60], "body":(body or "New message")[:180], "unread_count":str(max(1,int(unread_count)))},
+                android=messaging.AndroidConfig(priority="high", ttl=3600),
+            ))
         except Exception:
-            LOG.warning("FCM send failed for a %s device; check token/credentials", platform.lower())
+            LOG.warning("FCM send failed for a device; check token/credentials")
 
 
 def notify_data(tokens:list[str], data:dict):
-    """High-priority authenticated data notification for groups/calls/web PWA."""
+    """High-priority authenticated data notification for groups/calls."""
     if not tokens or _app() is None:
         return
     from firebase_admin import messaging
     payload={str(k):str(v)[:500] for k,v in data.items() if v is not None}
-    if "title" not in payload:
-        if payload.get("type") in {"incoming_call","call"}:
-            payload["title"]=payload.get("caller_name") or "Incoming LEMMIQ call"
-        elif payload.get("type")=="group":
-            payload["title"]=payload.get("group_name") or "LEMMIQ group"
-        else:
-            payload["title"]="LEMMIQ"
-    if "body" not in payload:
-        payload["body"]="You have a new LEMMIQ update"
-    if "url" not in payload:
-        if payload.get("group_id"):
-            payload["url"]=f"/web/#group-{payload['group_id']}"
-        elif payload.get("chat_id"):
-            payload["url"]=f"/web/#chat-{payload['chat_id']}"
-        elif payload.get("type") in {"incoming_call","call"}:
-            payload["url"]="/web/#calls"
-        else:
-            payload["url"]="/web/#chats"
-
-    for stored in tokens:
-        platform, token = _token_parts(stored)
+    for token in tokens:
         try:
-            if platform=="WEB":
-                messaging.send(messaging.Message(
-                    token=token,
-                    data=payload,
-                    webpush=messaging.WebpushConfig(headers={"Urgency":"high"}),
-                ))
-            else:
-                messaging.send(messaging.Message(
-                    token=token,
-                    data=payload,
-                    android=messaging.AndroidConfig(priority="high", ttl=3600),
-                ))
+            messaging.send(messaging.Message(token=_raw_token(token),data=payload,
+                android=messaging.AndroidConfig(priority="high", ttl=3600)))
         except Exception:
-            LOG.warning("FCM data send failed for a %s device", platform.lower())
-
+            LOG.warning("FCM data send failed for a device")

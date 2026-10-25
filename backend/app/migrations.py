@@ -20,14 +20,6 @@ def _add_column_if_missing(engine, table: str, column: str, ddl: str) -> bool:
     return True
 
 
-
-def _create_index_if_missing(engine, name: str, table: str, columns: str):
-    existing = set(inspect(engine).get_table_names())
-    if table not in existing:
-        return
-    with engine.begin() as conn:
-        conn.execute(text(f'CREATE INDEX IF NOT EXISTS "{name}" ON "{table}" ({columns})'))
-
 def apply_compat_migrations(engine):
     # Earlier voice-note compatibility migrations.
     _add_column_if_missing(engine, "voice_notes", "transcribed_at", "TIMESTAMP")
@@ -64,8 +56,24 @@ def apply_compat_migrations(engine):
                     "UPDATE q_predict_config SET real_q_enabled=TRUE, test_mode=FALSE"
                 ))
 
-    # V2.10.10: hot-path indexes for messenger/PWA performance.
-    _create_index_if_missing(engine, "ix_messages_chat_id_id", "messages", '"chat_id","id"')
-    _create_index_if_missing(engine, "ix_group_messages_group_id_id", "group_messages", '"group_id","id"')
-    _create_index_if_missing(engine, "ix_call_records_chat_started", "call_records", '"chat_id","started_at"')
-    _create_index_if_missing(engine, "ix_push_devices_user_id_fast", "push_devices", '"user_id"')
+    _create_performance_indexes(engine)
+
+
+def _create_performance_indexes(engine):
+    """Additive hot-path indexes. CREATE INDEX IF NOT EXISTS works on SQLite/PostgreSQL."""
+    existing=set(inspect(engine).get_table_names())
+    statements=[]
+    if "messages" in existing:
+        statements += [
+            'CREATE INDEX IF NOT EXISTS ix_messages_chat_id_id ON messages (chat_id, id)',
+            'CREATE INDEX IF NOT EXISTS ix_messages_chat_sender_read ON messages (chat_id, sender_id, read_at)',
+        ]
+    if "group_messages" in existing:
+        statements.append('CREATE INDEX IF NOT EXISTS ix_group_messages_group_id_id ON group_messages (group_id, id)')
+    if "call_records" in existing:
+        statements.append('CREATE INDEX IF NOT EXISTS ix_call_records_chat_started ON call_records (chat_id, started_at)')
+    if "push_devices" in existing:
+        statements.append('CREATE INDEX IF NOT EXISTS ix_push_devices_user_updated ON push_devices (user_id, updated_at)')
+    if not statements:return
+    with engine.begin() as conn:
+        for sql in statements:conn.execute(text(sql))

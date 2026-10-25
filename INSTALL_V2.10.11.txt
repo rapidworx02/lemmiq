@@ -1,0 +1,216 @@
+LEMMIQ V2.10.11 — INSTALL / GITHUB / BUILD
+
+REQUIRED CURRENT BASE
+- Backend/browser already working on V2.10.7.4 or later.
+- Android currently on V2.10.9/V2.10.10 family.
+- Repo: C:\Users\pc\LEMMIQ
+
+============================================================
+1) BACK UP CURRENT WORKING VERSION
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+powershell -NoProfile -Command "Compress-Archive -Path 'backend\app','backend\web','android\app' -DestinationPath '.\BACKUP_BEFORE_V21011.zip' -Force"
+
+============================================================
+2) EXTRACT V2.10.11
+============================================================
+
+Extract:
+LEMMIQ_V2.10.11_CONSOLIDATED_UPDATE.zip
+
+Inside it you will see:
+- backend\app
+- backend\web
+- android\app
+
+Copy `backend` and `android` into:
+C:\Users\pc\LEMMIQ\
+
+Choose Replace / overwrite for the supplied files.
+
+IMPORTANT:
+Do NOT delete any existing files that are not in this package.
+In particular keep your existing:
+- backend\app\v21072_q_usage.py
+- backend\app\v21074_q_economy.py
+- backend\web\v28.js / v29.js
+- backend\web\v21071_admin.*
+- backend\web\v21072_q_usage.*
+- backend\web\v21073_wallets.*
+- backend\web\v21074_q_economy.*
+
+============================================================
+3) VERIFY FILES / VERSION
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+findstr /n /i "version=\"2.10.11\"" backend\app\main.py
+findstr /n /i "\"version\": \"2.10.11\"" backend\app\main.py
+findstr /n /i "versionCode=61" android\app\build.gradle.kts
+findstr /n /i "versionName=\"2.10.11\"" android\app\build.gradle.kts
+
+dir backend\web\v21011.js
+dir backend\web\v21011.css
+
+git status --short backend android
+
+============================================================
+4) COMMIT TO GITHUB
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ
+
+git add backend\app\main.py
+git add backend\app\v24.py
+git add backend\app\migrations.py
+git add backend\app\push_service.py
+git add backend\web\index.html
+git add backend\web\sw.js
+git add backend\web\v21011.js
+git add backend\web\v21011.css
+git add android\app
+
+git status
+
+git commit -m "LEMMIQ V2.10.11 profile sync timestamps navigation media push performance"
+git push origin main
+
+============================================================
+5) RENDER / BACKEND
+============================================================
+
+Wait for Render deploy.
+
+Open:
+https://lemmiq-api.onrender.com/app-config
+
+Expected:
+"version": "2.10.11"
+
+The first server startup creates only additive performance indexes.
+
+============================================================
+6) OPTIONAL: ENABLE PWA PHONE NOTIFICATIONS
+============================================================
+
+If you do not want browser notifications yet, skip this section.
+Everything else in V2.10.11 works without these variables.
+
+In the SAME Firebase project used by the Android app:
+
+Firebase Console > Project settings > General > Your apps > Add app > Web
+Copy the Web config object as JSON.
+
+Firebase Console > Project settings > Cloud Messaging > Web Push certificates
+Generate/copy the PUBLIC VAPID key.
+
+Render > lemmiq-api > Environment:
+
+FIREBASE_WEB_CONFIG_JSON
+Example structure (USE YOUR REAL VALUES):
+{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}
+
+FIREBASE_WEB_VAPID_KEY
+Value: your public Web Push / VAPID key
+
+Keep your existing Firebase Admin variable:
+FIREBASE_SERVICE_ACCOUNT_JSON
+or
+FIREBASE_SERVICE_ACCOUNT_B64
+
+Redeploy Render.
+
+On phone Chrome/PWA:
+LEMMIQ > More > Appearance & notifications > Enable browser notifications
+Then tap Allow.
+
+============================================================
+7) CLEAR OLD PWA CACHE ONCE
+============================================================
+
+Phone:
+- Close all LEMMIQ Chrome/PWA windows.
+- Reopen LEMMIQ.
+
+If old UI remains:
+Chrome > Site settings > lemmiq-api.onrender.com (or app.lemmiq.com) > Clear site data
+Then sign in again.
+
+Desktop:
+Ctrl + Shift + R once.
+
+============================================================
+8) BUILD ANDROID
+============================================================
+
+cd /d C:\Users\pc\LEMMIQ\android
+
+gradlew clean
+gradlew assembleDebug
+
+Expected APK:
+C:\Users\pc\LEMMIQ\android\app\build\outputs\apk\debug\app-debug.apk
+
+============================================================
+9) INSTALL ANDROID
+============================================================
+
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+
+Only if Android reports a signing/signature mismatch:
+
+adb uninstall com.lemmiq.app
+adb install app\build\outputs\apk\debug\app-debug.apk
+
+WARNING: uninstall clears local app/session data. Use only for signature mismatch.
+
+============================================================
+10) FIRST TESTS
+============================================================
+
+ANDROID
+[ ] Profile > Change photo: new image appears immediately in Me/Profile.
+[ ] Return to Chats: your changed photo is not stuck on the old cached image.
+[ ] From another account, refresh and confirm the new avatar appears.
+[ ] Replace the photo again; confirm the second replacement appears, not the first cached one.
+[ ] Remove photo; initials/blank fallback returns everywhere.
+[ ] Chats list: today=time; yesterday=Yesterday; older=weekday/date.
+[ ] Open chat and swipe from left edge: returns to Chats, does NOT exit app.
+[ ] More > Profile and press/swipe Back: returns to More.
+[ ] Q Predict/Q Economy/Calls Back: returns toward Chats before app exit.
+[ ] Video call: Answer/Decline disappear immediately after answering.
+[ ] Camera OFF > ON repeatedly.
+[ ] Reverse front/rear camera repeatedly; local preview changes/mirroring updates.
+
+BROWSER / PWA
+[ ] Default theme is light.
+[ ] More > Dark mode toggles and persists.
+[ ] Mobile composer shows + / Mic / Message / Q / Send fully inside screen.
+[ ] Existing JPG/PNG messages show photo preview instead of filename only.
+[ ] New photo shows preview after send.
+[ ] Group photo messages show previews.
+[ ] Tap a preview: full-screen viewer opens and closes.
+[ ] Long chat initially loads latest 60 and Load older messages works.
+[ ] Chats list displays time / Yesterday / weekday / date correctly.
+[ ] Profile photo refreshes after replacement due to versioned avatar URL.
+[ ] If PWA push env is configured: background phone notification appears and tap opens the correct chat/group.
+
+PERFORMANCE
+[ ] API responses show Server-Timing / X-LEMMIQ-Server-Ms headers.
+[ ] Render logs identify requests >=750 ms as "Slow request".
+[ ] App opens Chats without waiting for Status/Trust/Moments/Calls/Q Predict to all finish first.
+
+============================================================
+ROLLBACK
+============================================================
+
+Option A:
+Restore BACKUP_BEFORE_V21011.zip
+
+Option B:
+git log --oneline -5
+git revert <V2.10.11 commit hash>
+git push origin main
