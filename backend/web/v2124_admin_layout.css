@@ -1,0 +1,35 @@
+/* LEMMIQ V2.12.4 - admin navigation and Q Air read-only preview */
+[hidden]{display:none!important}
+.v2124-admin-shell{margin:12px 0 24px;max-width:100%;min-width:0}
+.v2124-admin-layout{display:grid;grid-template-columns:minmax(168px,220px) minmax(0,1fr);gap:14px;align-items:start}
+.v2124-admin-sidebar{position:sticky;top:15px;display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid var(--line,rgba(255,255,255,.15));background:var(--panel,rgba(28,30,50,.8));border-radius:18px;min-width:0}
+.v2124-admin-nav-btn{border:none;border-radius:12px;background:transparent;color:var(--text,#fff);padding:12px;text-align:left;font-size:13px;line-height:1.35;cursor:pointer}
+.v2124-admin-nav-btn:hover,.v2124-admin-nav-btn.active{background:rgba(117,88,255,.22);color:var(--text,#fff)}
+.v2124-admin-main{min-width:0}.v2124-admin-heading{margin-bottom:10px}.v2124-admin-heading h3{margin:0;font-size:20px}.v2124-admin-heading p,.v2124-admin-panel-desc{margin:4px 0 12px;font-size:12px;color:var(--muted,#a4a9c3)}
+.v2124-admin-panel{display:grid;gap:10px;min-width:0}.v2124-admin-shortcuts{display:flex;gap:7px;flex-wrap:wrap}.v2124-admin-shortcuts button{padding:8px 10px;font-size:12px}
+.v2124-admin-disclosure{min-width:0;max-width:100%;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:16px;background:var(--panel,rgba(30,32,52,.7));overflow:hidden}
+.v2124-admin-disclosure>summary{cursor:pointer;padding:15px 16px;font-size:14px;font-weight:700;list-style:none;display:flex;gap:10px;align-items:center;justify-content:space-between}
+.v2124-admin-disclosure>summary::-webkit-details-marker{display:none}
+.v2124-admin-disclosure>summary::after{content:'⌄';font-size:19px;color:var(--muted,#aaa)}
+.v2124-admin-disclosure[open]>summary::after{content:'⌃'}
+.v2124-admin-disclosure[open]>summary{border-bottom:1px solid var(--line,rgba(255,255,255,.12))}
+.v2124-admin-disclosure-body{min-width:0;padding:8px}.v2124-admin-disclosure-body>.card{margin:0;max-width:100%;box-shadow:none}
+.v2124-admin-panel #q28AdminOverview{width:100%}.v2124-admin-panel .q28-admin-stats{min-width:0}
+.v2124-admin-mobile{display:none}
+.v2124-admin-panel #q28AdminUsers .q28-row{gap:6px;padding:9px 10px}
+.v2124-admin-panel #q28AdminUsers .q28-row strong{font-size:13px}
+.v2124-admin-panel #q28AdminUsers .q28-row small{font-size:11px}
+.v2124-local-filter{display:grid;gap:4px;margin:10px 0}.v2124-local-filter input{width:100%;max-width:450px}.v2124-local-filter span{font-size:12px;font-weight:600}.v2124-local-filter small{font-size:11px;color:var(--muted,#aaa)}
+.v2124-recovery-card{margin:0!important}.v2124-recovery-find{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin:12px 0}.v2124-recovery-find label{flex:1;min-width:180px}.v2124-recovery-find button{height:40px}
+.v2124-recovery-card label{display:grid;gap:6px;font-size:12px}.v2124-recovery-card input,.v2124-recovery-card textarea{width:100%;max-width:100%;box-sizing:border-box}
+.v2124-recovery-form{display:grid;gap:12px;margin:12px 0}.v2124-recovery-form button{width:fit-content}
+.v2124-recovery-identity{padding:10px;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:12px;font-weight:600;font-size:12px;overflow-wrap:anywhere}
+#v2124RecoveryStatus.error{color:#ff8c95}.v2124-once-password{display:block;max-width:100%;padding:12px;margin:10px 0;background:var(--panel2,#1a1d30);border-radius:10px;overflow-wrap:anywhere;user-select:all}
+/* Q Air has no purchase or subscription controls */
+.v2124-qair-hero{overflow:hidden;background:linear-gradient(125deg,rgba(75,110,163,.25),rgba(34,139,109,.13));border:1px solid var(--line,rgba(255,255,255,.12))}
+.v2124-qair-heading{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.v2124-qair-heading h3{margin:0}
+.v2124-qair-soon{font-size:10px;font-weight:700;padding:5px 9px;background:rgba(62,170,131,.16);border:1px solid rgba(79,189,147,.35);border-radius:999px}
+.v2124-qair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}.v2124-qair-feature{background:rgba(255,255,255,.035);border:1px solid var(--line,rgba(255,255,255,.1));padding:14px;border-radius:14px;min-width:0}
+.v2124-qair-feature strong{display:block;margin-bottom:6px}.v2124-qair-feature p{font-size:12px;margin:0;color:var(--muted,#aaa)}.v2124-qair-status{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:13px;font-size:12px;color:var(--muted,#aaa)}
+@media(max-width:950px){.v2124-admin-layout{grid-template-columns:1fr}.v2124-admin-sidebar{display:none}.v2124-admin-mobile{display:grid;gap:6px;margin-bottom:12px}.v2124-admin-mobile label{font-size:12px;font-weight:650}.v2124-admin-mobile select{width:100%;border-radius:13px;padding:12px;min-height:45px}}
+@media(max-width:600px){.v2124-admin-disclosure-body{padding:5px}.v2124-admin-disclosure>summary{padding:13px}.v2124-qair-grid{grid-template-columns:1fr}.v2124-recovery-find{display:grid}.v2124-recovery-form button{width:100%}.v2124-admin-shell .q28-row{max-width:100%}}

@@ -1,10 +1,10 @@
-const CACHE = "lemmiq-v2123-shell-1";
+const CACHE = "lemmiq-v2124-shell-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
   "/web/styles.css?v=2.10.7",
-  "/web/app.js?v=2.10.7",
-  "/web/v28.js?v=2.10.7",
+  "/web/app.js?v=2.12.4",
+  "/web/v28.js?v=2.12.4",
   "/web/v29.js?v=2.10.7",
   "/web/v2104.js?v=2.10.7",
   "/web/v2105.js?v=2.10.7",
@@ -20,6 +20,8 @@ const SHELL = [
   "/web/v2122_image_edit.css?v=2.12.2",
   "/web/v2122_image_edit.js?v=2.12.2",
   "/web/v2123_support.js?v=2.12.3",
+  "/web/v2124_admin_layout.js?v=2.12.4",
+  "/web/v2124_admin_layout.css?v=2.12.4",
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",
