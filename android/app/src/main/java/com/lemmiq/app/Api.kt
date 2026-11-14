@@ -67,6 +67,9 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("username" to u,"password" to p)).toRequestBody(json)
         return gson.fromJson(req(Request.Builder().url("$base/login").post(rb).build()),AuthResponse::class.java)
     }
+    suspend fun officialSupportV2123():UserDto =
+        gson.fromJson(req(b("$base/v2123/support").get().build()),UserDto::class.java)
+
     suspend fun me():UserDto = gson.fromJson(req(b("$base/me").get().build()),UserDto::class.java)
     suspend fun chats():List<ChatDto>{
         val t=req(b("$base/chats").get().build())

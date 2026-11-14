@@ -332,6 +332,40 @@
     try{
       const d=await qApi(`/admin/users/${userId}`);
       openModal(`<span class="eyebrow">Q USER CONTROL</span><h2>User #${d.user.id} · ${escapeHtml(d.user.display_name)}</h2><p>@${escapeHtml(d.user.username)}</p><div class="q28-user-wallet-control"><div><small>Q Wallet</small><strong>${fmtQ(d.wallet_q)} Q</strong><span>≈ ${fmtUsd(d.wallet_usd_reference)} reference</span></div><div><input id="q28AdjustAmount" type="number" step="0.01" placeholder="+/- Q correction"><input id="q28AdjustReason" placeholder="Reason for adjustment"><button id="q28AdjustWallet" class="primary">Apply wallet correction</button></div></div><h3>Packages</h3><div class="q28-list">${(d.packages||[]).map(packageCardHtml).join("")||"<p>No packages.</p>"}</div><button id="q28CloseUserControl" class="ghost full">Close</button>`);
+      // V2.12.3: show a one-time random reset password to Master Admin only.
+      // Never show, save or log a user's old password (the backend stores hashes).
+      if(v28.admin?.me?.role==="MASTER_ADMIN"){
+        const accountBox=document.createElement("section");
+        accountBox.className="q28-admin-password-reset";
+        accountBox.style.cssText="border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0";
+        accountBox.innerHTML='<strong>🔐 Account Recovery</strong><p class="micro">Existing passwords cannot be viewed. Verify the account owner before issuing a one-time replacement.</p><input id="v2123AdminPassword" type="password" autocomplete="current-password" placeholder="Confirm YOUR Master Admin password"><button id="v2123ResetPassword" class="ghost" type="button">Reset password</button><div id="v2123ResetResult" role="status"></div>';
+        $("q28AdjustWallet").closest(".q28-user-wallet-control")?.after(accountBox);
+        accountBox.querySelector("#v2123ResetPassword").onclick=async()=>{
+          const adminPassField=accountBox.querySelector("#v2123AdminPassword");
+          const adminPassword=adminPassField.value;adminPassField.value="";
+          if(!adminPassword){toast("Confirm your Master Admin password before resetting",true);return}
+          const reason=prompt(`Why are you resetting @${d.user.username}'s password? (min 8 characters)`);
+          if(reason===null)return;
+          if(reason.trim().length<8){toast("Enter an account verification reason (8+ characters)",true);return}
+          if(!confirm(`RESET password for User #${d.user.id} @${d.user.username}? All existing sessions will be revoked.`))return;
+          const resetButton=accountBox.querySelector("#v2123ResetPassword");resetButton.disabled=true;
+          try{
+            const result=await api(`/v2123/admin/users/${d.user.id}/reset-password`,{
+              method:"POST",body:JSON.stringify({reason:reason.trim(),confirm_username:d.user.username,admin_password:adminPassword})
+            });
+            const resultBox=accountBox.querySelector("#v2123ResetResult");
+            resultBox.replaceChildren();
+            const label=document.createElement("p");
+            label.textContent="New temporary password (displayed ONCE). Share securely with the verified account owner:";
+            const code=document.createElement("code");code.style.cssText="display:block;word-break:break-all;padding:12px;margin:8px 0;border-radius:10px;background:var(--panel2);font-size:15px";
+            code.textContent=result.temporary_password;
+            const copy=document.createElement("button");copy.type="button";copy.className="primary";copy.textContent="Copy new password";
+            copy.onclick=async()=>{try{await navigator.clipboard.writeText(result.temporary_password);toast("New password copied. Clear clipboard after sharing.")}catch{toast("Copy manually",true)}};
+            resultBox.append(label,code,copy);
+            resetButton.remove();
+          }catch(e){toast(e.message||"Reset failed",true);resetButton.disabled=false}
+        };
+      }
       $("q28AdjustWallet").onclick=async()=>{
         const amount=Number($("q28AdjustAmount").value),reason=$("q28AdjustReason").value.trim();
         if(!amount||reason.length<3){toast("Enter a non-zero Q correction and reason",true);return}

@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.12.2")
+app = FastAPI(title="LEMMIQ Server", version="2.12.3")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.middleware("http")
@@ -58,11 +58,24 @@ def hp(password: str, salt_hex: str | None = None):
     return digest.hex(), salt.hex()
 
 def make_token(uid: int):
-    return jwt.encode({"sub": str(uid), "exp": datetime.now(timezone.utc)+timedelta(days=30)}, SECRET, algorithm="HS256")
+    from .v2123_support import version_for_user
+    with SessionLocal() as version_db:
+        token_version = version_for_user(version_db, uid)
+    return jwt.encode({"sub": str(uid), "sv": token_version,
+                       "exp": datetime.now(timezone.utc)+timedelta(days=30)},
+                      SECRET, algorithm="HS256")
 
 def decode_token(token: str):
+    from .v2123_support import version_for_user
     try:
-        return int(jwt.decode(token, SECRET, algorithms=["HS256"])["sub"])
+        claims = jwt.decode(token, SECRET, algorithms=["HS256"])
+        uid = int(claims["sub"])
+        with SessionLocal() as version_db:
+            if int(claims.get("sv", 0)) != version_for_user(version_db, uid):
+                raise HTTPException(401, "Session expired after account password reset")
+        return uid
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(401, "Invalid or expired token")
 
@@ -244,7 +257,7 @@ def me(u: User = Depends(current_user)):
     return user_json(u)
 
 @app.post("/register")
-def register(body: Register, db: Session = Depends(get_db)):
+def register(body: Register, background: BackgroundTasks, db: Session = Depends(get_db)):
     username = body.username.strip().lower()
     if not username.replace("_", "").isalnum():
         raise HTTPException(400, "Username can only use letters, numbers and underscore")
@@ -267,6 +280,19 @@ def register(body: Register, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(u)
+    # Give each new member a real conversation with verified Official Support #22.
+    # Registration still succeeds if the support account is not yet configured.
+    try:
+        from .v2123_support import ensure_official_chat
+        official_welcome = ensure_official_chat(db, u)
+        if official_welcome:
+            db.commit()
+            welcome_data = msg_json(official_welcome["message"], db)
+            background.add_task(push, official_welcome["support_id"],
+                                {"type": "message", "data": welcome_data})
+    except Exception:
+        db.rollback()
+        logging.getLogger("lemmiq.support").exception("Official support chat setup failed for user id %s", u.id)
     return {"token": make_token(u.id), "user": user_json(u)}
 
 @app.post("/login")
@@ -1089,6 +1115,10 @@ register_v212_images(app, current_user, get_db, push, msg_json, push_tokens, unr
 # ---------------- LEMMIQ V2.12.2 Edit with Q (additive) ----------------
 from .v2122_image_edit import register_v2122_image_edit
 register_v2122_image_edit(app, current_user, get_db)
+
+# ---------------- LEMMIQ V2.12.3 Official Support & Admin Recovery ----------------
+from .v2123_support import register_v2123_support
+register_v2123_support(app, current_user, get_db, hp)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

@@ -1672,6 +1672,10 @@ private fun Profile(vm:LemmiqViewModel){
         Header("Me","@${vm.store.username.orEmpty()}")
         V24ProfilePhotoCard(vm)
         V24PrivacyCard(vm)
+        OutlinedButton(onClick={vm.openOfficialSupportV2123()},
+            modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=7.dp)) {
+            Text("💬 Chat with Lemmiq.Official Support (@lemmiq)")
+        }
         Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp)){Column(Modifier.padding(18.dp)){Text(vm.store.displayName.orEmpty(),fontSize=20.sp,fontWeight=FontWeight.Bold);Text("@${vm.store.username.orEmpty()}",color=Muted)}}
         Row(Modifier.padding(horizontal=20.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
             BrandMark(48.dp);Spacer(Modifier.width(10.dp));Text("LEMMIQ V${BuildConfig.VERSION_NAME}",fontWeight=FontWeight.Bold)

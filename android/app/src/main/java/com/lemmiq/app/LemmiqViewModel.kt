@@ -182,6 +182,15 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();qEarningCycles=QEarningCyclesDto();qWeeklyActive=QWeeklyActiveDto();qRebuyOptions=QRebuyOptionsDto();qRebuyOrders=emptyList();qWithdrawalConfig=QWithdrawalConfigDto();qWithdrawals=emptyList();qFeatureCatalog=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
+    fun openOfficialSupportV2123()=viewModelScope.launch {
+        try {
+            val contact=api.officialSupportV2123()
+            val conversation=api.direct(contact.id)
+            open(conversation)
+        } catch (e:Exception) {
+            error=e.message ?: "Unable to open LEMMIQ Official Support"
+        }
+    }
     fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
     fun search(q:String)=viewModelScope.launch{
         if(q.length<2){users=emptyList();return@launch}
