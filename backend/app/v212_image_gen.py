@@ -272,6 +272,9 @@ def register_v212_images(app, current_user, get_db, push, msg_json, push_tokens,
             return {"status":"SENT", "kind":row.sent_kind, "message_id":row.sent_message_id, "duplicate":True}
         if row.status != "READY" or not row.object_key:
             raise HTTPException(409, "Image is not ready")
+        # V2.12.2: distinguish edits from newly created images in chat history.
+        from .v2122_image_edit import ImageEditOrigin
+        caption = "✨ Q-edited image" if db.get(ImageEditOrigin, image_id) else "✨ Q-created image"
         now = utcnow()
         if body.chat_id is not None:
             c = db.get(Chat, body.chat_id)
@@ -280,7 +283,7 @@ def register_v212_images(app, current_user, get_db, push, msg_json, push_tokens,
             other = c.user2_id if c.user1_id == u.id else c.user1_id
             if db.get(UserBlock,{"blocker_id":u.id,"blocked_id":other}) or db.get(UserBlock,{"blocker_id":other,"blocked_id":u.id}):
                 raise HTTPException(403, "This conversation is blocked")
-            m = Message(chat_id=c.id, sender_id=u.id, text="✨ Q-created image", ai_generated=True)
+            m = Message(chat_id=c.id, sender_id=u.id, text=caption, ai_generated=True)
             c.updated_at = now
             db.add(m); db.flush()
             db.add(MessageAttachment(message_id=m.id, kind="PHOTO", object_key=row.object_key,
@@ -295,7 +298,7 @@ def register_v212_images(app, current_user, get_db, push, msg_json, push_tokens,
             g = db.get(LemmiqGroup, body.group_id)
             if not g or not db.get(GroupMember,{"group_id":body.group_id,"user_id":u.id}):
                 raise HTTPException(404, "Group not found")
-            m = GroupMessage(group_id=g.id,sender_id=u.id,text="✨ Q-created image", ai_generated=True)
+            m = GroupMessage(group_id=g.id,sender_id=u.id,text=caption, ai_generated=True)
             g.updated_at = now
             db.add(m); db.flush()
             db.add(GroupMessageAttachment(message_id=m.id,kind="PHOTO",object_key=row.object_key,

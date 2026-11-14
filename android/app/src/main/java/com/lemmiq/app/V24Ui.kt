@@ -322,6 +322,7 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     val mediaId=a?.media_id
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
     var mediaError by remember(m.id){mutableStateOf<String?>(null)}
+    var editPhotoV2122 by remember(m.id){mutableStateOf(false)}
     var photoOpen by remember(m.id){mutableStateOf(false)}
 
     LaunchedEffect(mediaId,isPhoto){
@@ -363,6 +364,7 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
                             }
                         }
                         if(m.text.isNotBlank())Text(m.text,color=if(mine)Color.White else V24Ink,modifier=Modifier.padding(horizontal=7.dp,vertical=6.dp))
+                        if(mediaId!=null)TextButton(onClick={editPhotoV2122=true}){Text("✨ Edit with Q", fontSize=11.sp, color=if(mine)Color.White else V24Purple)}
                     }
                     else -> Text(m.text,color=if(mine)Color.White else V24Ink)
                 }
@@ -371,6 +373,9 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
         }
     }
 
+    if(editPhotoV2122) V2122ImageEditDialog(sourceKind="group", sourceMessageId=m.id,
+        groupId=vm.activeGroup?.id, onClose={editPhotoV2122=false},
+        onSent={vm.activeGroup?.let{vm.openGroup(it)}; Unit})
     if(photoOpen){
         bitmap?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
     }

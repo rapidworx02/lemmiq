@@ -31,6 +31,7 @@ FEATURES = {
     "CHAT_SUMMARY": "Chat Summary",
     "Q_CHAT": "Q Chat",
     "Q_ADVANCED": "Q Advanced",
+    "Q_IMAGE_EDIT": "Edit with Q",
     "Q_IMAGE": "Q Create Image",
     "Q_VISION": "Q Vision",
     "Q_PREDICT_ANALYSIS": "Q Predict Analysis",
@@ -48,6 +49,7 @@ TIERS = ["FREE", "STARTER_10", "PLUS_50", "PRO_100", "PREMIUM_500", "ELITE_1000"
 DEFAULT_GLOBAL_Q = {
     "Q_CHAT": 0.25,
     "Q_ADVANCED": 1.00,
+    "Q_IMAGE_EDIT": 0.00,  # 0 Q until admin configures pricing
     "Q_IMAGE": 0.00,  # Disabled monetisation until admin sets price; feature flag is separately OFF
     "Q_VISION": 2.00,
     "TRUST_CHECK": 1.00,

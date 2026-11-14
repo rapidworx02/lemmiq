@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v212-shell-1";
+const CACHE = "lemmiq-v2122-shell-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
@@ -17,6 +17,8 @@ const SHELL = [
   "/web/v21011.js?v=2.10.11",
   "/web/v212_image_gen.js?v=2.12.0",
   "/web/v212_image_gen.css?v=2.12.0",
+  "/web/v2122_image_edit.css?v=2.12.2",
+  "/web/v2122_image_edit.js?v=2.12.2",
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",

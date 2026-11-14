@@ -594,6 +594,7 @@ private fun NewChat(vm:LemmiqViewModel,dismiss:()->Unit){
 private fun Chat(vm:LemmiqViewModel){
     val c=vm.active?:return
     var draft by remember(c.id){mutableStateOf(c.draft_text)}
+    var editPhotoIdV2122 by remember(c.id){mutableStateOf<Int?>(null)}
     var showAiImageV212 by remember(c.id){mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     var businessSettings by remember{mutableStateOf(false)}
@@ -814,7 +815,7 @@ private fun Chat(vm:LemmiqViewModel){
                     val prev=if(index>0)when(val x=timeline[index-1].second){is MessageDto->v24FriendlyDay(x.created_at);is CallDto->v24FriendlyDay(x.started_at);else->""} else null
                     if(day!=prev)V24DateSeparator(day)
                     when(val x=item.second){
-                        is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x})
+                        is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x},{editPhotoIdV2122=x.id})
                         is CallDto->{
                             val isVideo=x.call_type.equals("VIDEO",true)
                             val base=if(isVideo)"Video call" else "Voice call"
@@ -923,13 +924,17 @@ private fun Chat(vm:LemmiqViewModel){
             dismissButton={TextButton(onClick={vm.cancelVision()}){Text("Cancel")}}
         )
     }
+    editPhotoIdV2122?.let { mid ->
+        V2122ImageEditDialog(sourceKind="direct", sourceMessageId=mid, chatId=c.id,
+            onClose={editPhotoIdV2122=null}, onSent={vm.open(c); Unit})
+    }
     if(showAiImageV212) V212ImageDialog(chatId=c.id, onClose={showAiImageV212=false},
         onSent={vm.open(c)})
     vm.chatSummary?.let{s->ChatSummaryDialog(s){vm.clearChatSummary()}}
 }
 
 @Composable
-private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onActions:()->Unit){
+private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onActions:()->Unit,onEditPhoto:()->Unit){
     val mine=m.sender_id==me
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
@@ -1049,6 +1054,10 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                     color=if(mine)Color.White else Purple,
                                     fontSize=11.sp
                                 )
+                            }
+                            if (mediaId != null) TextButton(onClick=onEditPhoto,
+                                contentPadding=PaddingValues(horizontal=7.dp,vertical=2.dp)) {
+                                Text("✨ Edit with Q", color=if(mine)Color.White else Purple, fontSize=11.sp)
                             }
                         }
 

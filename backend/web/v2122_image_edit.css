@@ -1,0 +1,15 @@
+/* LEMMIQ V2.12.2 Edit with Q — respects existing light/dark theme */
+.v2122-edit-trigger{display:inline-flex!important;align-items:center;margin:8px 4px 2px!important;padding:7px 10px!important;min-height:34px;font-size:12px!important;cursor:pointer;color:var(--text,#fff)!important;background:var(--panel2,rgba(255,255,255,.12))!important}
+.v2122-studio{display:grid;gap:12px;max-width:100%;min-width:0}
+.v2122-studio h3,.v2122-studio p{margin:0}
+.v2122-studio label{display:grid;gap:6px;font-size:13px;color:inherit}
+.v2122-studio textarea,.v2122-studio select{max-width:100%;width:100%;box-sizing:border-box}
+.v2122-studio textarea{min-height:85px}
+.v2122-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.v2122-comparison>div{min-width:0;border:1px solid var(--line);border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.v2122-comparison strong{font-size:12px}.v2122-comparison>div>div{display:grid;place-items:center;min-height:80px}
+.v2122-preview{display:block;max-width:100%;max-height:230px;object-fit:contain;border-radius:10px}
+.v2122-empty{color:var(--muted);font-size:12px;text-align:center}
+.v2122-actions{display:flex;flex-wrap:wrap;gap:8px}.v2122-actions button{flex:1;min-width:90px}
+#v2122-note{color:var(--muted,#777);font-size:12px;min-height:19px}
+@media(max-width:420px){.v2122-comparison{gap:5px}.v2122-comparison>div{padding:5px}.v2122-actions button{font-size:12px;min-width:72px}}
