@@ -235,7 +235,8 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
                             }, enabled = config.payments_enabled) { Text("Send tip") }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            if (p.chat_q > 0) TextButton({ requestKind = "CHAT" }) { Text("Chat ${qText(p.chat_q)} Q", fontSize = 11.sp) }
+                            // V2134_LEGACY_CHAT_DISABLED: paid chat uses separate professional screen
+                            if (p.chat_q > 0) Text("Paid Chat: open Creator Inbox → Discover", fontSize = 11.sp, color = CreatorMuted)
                             if (p.voice_q > 0) TextButton({ requestKind = "VOICE" }) { Text("Voice ${qText(p.voice_q)} Q", fontSize = 11.sp) }
                             if (p.video_q > 0) TextButton({ requestKind = "VIDEO" }) { Text("Video ${qText(p.video_q)} Q", fontSize = 11.sp) }
                         }

@@ -140,7 +140,7 @@ function setView(name){
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
   const secondary=["trust","business","activity","money","me","q-admin","q-creators"];
-  const navName=secondary.includes(name)?"more":name;
+  const navName=name==="professional-inbox"?"chats":(secondary.includes(name)?"more":name);
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],
@@ -156,7 +156,8 @@ function setView(name){
     "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
     "q-predict":["Q Predict","Prediction markets using your LEMMIQ Q wallet."],
     "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."],
-    "q-creators":["Q Creators","Discover, follow and support professional creators."]
+    "q-creators":["Q Creators","Discover, follow and support professional creators."],
+    "professional-inbox":["Professional Creator Inbox","Paid creator messages separate from your personal chats."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -1593,7 +1594,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.2").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.4").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

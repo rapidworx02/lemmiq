@@ -316,6 +316,7 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
 
     @router.get('/chats')
     def own_chats(u:User=Depends(current_user),db:Session=Depends(get_db)):
+        raise HTTPException(410,'Use Professional Inbox for creator PPV offers')
         rows=db.scalars(select(Chat).where((Chat.user1_id==u.id)|(Chat.user2_id==u.id))
                         .order_by(Chat.updated_at.desc()).limit(100)).all()
         out=[]
@@ -327,7 +328,8 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
 
     @router.post('/chats/{chat_id}/offers')
     async def send_offer(chat_id:int,body:SendOfferIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        creator_ready(db,u.id)
+        # V2134_CREATOR_PRIVATE_OFFERS_ONLY: send via professional thread, never personal Chats
+        raise HTTPException(410,'Use Professional Inbox for creator PPV offers')
         c=db.get(Chat,chat_id)
         if not c or u.id not in (c.user1_id,c.user2_id):raise HTTPException(404,'Chat not found')
         fan=c.user2_id if c.user1_id==u.id else c.user1_id

@@ -250,6 +250,7 @@ private fun Home(vm:LemmiqViewModel){
             "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_to_q"->{tab=0;qThreadOpen=true;qFullScreen=false;showMore=false;vm.refreshQThread(markRead=true);LemmiqLaunchRouterV2103.consume()}
             "q_creators"->{showMore=true;morePage="creators";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
+            "creator_inbox"->{showMore=true;morePage="creator-inbox";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_assistant","q_analysis"->{qFullScreen=true;qThreadOpen=false;showMore=false;LemmiqLaunchRouterV2103.consume()}
             else->{if(r.type.isNotBlank()){showMore=true;morePage="notifications";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}}
         }
@@ -319,7 +320,8 @@ private fun Home(vm:LemmiqViewModel){
                     "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
                     "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
                     "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
-                    "creators"->V241MoreSubPage("Q Creators",{morePage=null}){V2131CreatorsAndroidScreen(vm)}
+                    "creators"->V241MoreSubPage("Q Creators",{morePage=null}){V2134ProfessionalHub(vm,2)}
+                    "creator-inbox"->V241MoreSubPage("Creator Inbox",{morePage=null}){V2134ProfessionalHub(vm,0)}
                     "settings"->V241MoreSubPage("Settings",{morePage=null}){V2102SettingsScreen(vm)}
                     "privacy"->V241MoreSubPage("Privacy & Security",{morePage=null}){V2102PrivacyScreen(vm)}
                     "notifications"->V241MoreSubPage("Notifications",{morePage=null}){LemmiqNotificationCenterV2103()}

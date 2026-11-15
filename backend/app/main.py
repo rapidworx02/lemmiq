@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.1")
+app = FastAPI(title="LEMMIQ Server", version="2.13.4")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.middleware("http")
@@ -109,6 +109,10 @@ def ensure_member(db: Session, cid: int, uid: int):
     c = db.get(Chat, cid)
     if not c or uid not in (c.user1_id, c.user2_id):
         raise HTTPException(404, "Chat not found")
+    # V2.13.4: old paid fan threads must never be shown as personal messages.
+    from .v2134_professional import is_legacy_paid_thread
+    if is_legacy_paid_thread(db, cid):
+        raise HTTPException(410, "Legacy paid creator chat moved to Professional Inbox. No personal chat access.")
     return c
 
 def get_settings(db: Session, cid: int, uid: int):
@@ -313,7 +317,8 @@ def search_users(q: str, u: User = Depends(current_user), db: Session = Depends(
 @app.get("/chats")
 def chats(u: User = Depends(current_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(Chat).where(or_(Chat.user1_id == u.id, Chat.user2_id == u.id)).order_by(Chat.updated_at.desc())).all()
-    return [chat_json(db, c, u.id) for c in rows]
+    from .v2134_professional import is_legacy_paid_thread
+    return [chat_json(db,c,u.id) for c in rows if not is_legacy_paid_thread(db,c.id)]
 
 @app.post("/chats/direct")
 def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -321,6 +326,9 @@ def direct(body: Direct, u: User = Depends(current_user), db: Session = Depends(
         raise HTTPException(400, "Cannot message yourself")
     if not db.get(User, body.user_id):
         raise HTTPException(404, "User not found")
+    from .v2134_professional import protect_personal_direct
+    if not protect_personal_direct(db,u.id,body.user_id):
+        raise HTTPException(403, "Use Q Creators Professional Inbox; this creator's personal messaging is private")
     if db.get(UserBlock, {"blocker_id": u.id, "blocked_id": body.user_id}) or db.get(UserBlock, {"blocker_id": body.user_id, "blocked_id": u.id}):
         raise HTTPException(403, "This conversation is blocked")
     a, b = sorted([u.id, body.user_id])
@@ -1131,6 +1139,10 @@ register_v2131_exclusives(app, current_user, get_db, push, msg_json)
 # LEMMIQ_V2132_CALL_RECOVERY
 from .v2132_call_recovery import register_v2132_call_recovery
 register_v2132_call_recovery(app, current_user, get_db, push)
+
+# LEMMIQ V2.13.4 Professional Identity + Independent Creator Chats
+from .v2134_professional import register_v2134_professional
+register_v2134_professional(app, current_user, get_db, push)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

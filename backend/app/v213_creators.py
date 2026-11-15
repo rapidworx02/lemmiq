@@ -257,13 +257,15 @@ def charge_ready(db):
 
 
 def profile_json(db,p,viewer=None):
-    u=db.get(User,p.user_id)
+    # V2134_PROFESSIONAL_PRIVACY: professional-only public name/avatar
+    from .v2134_professional import professional_public_for
+    safe=professional_public_for(db,p.user_id)
     subs=db.scalar(select(func.count()).select_from(CreatorSubscription).where(CreatorSubscription.creator_id==p.user_id,CreatorSubscription.expires_at>now())) or 0
     followers=db.scalar(select(func.count()).select_from(CreatorFollow).where(CreatorFollow.creator_id==p.user_id)) or 0
     own=bool(viewer and viewer==p.user_id)
     following=bool(viewer and db.scalar(select(CreatorFollow.id).where(CreatorFollow.creator_id==p.user_id,CreatorFollow.fan_id==viewer)))
     subscribed=bool(viewer and db.scalar(select(CreatorSubscription.id).where(CreatorSubscription.creator_id==p.user_id,CreatorSubscription.fan_id==viewer,CreatorSubscription.expires_at>now())))
-    return {'id':p.user_id,'username':u.username,'display_name':u.display_name,'avatar_url':(f'/v24/profile/avatar/{u.id}?v='+hashlib.sha256(u.avatar.encode()).hexdigest()[:12]) if u.avatar else None,'bio':p.bio,'category':p.category,'level':p.level,'adult_requested':p.adult_requested if own else False,'status':p.status,'monthly_q':q(p.monthly_micros),'chat_q':q(p.chat_micros),'voice_q':q(p.voice_micros),'video_q':q(p.video_micros),'tips_enabled':p.tips_enabled,'followers':followers,'subscribers':subs,'following':following,'subscribed':subscribed,'mine':own}
+    return {'id':p.user_id,'username':safe['username'],'display_name':safe['display_name'],'avatar_url':safe['avatar_url'],'public_id':safe['public_id'],'bio':p.bio,'category':p.category,'level':p.level,'adult_requested':p.adult_requested if own else False,'status':p.status,'monthly_q':q(p.monthly_micros),'chat_q':q(p.chat_micros),'voice_q':q(p.voice_micros),'video_q':q(p.video_micros),'tips_enabled':p.tips_enabled,'followers':followers,'subscribers':subs,'following':following,'subscribed':subscribed,'mine':own}
 
 
 def can_read(db,post,uid):
@@ -368,8 +370,10 @@ def refund(db,payment):
 
 def request_json(db,r,uid):
     p=db.get(CreatorPayment,r.payment_id)
-    person=db.get(User,r.fan_id if uid==r.creator_id else r.creator_id)
-    return {'id':r.id,'kind':r.kind,'status':r.status,'message':r.message,'reply':r.creator_reply,'name':person.display_name,'username':person.username,'amount_q':q(p.gross_micros),'created_at':r.created_at.isoformat(),'scheduled_at':r.scheduled_at.isoformat() if r.scheduled_at else None}
+    person=db.get(User,r.fan_id) if uid==r.creator_id else None
+    from .v2134_professional import professional_public_for
+    shown=professional_public_for(db,r.creator_id) if uid!=r.creator_id else None
+    return {'id':r.id,'kind':r.kind,'status':r.status,'message':r.message,'reply':r.creator_reply,'name':shown['display_name'] if shown else person.display_name,'username':shown['username'] if shown else person.username,'amount_q':q(p.gross_micros),'created_at':r.created_at.isoformat(),'scheduled_at':r.scheduled_at.isoformat() if r.scheduled_at else None}
 
 
 def register_v213_creators(app,current_user,get_db):
@@ -391,9 +395,10 @@ def register_v213_creators(app,current_user,get_db):
 
     @router.get('/discover')
     def discover(qtext:str='',category:str='',following:bool=False,limit:int=50,offset:int=0,u:User=Depends(current_user),db:Session=Depends(get_db)):
-        qry=select(CreatorProfile).join(User,User.id==CreatorProfile.user_id).where(CreatorProfile.status=='APPROVED',CreatorProfile.level.in_(['MAINSTREAM','GLAMOUR']))
+        from .v2134_professional import CreatorIdentity
+        qry=select(CreatorProfile).join(CreatorIdentity,CreatorIdentity.owner_id==CreatorProfile.user_id).where(CreatorProfile.status=='APPROVED',CreatorProfile.level.in_(['MAINSTREAM','GLAMOUR']))
         if category.upper() in CATEGORIES:qry=qry.where(CreatorProfile.category==category.upper())
-        if qtext.strip():qry=qry.where((func.lower(User.username).contains(qtext.strip().lower()))|(func.lower(User.display_name).contains(qtext.strip().lower())))
+        if qtext.strip():qry=qry.where((func.lower(CreatorIdentity.handle).contains(qtext.strip().lower()))|(func.lower(CreatorIdentity.stage_name).contains(qtext.strip().lower())))
         if following:qry=qry.join(CreatorFollow,(CreatorFollow.creator_id==CreatorProfile.user_id)&(CreatorFollow.fan_id==u.id))
         rows=db.scalars(qry.order_by(CreatorProfile.updated_at.desc()).offset(min(1000,max(offset,0))).limit(min(100,max(1,limit)))).all()
         return [profile_json(db,x,u.id) for x in rows]
@@ -529,6 +534,7 @@ def register_v213_creators(app,current_user,get_db):
     def request(creator_id:int,body:RequestIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
         p=creator_ready(db,creator_id)
         kind=body.kind.upper()
+        if kind=='CHAT':raise HTTPException(410,'Use the Professional Creator Inbox paid chat request instead')
         if kind not in ('CHAT','VOICE','VIDEO'):raise HTTPException(422,'Invalid service')
         amount={'CHAT':p.chat_micros,'VOICE':p.voice_micros,'VIDEO':p.video_micros}[kind]
         if not amount:raise HTTPException(409,'Creator has not enabled this paid service')
@@ -554,6 +560,7 @@ def register_v213_creators(app,current_user,get_db):
         r=db.get(CreatorRequest,request_id)
         if not r or u.id not in (r.fan_id,r.creator_id):raise HTTPException(404,'Request not found')
         action=body.action.upper();p=db.get(CreatorPayment,r.payment_id)
+        if r.kind=='CHAT':raise HTTPException(410,'Open Professional Creator Inbox for paid chat actions')
         if action=='ACCEPT' and u.id==r.creator_id and r.status=='REQUESTED':r.status='ACCEPTED'
         elif action=='REPLY' and u.id==r.creator_id and r.kind=='CHAT' and r.status in ('REQUESTED','ACCEPTED'):
             if len(body.reply.strip())<3:raise HTTPException(422,'Enter your reply')

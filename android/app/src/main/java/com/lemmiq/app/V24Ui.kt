@@ -98,6 +98,10 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
     Column(Modifier.fillMaxSize()){
         Column(Modifier.padding(horizontal=18.dp,vertical=12.dp)){
             Text("lemmiq",fontSize=28.sp,fontWeight=FontWeight.Black)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                FilterChip(selected=true,onClick={},label={Text("Personal Chats")})
+                FilterChip(selected=false,onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("creator_inbox")},label={Text("✦ Creator Chats")})
+            }
             Text(if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}",color=V24Muted,fontSize=11.sp)
             Row(Modifier.fillMaxWidth().padding(top=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)){
                 OutlinedTextField(search,{search=it},Modifier.weight(1f),singleLine=true,
