@@ -113,7 +113,7 @@ function showApp(){
   renderMeAvatar();
   connectSocket();
   const requested=(location.hash||"").replace(/^#/,"");
-  const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin"]);
+  const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin","q-creators"]);
   if(requested==="admin") setView("q-admin");
   else if(directViews.has(requested)) setView(requested);
   else refreshCurrent();
@@ -139,7 +139,7 @@ function setView(name){
   if(name!=="chats")$("globalQOrb")?.classList.remove("q2106-hide-orb");
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me","q-admin"];
+  const secondary=["trust","business","activity","money","me","q-admin","q-creators"];
   const navName=secondary.includes(name)?"more":name;
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
@@ -155,7 +155,8 @@ function setView(name){
     me:["Me","Your profile photo, account and LEMMIQ access."],
     "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
     "q-predict":["Q Predict","Prediction markets using your LEMMIQ Q wallet."],
-    "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."]
+    "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."],
+    "q-creators":["Q Creators","Discover, follow and support professional creators."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
   refreshView(name);
@@ -172,6 +173,7 @@ async function refreshView(name){
     if(name==="money") await loadMoney();
     if(name==="me") renderMeAvatar();
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
+    if(name==="q-creators" && window.loadQCreators) await window.loadQCreators();
     if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
     if(name==="q-admin" && window.loadQAdmin) { await window.loadQAdmin(); if(window.loadV29Admin) await window.loadV29Admin(); }
   }catch(e){toast(e.message,true)}
@@ -1581,7 +1583,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.12.4.1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

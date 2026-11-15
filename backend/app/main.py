@@ -24,7 +24,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.12.3")
+app = FastAPI(title="LEMMIQ Server", version="2.13.0")
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.middleware("http")
@@ -1119,6 +1119,10 @@ register_v2122_image_edit(app, current_user, get_db)
 # ---------------- LEMMIQ V2.12.3 Official Support & Admin Recovery ----------------
 from .v2123_support import register_v2123_support
 register_v2123_support(app, current_user, get_db, hp)
+
+# ---------------- LEMMIQ V2.13 Q Creators ----------------
+from .v213_creators import register_v213_creators
+register_v213_creators(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

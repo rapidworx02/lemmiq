@@ -29,6 +29,7 @@
   <link rel="stylesheet" href="/web/v212_chat_layout_fix.css?v=2.12.1">
   <link rel="stylesheet" href="/web/v2122_image_edit.css?v=2.12.2">
   <link rel="stylesheet" href="/web/v2124_admin_layout.css?v=2.12.4">
+  <link rel="stylesheet" href="/web/v213_creators.css?v=2.13.0">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -357,11 +358,14 @@
           <button data-more-view="business" class="more-card"><span>💼</span><strong>Business Agent</strong><small>Business knowledge and customer replies</small></button>
           <button data-more-view="activity" class="more-card"><span>◈</span><strong>Activity</strong><small>Detected notification intelligence</small></button>
           <button data-more-view="money" class="more-card"><span>💳</span><strong>Money</strong><small>Review detected payments and corrections</small></button>
+          <button data-more-view="q-creators" class="more-card"><span>✨</span><strong>Q Creators</strong><small>Discover creators, subscribe and earn Q</small></button>
           <button id="v2123SupportMore" class="more-card" type="button"><span>💬</span><strong>Official Support</strong><small>Chat with @lemmiq · User #22</small></button>
           <button data-more-view="me" class="more-card"><span>🙂</span><strong>Me / Profile</strong><small>Photo, account, privacy and sign out</small></button>
           <button id="moreAndroidDownloadBtn" class="more-card"><span>📱</span><strong>Download Android app</strong><small>Install the native LEMMIQ companion</small></button>
         </div>
       </section>
+
+      <section id="view-q-creators" class="view"><div id="v213CreatorsApp"><div class="card glass">Loading Q Creators…</div></div></section>
 
       <section id="view-q-economy" class="view">
         <div class="q28-hero glass">
@@ -373,6 +377,7 @@
           <button data-q28-tab="packages">Packages</button>
           <button data-q28-tab="market">Q Market</button>
           <button data-q28-tab="air">Q Air · Soon</button>
+          <button data-q28-tab="creators">Q Creators</button>
           <button data-q28-tab="refer">Refer & Earn</button>
           <button data-q28-tab="activity">Activity</button>
         </div>
@@ -418,6 +423,8 @@
             <p class="v2124-qair-status">No packages, purchase buttons, investment offers, earning percentages, wallets or guaranteed outcomes are enabled. Updates will appear here when launch details are approved.</p>
           </article>
         </div>
+
+        <div id="q28Tab-creators" class="q28-tab"><article class="card glass"><span class="eyebrow">Q CREATORS</span><h3>Discover creators and spend Q</h3><p class="micro">Follow professional creators, unlock approved content and use your existing Q Wallet. All charges are visible before payment.</p><button id="v213OpenCreators" class="primary" type="button">Explore Q Creators</button></article></div>
 
         <div id="q28Tab-refer" class="q28-tab">
           <div class="grid two">
@@ -499,6 +506,7 @@
             <div class="profile-photo-actions"><label class="upload ghost">📷 Add / change photo<input id="profilePhotoInput" type="file" accept="image/*" hidden></label><button id="removeProfilePhotoBtn" class="ghost">Remove photo</button></div>
             <p id="meUsername">@username</p>
             <button id="v2123SupportMe" class="ghost full" type="button">💬 Chat with Lemmiq.Official Support (@lemmiq)</button>
+            <button id="v213SwitchProfessional" class="ghost full" type="button">✨ Switch to Professional Creator</button>
             <button id="logoutBtn" class="danger">Log out</button>
           </article>
           <article class="card glass">
@@ -545,7 +553,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.12.4" defer></script>
+  <script src="/web/app.js?v=2.13.0" defer></script>
   <script src="/web/v28.js?v=2.12.4.1" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
@@ -562,6 +570,8 @@
   <script src="/web/v212_chat_layout_fix.js?v=2.12.1" defer></script>
   <script src="/web/v2122_image_edit.js?v=2.12.2" defer></script>
   <script src="/web/v2123_support.js?v=2.12.3" defer></script>
-  <script src="/web/v2124_admin_layout.js?v=2.12.4" defer></script>
+  <script src="/web/v2124_admin_layout.js?v=2.13.0" defer></script>
+  <script src="/web/v213_creators.js?v=2.13.0" defer></script>
+  <script src="/web/v213_creators_admin.js?v=2.13.0" defer></script>
 </body>
 </html>

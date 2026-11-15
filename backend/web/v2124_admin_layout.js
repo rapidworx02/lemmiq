@@ -8,6 +8,7 @@
   const GROUPS=[
     ['overview','Overview','Dashboard and urgent actions'],
     ['users','Users & Support','Search, manage accounts and recovery'],
+    ['creators','Q Creators','Applications, post review, Q earnings and commission'],
     ['economy','Q Economy','Packages, rewards, treasury and ledger'],
     ['payments','Payments & USDT','Incoming, withdrawals and wallets'],
     ['market','Q Market','Orders and disputes'],
