@@ -332,19 +332,109 @@
     try{
       const d=await qApi(`/admin/users/${userId}`);
       openModal(`<span class="eyebrow">Q USER CONTROL</span><h2>User #${d.user.id} · ${escapeHtml(d.user.display_name)}</h2><p>@${escapeHtml(d.user.username)}</p><div class="q28-user-wallet-control"><div><small>Q Wallet</small><strong>${fmtQ(d.wallet_q)} Q</strong><span>≈ ${fmtUsd(d.wallet_usd_reference)} reference</span></div><div><input id="q28AdjustAmount" type="number" step="0.01" placeholder="+/- Q correction"><input id="q28AdjustReason" placeholder="Reason for adjustment"><button id="q28AdjustWallet" class="primary">Apply wallet correction</button></div></div><h3>Packages</h3><div class="q28-list">${(d.packages||[]).map(packageCardHtml).join("")||"<p>No packages.</p>"}</div><button id="q28CloseUserControl" class="ghost full">Close</button>`);
-      // V2.12.4: Master Admin recovery is now in Users & Support, independent
-      // of the old Manage modal and blocking browser prompts.
-      if(v28.admin?.me?.role==="MASTER_ADMIN"){
-        const recoveryButton=document.createElement("button");
-        recoveryButton.type="button";recoveryButton.className="ghost";
-        recoveryButton.textContent="🔐 Reset user password";
-        $("q28AdjustWallet").closest(".q28-user-wallet-control")?.after(recoveryButton);
-        recoveryButton.onclick=()=>{
-          closeModal();
-          if(typeof window.lemmiqAdminOpenRecovery==='function')
-            window.lemmiqAdminOpenRecovery(d.user.username);
-          else toast("Account Recovery interface has not loaded. Refresh LEMMIQ.",true);
+      // V2.12.4.1: reset directly INSIDE the Manage dialog. No dependency on the
+      // dynamically organised admin screen or fragile page-to-page navigation.
+      // Server validates the Master Admin role, password and target username.
+      {
+        const recoveryHost=document.createElement("section");
+        recoveryHost.className="q28-admin-password-reset";
+        recoveryHost.style.cssText="border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0";
+        const walletHost=$("q28AdjustWallet").closest(".q28-user-wallet-control");
+        walletHost?.after(recoveryHost);
+        recoveryHost.textContent="Checking Master Admin recovery permissions…";
+        const setNote=(text,error=false)=>{
+          const note=recoveryHost.querySelector('[data-recovery-note]');
+          if(note){note.textContent=String(text||"");note.style.color=error?"#ff8c95":"var(--muted,#bec1d6)";}
         };
+        try{
+          const access=await api("/v28/admin/access/me");
+          if(access.role==="MASTER_ADMIN" && recoveryHost.isConnected){
+            recoveryHost.innerHTML=`<strong>🔐 Account Recovery</strong>
+              <p class="micro">Issue a new temporary password after verifying the account owner. Existing passwords cannot be viewed.</p>
+              <button type="button" class="ghost" data-reset-open>Reset user password</button>
+              <form data-reset-form hidden autocomplete="off" style="display:none;gap:11px;margin-top:12px">
+                <div data-reset-identity style="font-weight:600;overflow-wrap:anywhere"></div>
+                <label style="display:grid;gap:5px">Verification reason
+                  <textarea data-reset-reason minlength="8" maxlength="300" rows="2" required placeholder="How did you verify ownership? Do not enter passwords here."></textarea></label>
+                <label style="display:grid;gap:5px">Confirm target @username
+                  <input data-reset-confirm required autocomplete="off" placeholder="@username"></label>
+                <label style="display:grid;gap:5px">Your Master Admin password
+                  <input data-reset-master type="password" minlength="6" maxlength="128" required autocomplete="off" placeholder="Your admin password"></label>
+                <button type="submit" class="primary" data-reset-submit>Generate temporary password</button>
+              </form>
+              <p data-recovery-note role="status" aria-live="polite" style="overflow-wrap:anywhere"></p>
+              <div data-reset-output role="status" aria-live="polite"></div>`;
+            const open=recoveryHost.querySelector('[data-reset-open]');
+            const form=recoveryHost.querySelector('[data-reset-form]');
+            const output=recoveryHost.querySelector('[data-reset-output]');
+            const resetResult=()=>{output.replaceChildren();};
+            open.onclick=()=>{
+              form.hidden=!form.hidden;
+              form.style.display=form.hidden?"none":"grid";
+              resetResult();
+              recoveryHost.querySelector('[data-reset-identity]').textContent=`User #${d.user.id} · ${d.user.display_name} · @${d.user.username}`;
+              setNote(form.hidden?"":"Confirm identity, enter a reason and YOUR admin password.");
+              if(!form.hidden)recoveryHost.querySelector('[data-reset-reason]').focus();
+            };
+            form.onsubmit=async(ev)=>{
+              ev.preventDefault();
+              resetResult();
+              const reason=recoveryHost.querySelector('[data-reset-reason]').value.trim();
+              const typed=recoveryHost.querySelector('[data-reset-confirm]').value.trim().replace(/^@/,"").toLowerCase();
+              const adminField=recoveryHost.querySelector('[data-reset-master]');
+              const adminPass=adminField.value;
+              if(reason.length<8){setNote("Enter a verification reason of at least 8 characters.",true);return;}
+              if(typed!==String(d.user.username).toLowerCase()){
+                setNote("Username does not match selected account. No password changed.",true);return;
+              }
+              if(adminPass.length<6){setNote("Enter your Master Admin password.",true);return;}
+              if(!window.confirm(`Reset password for #${d.user.id} @${d.user.username}? All existing sessions will be revoked.`))return;
+              const submit=recoveryHost.querySelector('[data-reset-submit]');
+              submit.disabled=true;submit.textContent="Resetting…";
+              adminField.value="";
+              setNote("Submitting reset request to LEMMIQ server…");
+              try{
+                const result=await api(`/v2123/admin/users/${d.user.id}/reset-password`,{
+                  method:"POST",body:JSON.stringify({reason,confirm_username:d.user.username,admin_password:adminPass})
+                });
+                if(!result?.temporary_password)throw new Error("Server did not return a replacement password. Check Render logs.");
+                // The only readable password is a newly generated replacement, displayed once.
+                const help=document.createElement('p');
+                help.textContent='Password successfully reset. Give the new password only to the verified account owner:';
+                const value=document.createElement('code');
+                value.style.cssText='display:block;padding:10px;margin:8px 0;border-radius:10px;background:var(--panel2,#202437);overflow-wrap:anywhere;user-select:all';
+                value.textContent=result.temporary_password;
+                const copy=document.createElement('button');
+                copy.type='button';copy.className='ghost';copy.textContent='Copy temporary password';
+                copy.onclick=async()=>{
+                  try{await navigator.clipboard.writeText(value.textContent);setNote('Copied. Clear your clipboard after sharing.');}
+                  catch{setNote('Clipboard blocked; select the password and copy manually.',true);}
+                };
+                output.append(help,value,copy);
+                form.hidden=true;form.style.display="none";
+                open.disabled=true;
+                setNote('Reset completed; previous sessions have been revoked.');
+              }catch(err){
+                const msg=String(err?.message||err||'Unknown error');
+                const readable=/Not Found|HTTP 404/i.test(msg)
+                  ? 'Reset endpoint not available on Render. Deploy backend V2.12.3 or later.'
+                  : msg;
+                setNote(`Reset failed: ${readable}`,true);
+                // Keep the form visible so the administrator can correct the input.
+              }finally{submit.disabled=false;submit.textContent='Generate temporary password';}
+            };
+            // Never leave a readable replacement password in a closed dialog.
+            $("modal").addEventListener('close',()=>{
+              resetResult();
+              const adminField=recoveryHost.querySelector('[data-reset-master]');
+              if(adminField)adminField.value='';
+            },{once:true});
+          }else if(recoveryHost.isConnected){
+            recoveryHost.remove(); // Not Master Admin: do not show sensitive reset controls.
+          }
+        }catch(err){
+          recoveryHost.textContent='Account Recovery unavailable: '+String(err.message||err);
+        }
       }
       $("q28AdjustWallet").onclick=async()=>{
         const amount=Number($("q28AdjustAmount").value),reason=$("q28AdjustReason").value.trim();
