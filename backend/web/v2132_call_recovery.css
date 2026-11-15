@@ -1,0 +1,8 @@
+/* LEMMIQ V2.13.2 */
+.v2132-call-recovery{margin:14px 0;}
+.v2132-call-status{margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(122,92,255,.06);line-height:1.5;overflow-wrap:anywhere}
+.v2132-call-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}
+.v2132-call-actions button{flex:1 1 185px}
+.v2132-creators-shortcut{border:1px solid rgba(135,107,255,.4);border-radius:14px;padding:13px 16px;background:rgba(118,87,255,.15);color:inherit;font-weight:700;cursor:pointer;display:block;width:100%;text-align:left;margin:11px 0}
+.v2132-creators-shortcut:hover{background:rgba(118,87,255,.25)}
+.v2132-reset-result{margin-top:8px}

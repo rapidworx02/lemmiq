@@ -374,6 +374,7 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
     LaunchedEffect(Unit){vm.refreshCalls()}
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
         item{Header("Calls","Voice and video call history")}
+        item{V2132CallRecoveryPanel(vm)}
         if(vm.callHistory.isEmpty()){
             item{Empty("📞","No calls yet","Your LEMMIQ voice and video call history will appear here.")}
         }else{
@@ -903,7 +904,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
     var photoOpen by remember(m.id){mutableStateOf(false)}
     // LEMMIQ_ANDROID_CREATORS_V2131: render PPV markers as locked cards, not text.
-    val creatorOfferV2131=Regex("""^\[\[QCREATORS_PPV:(\d+)\]\]$""").matchEntire(m.text.trim())
+    val creatorOfferV2131=Regex("""^\[\[QCREATORS_PPV:(\d+)]]$""").matchEntire(m.text.trim())
         ?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     // V2.10.2: recognise image MIME/filename too, not only attachment.kind == PHOTO.

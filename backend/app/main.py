@@ -1128,6 +1128,10 @@ register_v213_creators(app, current_user, get_db)
 from .v2131_exclusives import register_v2131_exclusives
 register_v2131_exclusives(app, current_user, get_db, push, msg_json)
 
+# LEMMIQ_V2132_CALL_RECOVERY
+from .v2132_call_recovery import register_v2132_call_recovery
+register_v2132_call_recovery(app, current_user, get_db, push)
+
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 

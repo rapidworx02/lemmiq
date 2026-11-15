@@ -1095,7 +1095,19 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     private fun startCall(cid:Int,type:String,onReady:(CallJoinDto)->Unit)=viewModelScope.launch{
         if(callStarting){error="A call is already starting";return@launch}
         callStarting=true;busy=true;error=null
-        try{onReady(api.startCall(cid,type))}
+        try{
+            // V2132_BUSY_RECHECK: retry once only after an authenticated server
+            // check confirms the previous LiveKit room no longer exists.
+            try{onReady(api.startCall(cid,type))}
+            catch(first:Exception){
+                val busyConflict=(first.message?:"").contains("Call already active",ignoreCase=true) ||
+                    (first.message?:"").contains("already in another call",ignoreCase=true)
+                if(!busyConflict)throw first
+                val recovered=runCatching{CallRecoveryApiV2132(store).check()}.getOrNull()
+                if((recovered?.resolved_count?:0)>0)onReady(api.startCall(cid,type))
+                else throw first
+            }
+        }
         catch(e:Exception){
             error=if((e.message?:"").contains("Call already active",ignoreCase=true) || (e.message?:"").contains("already in another call",ignoreCase=true))
                 "A call is still active on the server. Open Calls and tap End stuck call if you are no longer in that call."

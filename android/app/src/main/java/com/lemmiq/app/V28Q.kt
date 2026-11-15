@@ -64,8 +64,8 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
             }
         }
         LazyRow(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),contentPadding=PaddingValues(end=8.dp)){
-            items(listOf("Wallet","Packages","Market","Refer","Activity")){label->
-                val i=listOf("Wallet","Packages","Market","Refer","Activity").indexOf(label)
+            items(listOf("Wallet","Packages","Market","Refer","Activity","Creators")){label->
+                val i=listOf("Wallet","Packages","Market","Refer","Activity","Creators").indexOf(label)
                 FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp,maxLines=1)},modifier=Modifier.widthIn(min=92.dp))
             }
         }
@@ -79,7 +79,8 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 1->Q28PackagesTab(vm){buyPlan=it}
                 2->Q28MarketTab(vm){disputeOrder=it}
                 3->Q28ReferralTab(vm)
-                else->Q28ActivityTab(vm)
+                4->Q28ActivityTab(vm)
+                else->V2131CreatorsAndroidScreen(vm)
             }
         }
     }

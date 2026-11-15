@@ -1014,7 +1014,16 @@ async function beginCall(chatId,person,callType="VOICE"){
   }
   state.callPhase="starting";state.callType=String(callType||"VOICE").toUpperCase();state.cameraFacing="user";
   try{
-    const join=await api("/v24/calls/start",{method:"POST",body:JSON.stringify({chat_id:chatId,call_type:state.callType})});
+    // V2132_BUSY_RECHECK: only retry if LiveKit confirms the old room is absent.
+    const payload={method:"POST",body:JSON.stringify({chat_id:chatId,call_type:state.callType})};
+    let join;
+    try{join=await api("/v24/calls/start",payload)}
+    catch(first){
+      if(!/already active|already in another call/i.test(String(first?.message||"")))throw first;
+      const found=await api("/v2132/calls/reconcile",{method:"POST",body:"{}"}).catch(()=>null);
+      if(!found?.resolved_count)throw first;
+      join=await api("/v24/calls/start",payload);
+    }
     state.callType=String(join.call?.call_type||state.callType).toUpperCase();
     state.callPhase="ringing";prepareCallUi(person||state.activeChat?.other_user||{},"Ringing…");
     startTone("outgoing");
@@ -1584,7 +1593,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.1").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.2").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

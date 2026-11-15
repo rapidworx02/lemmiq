@@ -1,9 +1,9 @@
-const CACHE = "lemmiq-v2131-shell-1";
+const CACHE = "lemmiq-v2132-call-recovery-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
   "/web/styles.css?v=2.10.7",
-  "/web/app.js?v=2.13.1",
+  "/web/app.js?v=2.13.2",
   "/web/v28.js?v=2.12.4.1",
   "/web/v29.js?v=2.10.7",
   "/web/v2104.js?v=2.10.7",
@@ -30,7 +30,9 @@ const SHELL = [
   "/web/manifest.webmanifest",
   "/web/icon-192.png",
   "/web/icon-512.png",
-  "/web/brand-icon.png"
+  "/web/brand-icon.png",
+  "/web/v2132_call_recovery.js?v=2.13.2",
+  "/web/v2132_call_recovery.css?v=2.13.2",
 ];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});
@@ -38,7 +40,7 @@ self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys
 
 self.addEventListener("fetch",event=>{
   const req=event.request;if(req.method!=="GET")return;const url=new URL(req.url);
-  const apiPrefixes=["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/push","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/v2105","/v2106","/v21072","/v21074","/v213","/v2131","/app-config"];
+  const apiPrefixes=["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/push","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/v2105","/v2106","/v21072","/v21074","/v213","/v2131","/v2132","/app-config"];
   if(apiPrefixes.some(x=>url.pathname.startsWith(x)))return;
   const isHtml=url.pathname==="/web/"||url.pathname.endsWith("/index.html");
   const versioned=/\.(js|css|png|webmanifest)$/.test(url.pathname);
