@@ -476,8 +476,9 @@ def register_v213_creators(app,current_user,get_db):
     def media(post_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
         post=db.get(CreatorPost,post_id)
         if not post or not post.object_key:raise HTTPException(404,'Media not found')
-        role=db.get(QAdminRole,u.id)
-        if not can_read(db,post,u.id) and not(role and role.active and role.role=='MASTER_ADMIN'):
+        # Admin access must use /v2131/exclusives/admin/posts/<id>/media,
+        # which enforces Master Admin and writes a per-access audit entry.
+        if not can_read(db,post,u.id):
             raise HTTPException(403,'Unlock this content to view the media')
         return StreamingResponse(media_store.stream(post.object_key),media_type=post.mime_type,headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"})
 
@@ -639,6 +640,14 @@ def register_v213_creators(app,current_user,get_db):
         if p.kind=='UNLOCK' and p.resource_id:
             old=db.scalar(select(CreatorUnlock).where(CreatorUnlock.fan_id==p.fan_id,CreatorUnlock.post_id==p.resource_id))
             if old:db.delete(old)
+        # V2.13.1: revoke exclusive/gallery entitlements on refund.
+        if p.kind in ('GALLERY','DM_PPV'):
+            from .v2131_exclusives import CreatorGalleryUnlock, CreatorOfferUnlock
+            if p.kind=='GALLERY':
+                access=db.scalar(select(CreatorGalleryUnlock).where(CreatorGalleryUnlock.payment_id==p.id))
+            else:
+                access=db.scalar(select(CreatorOfferUnlock).where(CreatorOfferUnlock.payment_id==p.id))
+            if access:db.delete(access)
         if p.kind=='SUB':
             old=db.scalar(select(CreatorSubscription).where(CreatorSubscription.fan_id==p.fan_id,CreatorSubscription.creator_id==p.creator_id))
             if old and old.last_payment_id==p.id:old.expires_at=now()

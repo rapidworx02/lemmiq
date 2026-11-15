@@ -423,7 +423,7 @@ function renderMessages(scrollToBottom=true){
     html+=`<div class="msg ${mine?"mine":"theirs"}" data-mid="${m.id}">
       <button class="mini msg-action-trigger message-menu" onclick="openMessageMenu(${m.id})">⋯</button>
       ${m.ai_generated?`<div class="micro">✨ AI generated</div>`:""}${quote}
-      <div>${escapeHtml(m.text).replace(/\n/g,"<br>")}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>
+      <div>${(window.v2131RenderChatOffer?.(m.text,mine))||escapeHtml(m.text).replace(/\n/g,"<br>")}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>
       ${attach}${reactions?`<div class="reaction-strip">${reactions}</div>`:""}
       ${!mine&&!m.deleted_for_everyone?`<div class="msg-actions"><button class="mini" onclick="checkMessage(${m.id})">🛡 Fact / Scam Check</button></div>`:""}
       <div class="meta"><span>${timeOnly(m.created_at)}</span>${mine?`<span>${m.read_at?"✓✓":"✓"}</span>`:""}</div>
@@ -432,6 +432,7 @@ function renderMessages(scrollToBottom=true){
   if(state.chatHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderMessages()">↑ Load older messages</button></div>`+html;
   $("messageList").innerHTML=html;
   hydrateMediaPreviews("messageList");
+  if(window.v2131HydrateChatOffers)window.v2131HydrateChatOffers();
   if(scrollToBottom)setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
 }
 async function sendMessage(){
@@ -1583,7 +1584,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.0").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.1").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

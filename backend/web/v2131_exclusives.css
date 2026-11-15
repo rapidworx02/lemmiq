@@ -1,0 +1,22 @@
+/* LEMMIQ V2.13.1. Scoped creator gallery, library, chat PPV and audit styling. */
+.v2131-section{margin:18px 0;padding:20px;border:1px solid rgba(153,163,225,.15);border-radius:18px;background:rgba(24,28,55,.45)}
+.v2131-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.v2131-title h3{margin:4px 0 8px}
+.v2131-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));gap:14px;margin-top:16px}
+.v2131-gallery-card{border-radius:17px;display:flex;flex-direction:column;gap:8px;border:1px solid rgba(153,163,225,.2);padding:12px;background:rgba(9,12,36,.45);min-width:0}
+.v2131-gallery-card h4{margin:0;font-size:15px;overflow-wrap:anywhere}
+.v2131-gallery-card p{font-size:12px;color:var(--muted,#bbb);margin:0;line-height:1.5;overflow-wrap:anywhere}
+.v2131-placeholder{min-height:144px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;text-align:center;background:radial-gradient(circle at 25% 30%,rgba(138,114,255,.28),transparent 70%),linear-gradient(135deg,#1a2242,#142e46);border-radius:13px}
+.v2131-placeholder span{font-size:30px}.v2131-placeholder strong{font-size:12px}.v2131-placeholder small{color:#c0c9e9;font-size:10px}
+.v2131-card-bottom{margin-top:auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;font-size:12px;font-weight:700}.v2131-card-bottom button{font-size:11px;padding:7px 8px}
+.v2131-studio-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:18px;margin:16px 0}
+.v2131-form{display:grid;gap:12px;padding:16px;border-radius:15px;background:rgba(13,18,42,.65);border:1px solid rgba(143,155,212,.18)}
+.v2131-form h4{margin:0}.v2131-form select[multiple]{min-height:112px}.v2131-section details{border-top:1px solid rgba(147,150,204,.25);padding:12px 0;margin:12px 0}.v2131-section summary{font-weight:700;cursor:pointer}
+.v2131-policy{font-size:12px;padding:13px 15px;border-radius:12px;border:1px solid rgba(160,159,210,.35);color:#cbd2ec;background:rgba(25,29,63,.65);line-height:1.65}
+.v2131-rows{display:grid;gap:8px;margin:10px 0}.v2131-rows>div{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;border:1px solid rgba(132,149,211,.17);border-radius:11px;padding:10px 12px;min-width:0}.v2131-rows strong,.v2131-rows small{display:block;overflow-wrap:anywhere}.v2131-rows small{color:var(--muted,#c0c5db);font-size:11px;margin-top:5px}.v2131-rows>div>div{display:flex;gap:5px;flex-wrap:wrap}.v2131-rows button{padding:7px 10px;font-size:11px}
+.v2131-media-list{display:grid;gap:18px}.v2131-media-list img,.v2131-media-list video,#v2131ModalMedia img,#v2131ModalMedia video{max-height:65vh;border-radius:12px;object-fit:contain;background:#000;display:block;margin:8px auto;max-width:100%}
+.v2131-chat-offer{padding:12px;border:1px solid rgba(147,122,232,.5);background:rgba(55,37,95,.35);border-radius:12px;display:grid;gap:8px}.v2131-chat-offer p{margin:0}.v2131-error{color:#ff9ca8}
+@media(max-width:680px){.v2131-section{padding:13px}.v2131-gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.v2131-placeholder{min-height:110px}.v2131-gallery-card{padding:8px}.v2131-gallery-card h4{font-size:13px}}
+.v2131-pages{display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap;font-size:12px;margin:12px 0}.v2131-pages button{font-size:11px}
+
+.composer.v2131-composer{grid-template-columns:auto auto auto minmax(0,1fr) auto auto;gap:6px}.composer.v2131-composer #v2131ChatComposerButton{min-width:38px;padding:9px 8px}@media(max-width:570px){.composer.v2131-composer{gap:4px;padding:8px}.composer.v2131-composer #v2131ChatComposerButton{min-width:33px;padding:8px 4px}}

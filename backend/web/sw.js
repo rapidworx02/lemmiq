@@ -1,9 +1,9 @@
-const CACHE = "lemmiq-v2130-shell-1";
+const CACHE = "lemmiq-v2131-shell-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
   "/web/styles.css?v=2.10.7",
-  "/web/app.js?v=2.13.0",
+  "/web/app.js?v=2.13.1",
   "/web/v28.js?v=2.12.4.1",
   "/web/v29.js?v=2.10.7",
   "/web/v2104.js?v=2.10.7",
@@ -21,8 +21,10 @@ const SHELL = [
   "/web/v2122_image_edit.js?v=2.12.2",
   "/web/v2123_support.js?v=2.12.3",
   "/web/v213_creators.css?v=2.13.0",
-  "/web/v213_creators.js?v=2.13.0",
-  "/web/v213_creators_admin.js?v=2.13.0",
+  "/web/v213_creators.js?v=2.13.1",
+  "/web/v2131_exclusives.js?v=2.13.1",
+  "/web/v2131_exclusives.css?v=2.13.1",
+  "/web/v213_creators_admin.js?v=2.13.1",
   "/web/v2124_admin_layout.js?v=2.13.0",
   "/web/v2124_admin_layout.css?v=2.12.4",
   "/web/manifest.webmanifest",
@@ -36,7 +38,7 @@ self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys
 
 self.addEventListener("fetch",event=>{
   const req=event.request;if(req.method!=="GET")return;const url=new URL(req.url);
-  const apiPrefixes=["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/push","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/v2105","/v2106","/v21072","/v21074","/v213","/app-config"];
+  const apiPrefixes=["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/push","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/v2105","/v2106","/v21072","/v21074","/v213","/v2131","/app-config"];
   if(apiPrefixes.some(x=>url.pathname.startsWith(x)))return;
   const isHtml=url.pathname==="/web/"||url.pathname.endsWith("/index.html");
   const versioned=/\.(js|css|png|webmanifest)$/.test(url.pathname);
