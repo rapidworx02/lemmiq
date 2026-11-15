@@ -51,6 +51,9 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
             Column(Modifier.padding(18.dp)){
                 Text("LEMMIQ Q",color=Color(0xFFC9BFFF),fontSize=11.sp,fontWeight=FontWeight.Bold)
                 Text("Q Economy",color=Color.White,fontSize=28.sp,fontWeight=FontWeight.Black)
+                TextButton(onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("q_creators")}) {
+                    Text("✨ Q Creators · Discover",color=Color.White,fontSize=12.sp)
+                }
                 Spacer(Modifier.height(8.dp))
                 Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)

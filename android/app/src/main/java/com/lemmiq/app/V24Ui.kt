@@ -139,7 +139,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
                         V24Avatar(c.other_user);Spacer(Modifier.width(11.dp))
                         Column(Modifier.weight(1f)){
                             Text("${if(c.pinned)"📌 " else ""}${if(c.favourite)"⭐ " else ""}${c.other_user.display_name}",fontWeight=FontWeight.Bold)
-                            Text(if(c.draft_text.isNotBlank())"Draft: ${c.draft_text}" else c.last_message?:"Start chatting",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                            Text(if(c.draft_text.isNotBlank())"Draft: ${c.draft_text}" else if(c.last_message?.startsWith("[[QCREATORS_PPV:")==true)"🔒 PPV media offer" else c.last_message?:"Start chatting",color=V24Muted,fontSize=12.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
                         }
                         Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(4.dp)){
                             if(!c.updated_at.isNullOrBlank())Text(v24InboxStamp(c.updated_at),fontSize=10.sp,color=if(c.unread>0)V24Purple else V24Muted)

@@ -1,9 +1,7 @@
 package com.lemmiq.app
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
@@ -33,6 +31,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -132,7 +132,7 @@ private fun V29ConversationQOrb(vm:LemmiqViewModel){
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
         }
-        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}; Unit
+        try { talkToQ.launch(intent) } catch (_: Exception) { vm.error = "Speech recognition is unavailable on this device" }
     }
     Box(Modifier.fillMaxSize(),contentAlignment=Alignment.BottomEnd){
         SmallFloatingActionButton(
@@ -249,6 +249,7 @@ private fun Home(vm:LemmiqViewModel){
             "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=3;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
             "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_to_q"->{tab=0;qThreadOpen=true;qFullScreen=false;showMore=false;vm.refreshQThread(markRead=true);LemmiqLaunchRouterV2103.consume()}
+            "q_creators"->{showMore=true;morePage="creators";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_assistant","q_analysis"->{qFullScreen=true;qThreadOpen=false;showMore=false;LemmiqLaunchRouterV2103.consume()}
             else->{if(r.type.isNotBlank()){showMore=true;morePage="notifications";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}}
         }
@@ -318,6 +319,7 @@ private fun Home(vm:LemmiqViewModel){
                     "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
                     "money"->V241MoreSubPage("Money",{morePage=null}){MoneyScreen(vm)}
                     "me"->V241MoreSubPage("Me / Profile",{morePage=null}){Profile(vm)}
+                    "creators"->V241MoreSubPage("Q Creators",{morePage=null}){V2131CreatorsAndroidScreen(vm)}
                     "settings"->V241MoreSubPage("Settings",{morePage=null}){V2102SettingsScreen(vm)}
                     "privacy"->V241MoreSubPage("Privacy & Security",{morePage=null}){V2102PrivacyScreen(vm)}
                     "notifications"->V241MoreSubPage("Notifications",{morePage=null}){LemmiqNotificationCenterV2103()}
@@ -431,6 +433,7 @@ private fun V241MoreMenu(onOpen:(String)->Unit){
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
         Triple("💳","Money","Review detected payment insights") to "money",
+        Triple("✨","Q Creators","Discover profiles, exclusive content and creator studio") to "creators",
         Triple("🙂","Me / Profile","Photo, account and sign out") to "me",
         Triple("⚙","Settings","Notifications, app version and controls") to "settings",
         Triple("🔒","Privacy & Security","Profile, last-seen and status privacy") to "privacy"
@@ -517,56 +520,6 @@ private fun V2102PrivacyScreen(vm:LemmiqViewModel){
 }
 
 @Composable
-private fun Inbox(vm:LemmiqViewModel){
-    LaunchedEffect(Unit){vm.refreshAgent();vm.refreshSocialIq()}
-    Column(Modifier.fillMaxSize()){
-        Header("lemmiq",if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}")
-        GradientPanel("Q · AI Inbox","Your conversations, intelligently organised"){
-                Text("Your inbox",color=Color.White,fontWeight=FontWeight.Bold)
-                val unread=vm.chats.sumOf{it.unread}
-                Text(if(unread==0)"You're caught up." else "$unread unread message${if(unread==1)"" else "s"} waiting.",color=Color(0xFFDDDBE8),modifier=Modifier.padding(top=6.dp))
-                Text("Each chat can be Off, Assist or Auto.",color=Color(0xFFB9AAFF),fontSize=11.sp,modifier=Modifier.padding(top=6.dp))
-                vm.agentBrief?.let{b->Text("${b.needs_reply_count} conversations may need a reply.",color=Color.White,fontSize=11.sp)}
-        }
-        Text("Chats",fontSize=20.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(20.dp,18.dp,20.dp,6.dp))
-        if(vm.chats.isEmpty())Empty("💬","No conversations yet","Tap + and search another username.")
-        else LazyColumn{items(vm.chats,key={it.id}){c->ChatRow(c){vm.open(c)}}}
-    }
-}
-
-@Composable
-private fun ChatRow(c:ChatDto,click:()->Unit){
-    Row(Modifier.fillMaxWidth().clickable(onClick=click).padding(horizontal=20.dp,vertical=12.dp),verticalAlignment=Alignment.CenterVertically){
-        Avatar(c.other_user)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)){
-            Row{
-                Text(c.other_user.display_name,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
-                Text(catEmoji(c.category))
-            }
-            Text(c.last_message?:"Start chatting",color=Muted,maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=13.sp)
-        }
-        Column(horizontalAlignment=Alignment.End){
-            Mode(c.ai_mode)
-            if(c.unread>0){
-                Spacer(Modifier.height(5.dp))
-                Box(Modifier.size(20.dp).clip(CircleShape).background(Purple),contentAlignment=Alignment.Center){Text("${c.unread}",color=Color.White,fontSize=10.sp)}
-            }
-        }
-    }
-}
-@Composable
-private fun Avatar(u:UserDto){ V24Avatar(u) }
-
-@Composable
-private fun Mode(m:String){
-    val label=when(m){"AUTO"->"⚡ Auto";"ASSIST"->"✨ Assist";else->"AI Off"}
-    Surface(color=if(m=="AUTO")Color(0xFFE7FFF1) else if(m=="ASSIST")Soft else Color(0xFFF0F0F4),shape=RoundedCornerShape(100.dp)){
-        Text(label,Modifier.padding(horizontal=8.dp,vertical=4.dp),color=if(m=="OFF")Muted else Purple,fontSize=10.sp,fontWeight=FontWeight.Bold)
-    }
-}
-
-@Composable
 private fun NewChat(vm:LemmiqViewModel,dismiss:()->Unit){
     var q by remember{mutableStateOf("")}
     AlertDialog(
@@ -579,7 +532,7 @@ private fun NewChat(vm:LemmiqViewModel,dismiss:()->Unit){
                 LazyColumn(Modifier.heightIn(max=320.dp)){
                     items(vm.users,key={it.id}){u->
                         Row(Modifier.fillMaxWidth().clickable{vm.start(u.id);dismiss()}.padding(vertical=9.dp),verticalAlignment=Alignment.CenterVertically){
-                            Avatar(u);Spacer(Modifier.width(10.dp))
+                            V24Avatar(u);Spacer(Modifier.width(10.dp))
                             Column{Text(u.display_name,fontWeight=FontWeight.Bold);Text("@${u.username}",color=Muted,fontSize=12.sp)}
                         }
                     }
@@ -596,6 +549,7 @@ private fun Chat(vm:LemmiqViewModel){
     var draft by remember(c.id){mutableStateOf(c.draft_text)}
     var editPhotoIdV2122 by remember(c.id){mutableStateOf<Int?>(null)}
     var showAiImageV212 by remember(c.id){mutableStateOf(false)}
+    var showCreatorPpvV2131 by remember(c.id){mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     var businessSettings by remember{mutableStateOf(false)}
     var showAttach by remember{mutableStateOf(false)}
@@ -636,7 +590,7 @@ private fun Chat(vm:LemmiqViewModel){
     }
     val messageListState=rememberLazyListState()
     val timeline=remember(vm.messages,vm.activeCalls){
-        buildList<Pair<String,Any>>{
+        buildList{
             vm.messages.forEach{add("message" to it)}
             vm.activeCalls.forEach{add("call" to it)}
         }.sortedBy{(_,x)->when(x){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}}
@@ -653,7 +607,7 @@ private fun Chat(vm:LemmiqViewModel){
             ){
                 Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically){
                     Text("‹",fontSize=36.sp,modifier=Modifier.clickable{vm.close()}.padding(8.dp))
-                    Avatar(c.other_user);Spacer(Modifier.width(10.dp))
+                    V24Avatar(c.other_user);Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)){
                         Text(c.other_user.display_name,fontWeight=FontWeight.Bold)
                         Text("@${c.other_user.username} · ${catEmoji(c.category)} ${pretty(c.category)} · ${pretty(c.ai_mode)}",color=Muted,fontSize=10.sp)
@@ -735,6 +689,9 @@ private fun Chat(vm:LemmiqViewModel){
                         colors=CardDefaults.cardColors(containerColor=Soft)){
                         Column(Modifier.padding(12.dp)){
                             Text("Share in this chat",fontWeight=FontWeight.Bold,color=Purple)
+                            TextButton({showCreatorPpvV2131=true;showAttach=false}) {
+                                Text("🔒 Send PPV photo / video from Creator Studio")
+                            }
                             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly){
                                 TextButton({photoPicker.launch("image/*");showAttach=false}){Text("🖼 Photo")}
                                 TextButton({showAiImageV212=true;showAttach=false}){Text("🎨 Q Image")}
@@ -787,7 +744,7 @@ private fun Chat(vm:LemmiqViewModel){
                     Spacer(Modifier.width(6.dp))
                     TextButton({businessSettings=true}){Text("Customer memory")}
                     Spacer(Modifier.weight(1f))
-                    Text("${vm.activeBusinessSetting.mode}",fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
+                    Text(vm.activeBusinessSetting.mode,fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
                 }
             }
             if(c.ai_mode!="OFF"){
@@ -807,8 +764,7 @@ private fun Chat(vm:LemmiqViewModel){
                 verticalArrangement=Arrangement.spacedBy(7.dp)
             ){
                 itemsIndexed(timeline,key={_,item->
-                    val x=item.second
-                    when(x){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->item.hashCode().toString()}
+                    when(val x=item.second){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->item.hashCode().toString()}
                 }){index,item->
                     val at=when(val x=item.second){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}
                     val day=v24FriendlyDay(at)
@@ -926,10 +882,12 @@ private fun Chat(vm:LemmiqViewModel){
     }
     editPhotoIdV2122?.let { mid ->
         V2122ImageEditDialog(sourceKind="direct", sourceMessageId=mid, chatId=c.id,
-            onClose={editPhotoIdV2122=null}, onSent={vm.open(c); Unit})
+            onClose={editPhotoIdV2122=null}, onSent={vm.open(c)})
     }
     if(showAiImageV212) V212ImageDialog(chatId=c.id, onClose={showAiImageV212=false},
         onSent={vm.open(c)})
+    if(showCreatorPpvV2131) V2131SendPpvSheet(vm, chatId=c.id,
+        onClose={showCreatorPpvV2131=false},onSent={vm.open(c)})
     vm.chatSummary?.let{s->ChatSummaryDialog(s){vm.clearChatSummary()}}
 }
 
@@ -944,6 +902,9 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     val mediaId=a?.media_id
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
     var photoOpen by remember(m.id){mutableStateOf(false)}
+    // LEMMIQ_ANDROID_CREATORS_V2131: render PPV markers as locked cards, not text.
+    val creatorOfferV2131=Regex("""^\[\[QCREATORS_PPV:(\d+)\]\]$""").matchEntire(m.text.trim())
+        ?.groupValues?.getOrNull(1)?.toIntOrNull()
 
     // V2.10.2: recognise image MIME/filename too, not only attachment.kind == PHOTO.
     LaunchedEffect(mediaId,isPhoto){
@@ -986,7 +947,9 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                     }
                 }
 
-                if(a!=null){
+                if(creatorOfferV2131!=null) {
+                    V2131PpvOfferBubble(vm,creatorOfferV2131,mine)
+                } else if(a!=null){
                     when{
                         a.kind=="VOICE" -> V24VoiceContent(a,m.id,false,vm,mine)
 
@@ -1043,7 +1006,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                     try{
                                         val bytes=vm.mediaBytes(mediaId)
                                         vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.",m.id)
-                                    }catch(e:Exception){mediaError="Unable to load this photo"}
+                                    }catch(_:Exception){mediaError="Unable to load this photo"}
                                 }},
                                 contentPadding=PaddingValues(horizontal=7.dp,vertical=2.dp)
                             ){
@@ -1069,7 +1032,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                         withContext(Dispatchers.IO){file.writeBytes(bytes)};val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
                                         val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"video/mp4");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
                                         ctx.startActivity(Intent.createChooser(intent,"Play video"))
-                                    }catch(e:Exception){mediaError="Unable to open this video"}
+                                    }catch(_:Exception){mediaError="Unable to open this video"}
                                 }
                             }){Box(contentAlignment=Alignment.Center){Text("▶",fontSize=42.sp,color=if(mine)Color.White else Purple)}}
                             if(m.text.isNotBlank())Text(m.text,Modifier.padding(top=8.dp),color=if(mine)Color.White else Ink)
@@ -1092,7 +1055,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                     val uri=FileProvider.getUriForFile(ctx,"${ctx.packageName}.files",file)
                                     val intent=Intent(Intent.ACTION_VIEW).apply{setDataAndType(uri,a.mime_type?:"application/octet-stream");addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)}
                                     ctx.startActivity(Intent.createChooser(intent,"Open attachment"))
-                                }catch(e:Exception){mediaError="Unable to open this file"}
+                                }catch(_:Exception){mediaError="Unable to open this file"}
                             }}){Text("Open / share",color=if(mine)Color.White else Purple)}
                         }
                     }
@@ -1190,7 +1153,7 @@ private fun Moments(vm:LemmiqViewModel){
         }
         LazyColumn(contentPadding=PaddingValues(20.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
             items(vm.moments,key={it.id}){m->
-                Card{Row(Modifier.fillMaxWidth().padding(14.dp)){Avatar(m.user);Spacer(Modifier.width(10.dp));Column{Text(m.user.display_name,fontWeight=FontWeight.Bold);Text(m.text)}}}
+                Card{Row(Modifier.fillMaxWidth().padding(14.dp)){V24Avatar(m.user);Spacer(Modifier.width(10.dp));Column{Text(m.user.display_name,fontWeight=FontWeight.Bold);Text(m.text)}}}
             }
         }
     }
@@ -1207,7 +1170,6 @@ private fun ChatAgent(vm:LemmiqViewModel){
     var coordOptions by remember{mutableStateOf("")}
     var selectedCoordUsers by remember{mutableStateOf<Map<Int,UserDto>>(emptyMap())}
     var visionQuestion by remember{mutableStateOf("")}
-    var visionFollowUp by remember{mutableStateOf("")}
     var todayExpanded by remember{mutableStateOf(false)}
     var savedPredictAnalysisOpen by remember{mutableStateOf<SavedPredictAnalysisV2104?>(null)}
 
@@ -1233,7 +1195,7 @@ private fun ChatAgent(vm:LemmiqViewModel){
             putExtra(RecognizerIntent.EXTRA_LANGUAGE,Locale.getDefault().toLanguageTag())
             putExtra(RecognizerIntent.EXTRA_PROMPT,"Talk to Q")
         }
-        runCatching{talkToQ.launch(intent)}.onFailure{vm.error="Speech recognition is unavailable on this device"}; Unit
+        try { talkToQ.launch(intent) } catch (_: Exception) { vm.error = "Speech recognition is unavailable on this device" }
     }
 
     LaunchedEffect(Unit){vm.refreshAgent()}
@@ -1436,7 +1398,6 @@ private fun ChatAgent(vm:LemmiqViewModel){
             item{Text("Active Q-to-Q",fontSize=16.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=20.dp,vertical=4.dp))}
             items(activePlans.toList()){group->
                 val first=group.first()
-                val names=group.mapNotNull{it.target?.display_name}.distinct().joinToString(", ")
                 val responses=group.count{it.status=="RESPONDED"}
                 Card(Modifier.fillMaxWidth().padding(horizontal=20.dp)){
                     Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
@@ -1655,23 +1616,20 @@ private fun ChatSummaryDialog(s:ChatSummary,dismiss:()->Unit){
     )
 }
 
-@Composable
-private fun Agents(){
-    val a=listOf("❤️ Partner","💘 Dating","👯 Bestie","😂 Friend","🏠 Family","💼 Work","🤝 Customer","💰 Sales","🎓 Study","✨ Custom")
-    Column{Header("Agents","Different intelligence for every conversation");LazyColumn(contentPadding=PaddingValues(20.dp)){items(a){x->Card(Modifier.fillMaxWidth().padding(bottom=8.dp)){Text(x,Modifier.padding(16.dp),fontWeight=FontWeight.Bold)}}}}
-}
+
 @Composable
 private fun Profile(vm:LemmiqViewModel){
     val ctx=LocalContext.current
-    val notificationPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted->
-        if(granted)vm.registerPush()
-    }
     var showMoments by remember{mutableStateOf(false)}
     if(showMoments){Column{TextButton({showMoments=false}){Text("‹ Back to Me")};Moments(vm)};return}
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())){
         Header("Me","@${vm.store.username.orEmpty()}")
         V24ProfilePhotoCard(vm)
         V24PrivacyCard(vm)
+        OutlinedButton(onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("q_creators")},
+            modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=7.dp)) {
+            Text("✨ Switch to Professional Creator / Q Creators")
+        }
         OutlinedButton(onClick={vm.openOfficialSupportV2123()},
             modifier=Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=7.dp)) {
             Text("💬 Chat with Lemmiq.Official Support (@lemmiq)")
@@ -1702,8 +1660,6 @@ private fun Profile(vm:LemmiqViewModel){
         Button({vm.logout()},modifier=Modifier.padding(20.dp)){Text("Log out")}
     }
 }
-@Composable
-private fun SimplePage(title:String,icon:String,sub:String){Column{Header(title);Empty(icon,title,sub)}}
 @Composable
 private fun Empty(icon:String,title:String,sub:String){
     Column(Modifier.fillMaxSize().padding(32.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
@@ -1909,8 +1865,8 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
                     Text("2. Choose categories",fontSize=18.sp,fontWeight=FontWeight.Bold)
                     Text("Only recognised events in enabled categories are saved.",fontSize=11.sp,color=Muted)
                     NotificationControl.categories.forEach{cat->
-                        val label=when(cat){"MONEY"->"💳 Payments";"BILL"->"📅 Bills & renewals";
-                            "DELIVERY"->"📦 Deliveries";"WORK"->"💼 Schedules";
+                        val label=when(cat){"MONEY"->"💳 Payments";"BILL"->"📅 Bills & renewals"
+                            "DELIVERY"->"📦 Deliveries";"WORK"->"💼 Schedules"
                             "TRAVEL"->"✈️ Travel";else->"🛡️ Scam signals"}
                         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                             Text(label,Modifier.weight(1f),fontSize=13.sp)
@@ -2012,7 +1968,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
 }
 
 @Composable private fun ExternalChatPanel(vm:LemmiqViewModel){
-    val ctx=LocalContext.current
+    @Suppress("DEPRECATION")
     val clipboard=androidx.compose.ui.platform.LocalClipboardManager.current
     var expanded by remember{mutableStateOf(false)}
     var confirmDelete by remember{mutableStateOf(false)}
@@ -2080,7 +2036,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
 }
 
 @Composable private fun EventCard(e:PhoneEvent,onManage:(PhoneEvent)->Unit={}){
-    val mark=when(e.category){"MONEY"->"💳";"BILL"->"📅";"DELIVERY"->"📦";
+    val mark=when(e.category){"MONEY"->"💳";"BILL"->"📅";"DELIVERY"->"📦"
        "TRAVEL"->"✈️";"WORK"->"💼";"TRUST"->"🛡️";else->"🔔"}
     Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(19.dp),
       colors=CardDefaults.cardColors(containerColor=Color.White)){
@@ -2108,7 +2064,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
     var source by remember(e.client_event_id){mutableStateOf(e.source)}
     var title by remember(e.client_event_id){mutableStateOf(e.title)}
     var detail by remember(e.client_event_id){mutableStateOf(e.detail)}
-    var amount by remember(e.client_event_id){mutableStateOf(e.amount_cents?.let{String.format(java.util.Locale.US,"%.2f",it/100.0)}?:"")}
+    var amount by remember(e.client_event_id){mutableStateOf(e.amount_cents?.let{String.format(Locale.US,"%.2f",it/100.0)}?:"")}
     var direction by remember(e.client_event_id){mutableStateOf(e.direction)}
     var occurred by remember(e.client_event_id){mutableStateOf(e.occurred_at)}
     var confirmDelete by remember{mutableStateOf(false)}
@@ -2159,7 +2115,7 @@ private fun BusinessLearnDialog(vm:LemmiqViewModel){
     )
 }
 
-private fun moneyString(cents:Long):String = String.format(java.util.Locale.US,"$%,.2f",cents/100.0)
+private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",cents/100.0)
 
 @Composable private fun MoneyScreen(vm:LemmiqViewModel){
     var amount by remember{mutableStateOf("")}
