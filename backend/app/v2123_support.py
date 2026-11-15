@@ -125,8 +125,11 @@ def register_v2123_support(app, current_user, get_db, hash_password):
         if target.id == admin.id:
             raise HTTPException(403, "Use a separate secure process to recover your own admin account")
         target_role = db.get(QAdminRole, target.id)
-        if target_role and target_role.active:
-            raise HTTPException(403, "Admin accounts cannot be reset using the support tool")
+        # V2.12.4.2: Master Admin may recover delegated admin accounts.
+        # Protect ALL Master Admin accounts, even if a role was deactivated.
+        if target_role and target_role.role == "MASTER_ADMIN":
+            raise HTTPException(403, "Master Admin accounts cannot be reset using the support tool")
+        delegated_admin_role = target_role.role if target_role and target_role.active else None
 
         # Row lock prevents overlapping resets on PostgreSQL.
         db.execute(select(User.id).where(User.id == target.id).with_for_update()).all()
@@ -149,10 +152,10 @@ def register_v2123_support(app, current_user, get_db, hash_password):
         state.reset_at = now
         db.add(QAdminAuditLog(
             admin_user_id=admin.id,
-            action="ACCOUNT_PASSWORD_RESET_V2123",
+            action="DELEGATED_ADMIN_PASSWORD_RESET" if delegated_admin_role else "ACCOUNT_PASSWORD_RESET_V2123",
             target_user_id=target.id,
             before_json="{}",
-            after_json=json.dumps({"credential_revision": state.revision}),
+            after_json=json.dumps({"credential_revision": state.revision, "delegated_admin_role": delegated_admin_role}),
             reason=body.reason.strip(),
         ))
         db.commit()
@@ -162,6 +165,7 @@ def register_v2123_support(app, current_user, get_db, hash_password):
             "temporary_password": temporary_password,
             "shown_once": True,
             "sessions_revoked": True,
+            "target_admin_role": delegated_admin_role,
             "instructions": "Share privately with the verified account owner. Password is displayed only once.",
         }
 
