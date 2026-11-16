@@ -81,7 +81,7 @@
       <p class="micro">Creator approval: ${esc(proMe?.creator_status||'Apply in Q Creators Studio first')} · Professional chat is moderated under LEMMIQ policies.</p>
       <form id="v2134IdentityForm"><label>Creator username<input name="handle" minlength="3" maxlength="32" required placeholder="studio_nova" value="${esc(x.handle||'')}"></label><label>Professional display name<input name="stage_name" minlength="2" maxlength="80" required placeholder="Nova Studio" value="${esc(x.stage_name||'')}"></label><button class="primary" type="submit">Save Professional Identity</button></form>
       ${x.public_id?`<form id="v2134AvatarForm"><label>Professional photo (separate from personal)<input type="file" name="file" accept="image/jpeg,image/png,image/webp" required></label><button class="ghost" type="submit">Upload creator avatar</button></form>`:''}</article>
-      <article class="v2134-request"><h3>Paid Chat Package</h3><form id="v2134TermsForm"><label>Fan messages + creator replies per pass<input type="number" name="messages" min="1" max="25" value="${Number(t.messages||3)}"></label><label>Validity in hours<input type="number" name="hours" min="1" max="168" value="${Number(t.hours||48)}"></label><button class="primary" type="submit">Save chat terms</button></form><p class="micro">The creator's Q price is configured in Q Creators → Creator Studio.</p></article></div>`;
+      <article class="v2134-request"><h3>Paid Chat Package</h3><form id="v2134TermsForm"><label>Fan messages + creator replies per pass<input type="number" name="messages" min="1" max="25" value="${Number(t.messages||3)}"></label><label>Validity in hours<input type="number" name="hours" min="1" max="168" value="${Number(t.hours||48)}"></label><button class="primary" type="submit">Save chat terms</button></form><p class="micro">The creator's Q price is configured in Q Creators → Creator Studio.</p>${proMe?.creator_status==='APPROVED'?'<button type="button" class="ghost" data-v21341="manager">🖼 Open My Media Library & Gallery</button>':''}</article></div>`;
  }
  function renderThread(data){
    const isCreator=data.role==='CREATOR',title=isCreator?'Fan · '+(data.fan?.display_name||'LEMMIQ user'):data.creator.stage_name;
@@ -95,7 +95,7 @@
     }).join('')||'<p class="v2134-empty">Chat will begin when the fan sends their first included message.</p>'}</div>
     ${allowed?`<form class="v2134-composer" id="v2134MessageForm"><input name="text" maxlength="4000" placeholder="${isCreator?'Reply as @'+data.creator.handle:'Message the professional creator'}" required><button class="primary">Send</button></form>`:
     `<div class="v2134-locked">🔒 ${active?'Your allowance is used or awaiting the next reply.':'This paid chat pass is completed or expired.'} ${!isCreator?'<button class="ghost" data-v2134="requestAgain">Request another chat</button>':''}</div>`}
-    ${isCreator?`<div class="v2134-offer"><form id="v2134OfferForm"><strong>Send exclusive PPV from approved gallery</strong><label>Gallery item ID<input name="item_id" type="number" min="1" required></label><label>Offer price (Q)<input name="price_q" type="number" min="0.01" step="0.01" required></label><button class="ghost" type="submit">Send locked offer</button></form></div>`:''}`;
+    ${isCreator?`<div class="v2134-offer"><strong>Send exclusive photos, videos or albums</strong><p class="micro">Choose approved creator content or upload new media for moderation. Personal Chats are never used.</p><button type="button" class="primary" data-v21341="picker">🖼 Choose from My Gallery / Upload</button></div>`:''}`;
    const sc=by('v2134Messages');if(sc)sc.scrollTop=sc.scrollHeight;
  }
  async function requestNew(publicId,price){
@@ -106,6 +106,12 @@
  }
  async function click(ev){
    const b=ev.target.closest('button');if(!b||!host()?.contains(b))return;
+   // V21341_VISUAL_PICKER: use authenticated professional chat, never personal Chat IDs.
+   if(b.dataset.v21341==='picker'){
+     if(!selectedThread)return toastPro('Open a professional thread first.',true);
+     return window.LEMMIQCreatorGalleryV21341?.openPicker(selectedThread,()=>refresh());
+   }
+   if(b.dataset.v21341==='manager')return window.LEMMIQCreatorGalleryV21341?.openManager();
    if(b.dataset.v2134Tab){tab=b.dataset.v2134Tab;selectedThread=null;return refresh()}
    if(b.dataset.v2134==='personal')return setView('chats');
    if(b.dataset.v2134==='back'){selectedThread=null;tab='inbox';return refresh()}

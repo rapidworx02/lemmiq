@@ -1,0 +1,26 @@
+/* LEMMIQ V2.13.4.1 — professional Q Creator gallery management */
+.v21341-dialog{width:min(830px,calc(100vw - 26px));max-height:90vh;overflow:auto;background:#161934;color:#f7f7ff;border:1px solid #62618e;border-radius:20px;padding:0;box-shadow:0 18px 65px #000a;}
+.v21341-dialog::backdrop{background:rgba(6,7,19,.77)}
+#v21341Root{padding:22px;display:flex;flex-direction:column;gap:14px}
+.v21341-header{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.v21341-header h2{margin:4px 0;font-size:24px}.v21341-header p,.v21341-dialog footer{font-size:12px;color:#c4c6e3;line-height:1.5}.v21341-header .eyebrow{font-size:10px;color:#b3a5ff}
+.v21341-tabs{display:flex;flex-wrap:wrap;gap:6px}.v21341-tabs button{border:1px solid #585679;border-radius:999px;background:transparent;color:#d9d8fa;padding:8px 13px;cursor:pointer}.v21341-tabs button.active{background:#7057ed;color:white;border-color:#9788ff}
+.v21341-feedback{min-height:16px;color:#c1bddc;font-size:12px}.v21341-feedback.error{color:#ffa3ab}
+.v21341-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;max-height:49vh;overflow:auto}
+.v21341-item{border:1px solid #514f72;background:#232744;color:#f3f2ff;border-radius:14px;padding:10px;display:flex;align-items:center;text-align:left;gap:10px;cursor:pointer;min-width:0}
+.v21341-item.selected{outline:2px solid #9c8cff;background:#302960}.v21341-item:disabled{opacity:.55;cursor:default}
+.v21341-thumb{width:74px;height:82px;flex:none;background:#3c3e61;color:#eee;border-radius:10px;display:grid;place-items:center;font-size:27px;overflow:hidden}
+.v21341-thumb img{width:100%;height:100%;object-fit:cover}
+.v21341-item-detail{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}.v21341-item-detail strong{overflow-wrap:anywhere;font-size:13px}.v21341-item-detail small{color:#c0bdd8;font-size:10px}.v21341-pending{color:#ffd48c!important}
+.v21341-actions{display:flex;flex-wrap:wrap;align-items:end;gap:9px}.v21341-actions label{flex:1;min-width:145px}
+.v21341-dialog input,.v21341-dialog select,.v21341-dialog textarea{width:100%;background:#292c4b;color:#fff;border:1px solid #69678c;padding:11px;border-radius:10px;box-sizing:border-box}
+.v21341-dialog label{display:flex;flex-direction:column;gap:6px;font-size:12px;color:#e4e1fa}.v21341-dialog input[type=checkbox]{width:auto;accent-color:#9176ff}
+.v21341-dialog .primary{background:#7755ef;color:#fff;border:0;border-radius:10px;padding:12px 18px;cursor:pointer;font-weight:650}
+.v21341-dialog .ghost{border:1px solid #7875a0;color:#fff;background:transparent;border-radius:10px;padding:10px 15px;cursor:pointer}
+.v21341-dialog button:disabled{opacity:.5;cursor:not-allowed}
+.v21341-form{display:flex;flex-direction:column;gap:12px;max-width:650px}.v21341-form h3{font-size:17px;margin:4px 0}.v21341-form fieldset{border:1px solid #555475;border-radius:12px}
+.v21341-assets{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:9px;max-height:220px;overflow:auto}
+.v21341-asset{border:1px solid #565573;border-radius:10px;padding:9px;display:flex!important;flex-direction:row!important;align-items:center;flex-wrap:wrap;gap:8px}.v21341-asset strong{font-size:12px}.v21341-asset small{color:#c7c6de}
+.v21341-library{border-top:1px solid #575470;padding-top:8px;max-height:160px;overflow:auto}.v21341-library p{font-size:12px;margin:4px 0;color:#d4d1ea}
+.v21341-dialog footer{border-top:1px solid #424363;padding-top:8px}
+@media(max-width:550px){#v21341Root{padding:14px}.v21341-dialog{width:calc(100vw - 12px)}.v21341-grid{grid-template-columns:1fr}.v21341-thumb{width:65px;height:70px}}

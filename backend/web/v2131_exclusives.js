@@ -24,7 +24,7 @@
    <form id="v2131PublishForm" class="v2131-form"><h4>2. Make an exclusive item</h4><label>Title<input name="title" minlength="3" maxlength="140" required placeholder="Exclusive collection"></label><label>Public teaser<input name="teaser" maxlength="240" placeholder="Short description (no private media)"></label><label>Type<select name="kind"><option value="PHOTO">Single photo</option><option value="VIDEO">Single video</option><option value="ALBUM">Photo / video album (2–20)</option></select></label><label>Access<select name="visibility"><option value="PPV">Pay to unlock</option><option value="SUBSCRIBERS">Included for subscribers</option></select></label><label>PPV price in Q (0 for subscriber included)<input name="price_q" type="number" min="0" max="100000" step="0.01" value="50" required></label><label>Approved files (select 1; Ctrl-click for albums)<select name="assets" multiple size="5" required>${approved.map(a=>`<option value="${a.id}">#${a.id} ${esc(a.kind)} · ${esc(a.title)}</option>`).join('')}</select></label><button type="submit" class="primary" ${approved.length?'':'disabled'}>Submit gallery item for approval</button></form></div>
    <details><summary>My media library (${S.library.length})</summary><div class="v2131-rows">${S.library.map(a=>`<div><span><strong>#${a.id} · ${esc(a.title)}</strong><small>${esc(a.kind)} · ${esc(a.review)}</small></span><button type="button" class="ghost" data-xaction="libraryview" data-id="${a.id}">Preview</button></div>`).join('')||'<p class="micro">No uploaded media.</p>'}</div></details>
    <details><summary>My exclusive gallery (${S.mineGallery.length})</summary><div class="v2131-gallery-grid">${S.mineGallery.map(i=>galleryCard(i,true)).join('')||'<p class="micro">No gallery items.</p>'}</div></details>
-   <details><summary>Send an exclusive photo/video privately in Chat</summary><p class="micro">Select an approved gallery item and an existing conversation. The fan sees a locked PPV message. You set a separate Q price for this offer.</p><form id="v2131SendForm" class="v2131-form"><label>Existing LEMMIQ conversation<select name="chat_id" required>${chats.map(c=>`<option value="${c.chat_id}">@${esc(c.username)} (${esc(c.display_name)})</option>`).join('')}</select></label><label>Approved gallery item<select name="item_id" required>${S.mineGallery.filter(i=>i.review==='APPROVED').map(i=>`<option value="${i.id}">#${i.id} ${esc(i.title)}</option>`).join('')}</select></label><label>Private offer price (Q)<input name="price_q" type="number" min="0.01" max="100000" step="0.01" value="25" required></label><button class="primary" type="submit">Send locked PPV message</button></form></details>
+    <details><summary>Send PPV in Professional Chat</summary><p class="micro">To protect your personal identity, send PPV only through the separate Professional Inbox.</p><button class="ghost" type="button" data-xaction="professionalpicker">Open Professional Inbox</button></details>
    <p id="v2131Notice" role="status" aria-live="polite"></p></section>`;
  };
  function inboxBox(items){return `<section class="card glass v2131-section" id="v2131Inbox"><h3>Private PPV offers</h3><p class="micro">Locked photo/video offers received in your LEMMIQ conversations.</p><div class="v2131-rows">${items.map(x=>`<div><span><strong>${esc(x.title)}</strong><small>Creator #${x.creator_id} · ${num(x.price_q)} Q · ${x.unlocked?'Unlocked':'Locked'}</small></span><button class="ghost" type="button" data-xaction="offer" data-id="${x.id}">${x.unlocked?'View':'Open offer'}</button></div>`).join('')||'<p class="micro">No private offers.</p>'}</div></section>`}
@@ -40,9 +40,10 @@
     }catch(e){if(insert.isConnected)insert.innerHTML=`<p class="micro">Exclusive gallery unavailable: ${esc(e.message)}</p>`}
   }else if(context.mode==='studio'&&context.mine?.status==='APPROVED'){
     const insert=document.createElement('div');insert.id='v2131Area';main.append(insert);
-    try{const results=await Promise.all([call('/library'),call('/gallery/mine'),call('/chats')]);
+    try{// V21341_NO_PERSONAL_CHAT_LOOKUP: the old /chats endpoint returns 410 after dual-identity upgrade.
+     const results=await Promise.all([call('/library'),call('/gallery/mine')]);
       if(seq!==S.renderSeq||!insert.isConnected)return;
-      [S.library,S.mineGallery,S.chatList]=results;insert.innerHTML=libraryBox();
+      [S.library,S.mineGallery]=results;S.chatList=[];insert.innerHTML=libraryBox();
     }catch(e){if(insert.isConnected)insert.innerHTML=`<p class="micro">Creator library unavailable: ${esc(e.message)}</p>`}
   }else if(context.mode==='studio'){
     const insert=document.createElement('div');insert.id='v2131Area';main.append(insert);
@@ -80,6 +81,7 @@
  }
  async function handleAction(b){const what=b.dataset.xaction,id=Number(b.dataset.id);try{
   if(what==='view')await viewItem(id);
+   if(what==='professionalpicker'){window.openCreatorProfessionalInbox?.('inbox');return}
   if(what==='unlock')await unlockGallery(id);
   if(what==='offer')await offerModal(id);
   if(what==='libraryview'){openModal('<h3>Media Library Preview</h3><div id="v2131ModalMedia"></div>');await mediaBlob(`/library/${id}/media`,$('v2131ModalMedia'))}
@@ -115,7 +117,7 @@
     await call(`/chats/${active.id}/offers`,json('POST',{item_id:Number($('v2131ChatItem').value),price_q:price,client_key:key()}));closeModal();toast('Private PPV media sent.');
    }catch(e){toast(e.message,true)}};
  }catch(e){toast(e.message,true)}}
- window.v2131OpenChatPPV=chatSendShortcut;
+  window.v2131OpenChatPPV=()=>window.openCreatorProfessionalInbox?.('inbox');
  function installComposerShortcut(){if($('v2131ChatComposerButton'))return;const input=$('fileInput');const attach=input?.closest('.attach-btn');if(!attach)return;
   const btn=document.createElement('button');btn.id='v2131ChatComposerButton';btn.type='button';btn.className='ghost';btn.title='Send Q Creators PPV media';btn.textContent='🔒';btn.onclick=chatSendShortcut;attach.after(btn);attach.closest('.composer')?.classList.add('v2131-composer');
  }
@@ -154,7 +156,8 @@
   }catch(e){const note=$('v2131AuditNote');if(note)note.textContent=e.message;else toast(e.message,true)}
  }
  document.addEventListener('DOMContentLoaded',()=>{
-  installComposerShortcut();const app=$('v213CreatorsApp');
+  // V21341: old direct-chat PPV button is disabled; use Professional Inbox only.
+  const app=$('v213CreatorsApp');
   if(app){app.addEventListener('click',e=>{const b=e.target.closest('[data-xaction]');if(b)handleAction(b)});
    app.addEventListener('submit',e=>{if(!['v2131UploadForm','v2131PublishForm','v2131SendForm'].includes(e.target.id))return;e.preventDefault();handleForm(e.target)});
   }

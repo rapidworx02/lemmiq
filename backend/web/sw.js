@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v2134-professional-1";
+const CACHE = "lemmiq-v21341-gallery-1";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
@@ -35,6 +35,9 @@ const SHELL = [
   "/web/v2132_call_recovery.css?v=2.13.2",
   "/web/v2134_professional.js?v=2.13.4",
   "/web/v2134_professional.css?v=2.13.4",
+
+  "/web/v21341_gallery_picker.css?v=2.13.4.1",
+  "/web/v21341_gallery_picker.js?v=2.13.4.1",
 ];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});

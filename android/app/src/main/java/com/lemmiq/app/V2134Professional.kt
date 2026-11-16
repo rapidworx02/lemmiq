@@ -156,6 +156,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
     var galleryId by remember { mutableStateOf("") }
     var offerQ by remember { mutableStateOf("") }
     var showLegacy by remember { mutableStateOf(false) }
+    var showGalleryPicker by remember { mutableStateOf(false) }
     var confirmOp by remember { mutableStateOf<Pair<String,()->Unit>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -250,15 +251,17 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                     Text("🔒 This professional chat is read-only or awaiting a reply",fontSize=12.sp)
                     if(!isCreator)TextButton({tab=1;selected=null;reload()}){Text("Request another paid chat")}
                 }}
-                if(isCreator){Card(Modifier.fillMaxWidth().padding(10.dp)){Column(Modifier.padding(10.dp)){
-                    Text("Send PPV offer from approved gallery",fontSize=12.sp,fontWeight=FontWeight.Bold)
-                    Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){
-                        OutlinedTextField(galleryId,{galleryId=it},Modifier.weight(1f),label={Text("Item ID")},singleLine=true)
-                        OutlinedTextField(offerQ,{offerQ=it},Modifier.weight(1f),label={Text("Q price")},singleLine=true)
+                // V21341: no numeric gallery ID and no personal-chat PPV endpoint.
+                if(isCreator){Card(Modifier.fillMaxWidth().padding(10.dp)){
+                    Column(Modifier.padding(12.dp)){
+                        Text("Send exclusive photo, video or album",fontSize=12.sp,fontWeight=FontWeight.Bold)
+                        Text("Choose approved media. New uploads require moderation.",fontSize=11.sp,color=ProMuted)
+                        Button(onClick={showGalleryPicker=true},modifier=Modifier.fillMaxWidth()){
+                            Text("🖼 Choose from My Gallery / Upload")
+                        }
                     }
-                    Button(onClick={scope.launch{busy=true;try{api.offer(selected!!,galleryId.toInt(),offerQ.toDouble());reload()}
-                        catch(e:Exception){error=e.message}finally{busy=false}}},enabled=galleryId.toIntOrNull()!=null&&offerQ.toDoubleOrNull()?.let{it>0}==true){Text("Send locked PPV")}
-                }}}
+                }
+                }
             }
         }else when(tab){
             0->LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -337,9 +340,14 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                 Button({scope.launch{busy=true;try{api.saveTerms(count.toInt(),hours.toInt());reload()}
                     catch(e:Exception){error=e.message}finally{busy=false}}},enabled=(count.toIntOrNull()?.let{it in 1..25}==true)&&(hours.toIntOrNull()?.let{it in 1..168}==true)&&!busy){Text("Save Chat Allowance")}
                 OutlinedButton({showLegacy=true},modifier=Modifier.fillMaxWidth()){Text("Open Creator Studio / Exclusive Gallery")}
+                if(identity.creator_status=="APPROVED")OutlinedButton({showGalleryPicker=true},modifier=Modifier.fillMaxWidth()){Text("🖼 Manage My Media Library & Gallery")}
                 Text("Set Q pricing in Creator Studio. Media remains subject to moderation. Explicit material is not enabled in this Android app.",fontSize=11.sp,color=ProMuted)
             }
         }
+    }
+    if(showGalleryPicker){
+        V21341GalleryPicker(vm,selected,onDismiss={showGalleryPicker=false},
+            onSent={showGalleryPicker=false;reload()})
     }
     confirmOp?.let{(question,action)->AlertDialog(onDismissRequest={confirmOp=null},title={Text("Confirm action")},
         text={Text(question)},confirmButton={Button(onClick={confirmOp=null;action()}){Text("Confirm")}},
