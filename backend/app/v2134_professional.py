@@ -248,6 +248,9 @@ def message_json(db,m,uid):
     if m.kind=='OFFER' and m.offer_id:
         o=db.get(ProfessionalOffer,m.offer_id)
         out['offer']=offer_json(db,o,uid) if o else None
+    if m.kind == 'DIRECT_MEDIA':
+        from .v2135_direct_media import attach_json
+        out['media'] = attach_json(db, m, uid)
     return out
 
 

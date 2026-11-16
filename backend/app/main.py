@@ -1144,6 +1144,10 @@ register_v2132_call_recovery(app, current_user, get_db, push)
 from .v2134_professional import register_v2134_professional
 register_v2134_professional(app, current_user, get_db, push)
 
+# LEMMIQ V2.13.5 — independent creator media, Q unlocks, audit
+from .v2135_direct_media import register_v2135_direct_media
+register_v2135_direct_media(app, current_user, get_db, push)
+
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 

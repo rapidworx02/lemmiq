@@ -98,6 +98,7 @@
     `<div class="v2134-thread-menu"><button class="ghost" data-v2134="back">‹ Inbox</button><span>✦ ${active?'Paid pass active':'Read-only professional history'} · ${terms(p)}</span></div>
     <div class="v2134-messages" id="v2134Messages">${(data.messages||[]).map(m=>{
       const own=(isCreator?m.role==='CREATOR':m.role==='FAN');
+      if(m.kind==='DIRECT_MEDIA'&&m.media)return window.v2135MediaCard?.(m,own)||'';
       if(m.kind==='OFFER'&&m.offer){const o=m.offer;return `<div class="v2134-bubble ${own?'mine':''}"><strong>🔒 Exclusive ${esc(o.kind)}</strong><p>${esc(o.title)}</p>${o.unlocked?'<small>Unlocked in your Exclusive Gallery</small>':`<button class="primary" data-v2134-action="unlock" data-id="${o.id}" data-price="${o.price_q}">Unlock ${o.price_q} Q</button>`}</div>`}
       return `<div class="v2134-bubble ${own?'mine':''}">${esc(m.body)}<small>${time(m.created_at)}</small></div>`
     }).join('')||'<p class="v2134-empty">Chat will begin when the fan sends their first included message.</p>'}</div>
@@ -105,6 +106,8 @@
     `<div class="v2134-locked" role="status">🔒 ${esc(reason)} ${!active&&!isCreator?'<button class="ghost" data-v2134="requestAgain">Request another chat pass</button>':''}</div>`}
      ${canFinish?'<div class="v2134-early-finish"><small>You may close this pass after receiving the replies owed so far. This releases the agreed Q payment and lets you request another pass.</small><button class="ghost" type="button" data-v2134="finish">Complete paid chat</button></div>':''}
     ${isCreator?`<div class="v2134-offer"><strong>Send exclusive photos, videos or albums</strong><p class="micro">Choose approved creator content or upload new media for moderation. Personal Chats are never used.</p><button type="button" class="primary" data-v21341="picker">🖼 Choose from My Gallery / Upload</button></div>`:''}`;
+   window.v2135RefreshThread=()=>refresh();
+   if(window.v2135SetupThread)window.v2135SetupThread(data);
    const sc=by('v2134Messages');if(sc)sc.scrollTop=sc.scrollHeight;
  }
  async function requestNew(publicId,price){

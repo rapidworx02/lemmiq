@@ -149,9 +149,9 @@ class LemmiqCallActivity:ComponentActivity(){
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha=.44f)).navigationBarsPadding().padding(16.dp),
                 horizontalAlignment=Alignment.CenterHorizontally
             ){
-                Text(status.value,color=Color.White,fontWeight=FontWeight.Bold)
-                if(status.value=="Connected")Text(formatSeconds(seconds.intValue),color=Color.White.copy(alpha=.8f),fontSize=12.sp)
-                Spacer(Modifier.height(12.dp))
+                if(status.value!="Connected")Text(status.value,color=Color.White,fontSize=12.sp)
+                else Text(formatSeconds(seconds.intValue),color=Color.White.copy(alpha=.88f),fontSize=13.sp)
+                Spacer(Modifier.height(6.dp))
                 CallControls(video=true)
             }
         }

@@ -1237,6 +1237,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                         refreshChats()
                     }
                 }
+                if(map["type"]?.toString()=="profile_updated"){
+                    viewModelScope.launch{
+                        refreshChats();refreshMe();refreshGroups();refreshCalls()
+                    }
+                }
                 if(map["type"]?.toString()=="message_update"){
                     val m=gson.fromJson(gson.toJson(map["data"]),MessageDto::class.java)
                     viewModelScope.launch{

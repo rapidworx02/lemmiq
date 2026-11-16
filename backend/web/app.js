@@ -68,12 +68,13 @@ function friendlyDay(iso){
   }catch{return ""}
 }
 function avatarHtml(u){
-  if(u?.avatar_url)return `<span class="avatar"><img src="${escapeHtml(u.avatar_url)}" alt=""></span>`;
+  if(u?.avatar_url)return `<span class="avatar v2135-avatar"><span class="v2135-initial">${escapeHtml(initials(u.display_name||"?"))}</span><img src="${escapeHtml(u.avatar_url)}" alt=""></span>`;
   return `<span class="avatar">${escapeHtml(initials(u?.display_name||"?"))}</span>`;
 }
 function renderMeAvatar(){
   if(!$("meAvatar"))return;
-  $("meAvatar").innerHTML=state.user?.avatar_url?`<img src="${escapeHtml(state.user.avatar_url)}" alt="">`:`<span>${escapeHtml(initials(state.user?.display_name||"?"))}</span>`;
+  $("meAvatar").classList.add("v2135-avatar");
+  $("meAvatar").innerHTML=state.user?.avatar_url?`<span class="v2135-initial">${escapeHtml(initials(state.user.display_name||"?"))}</span><img src="${escapeHtml(state.user.avatar_url)}" alt="">`:`<span>${escapeHtml(initials(state.user?.display_name||"?"))}</span>`;
 }
 
 
@@ -196,6 +197,19 @@ function connectSocket(){
   ws.onmessage=async ev=>{
     try{
       const p=JSON.parse(ev.data);
+      // V2135_PROFILE_UPDATED_HOOK: contact avatar changed
+      if(p.type === "profile_updated"){
+        await loadChats(true).catch(()=>{});
+        const current=state.activeChat && state.chats.find(c=>c.id===state.activeChat.id);
+        if(current){
+          state.activeChat=current;
+          const avatar=document.getElementById("chatAvatar");
+          if(avatar)avatar.innerHTML=current.other_user.avatar_url
+            ? `<img src="${escapeHtml(current.other_user.avatar_url)}" alt="">`
+            : escapeHtml(initials(current.other_user.display_name));
+        }
+        return;
+      }
       if(p.type==="message"){
         if(state.activeChat&&p.data?.chat_id===state.activeChat.id&&p.data?.id&&!state.messages.some(m=>m.id===p.data.id)){
           state.messages.push(p.data);renderMessages(true);

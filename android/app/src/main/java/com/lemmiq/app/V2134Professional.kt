@@ -56,7 +56,8 @@ internal data class ProRequestV2134(val id:Int=0,val status:String="REQUESTED",v
 internal data class ProOfferV2134(val id:Int=0,val item_id:Int=0,val title:String="",val kind:String="",
     val price_q:Double=0.0,val unlocked:Boolean=false)
 internal data class ProMessageV2134(val id:Int=0,val role:String="",val kind:String="TEXT",val body:String="",
-    val created_at:String="",val offer:ProOfferV2134?=null)
+    val created_at:String="",val offer:ProOfferV2134?=null,
+    val media:ProDirectMediaV2135?=null)
 internal data class ProChatV2134(val thread_id:String="",val role:String="FAN",val creator:ProIdentityV2134=ProIdentityV2134(),
     val fan:ProFanV2134?=null,val pass_data:ProPassV2134?=null,val messages:List<ProMessageV2134> = emptyList()) {
     @com.google.gson.annotations.SerializedName("pass") private val wirePass:ProPassV2134?=null
@@ -229,7 +230,9 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                         Surface(color=if(mine)Color(0xFFDCD3FF) else Color.White,
                             shape=androidx.compose.foundation.shape.RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth()){
                             Column(Modifier.padding(12.dp)){
-                                if(msg.kind=="OFFER"&&msg.offer!=null){
+                                if(msg.kind=="DIRECT_MEDIA"&&msg.media!=null){
+                                    V2135DirectMediaBubble(vm.store,msg.media,isCreator){reload()}
+                                }else if(msg.kind=="OFFER"&&msg.offer!=null){
                                     val o=msg.offer
                                     Text("🔒 Exclusive ${o.kind}",fontWeight=FontWeight.Bold)
                                     Text(o.title,fontSize=12.sp)
@@ -262,6 +265,9 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                 }
                 // V21342_ANDROID_COMPOSER: gallery above composer; Send never sits beneath the Q orb.
                 // V21341: no numeric gallery ID and no personal-chat PPV endpoint.
+                if(isCreator){
+                    V2135CreatorMediaComposer(vm.store,selected!!){reload()}
+                }
                 if(isCreator){Card(Modifier.fillMaxWidth().padding(10.dp)){
                     Column(Modifier.padding(12.dp)){
                         Text("Send exclusive photo, video or album",fontSize=12.sp,fontWeight=FontWeight.Bold)

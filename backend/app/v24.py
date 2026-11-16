@@ -112,6 +112,14 @@ class ReportIn(BaseModel):
 
 
 def register_routes(current_user):
+    async def notify_avatar_change(db,uid):
+        # Refresh only existing personal-chat contacts. Do not expose professional identity links.
+        rows=db.scalars(select(Chat).where(or_(Chat.user1_id==uid,Chat.user2_id==uid)).limit(300)).all()
+        targets={c.user2_id if c.user1_id==uid else c.user1_id for c in rows}
+        for target in targets:
+            try:await _push(target,{'type':'profile_updated','user_id':uid})
+            except Exception:pass
+
     # -------- profile photo --------
     @router.post("/v24/profile/avatar")
     async def profile_avatar(file:UploadFile=File(...),u=Depends(current_user),db:Session=Depends(dep_db)):
@@ -119,18 +127,32 @@ def register_routes(current_user):
         if mime not in {"image/jpeg","image/png","image/webp"}:raise HTTPException(415,"Use JPEG, PNG or WebP")
         data=await file.read(5*1024*1024+1)
         if not data or len(data)>5*1024*1024:raise HTTPException(413,"Profile photo must be 5 MB or less")
-        u.avatar=media_store.store(data);db.commit();return _user_json(u)
+        u.avatar=media_store.store(data);db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
 
     @router.delete("/v24/profile/avatar")
-    def profile_avatar_delete(u=Depends(current_user),db:Session=Depends(dep_db)):
-        u.avatar=None;db.commit();return _user_json(u)
+    async def profile_avatar_delete(u=Depends(current_user),db:Session=Depends(dep_db)):
+        u.avatar=None;db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
 
     @router.get("/v24/profile/avatar/{uid}")
     def profile_avatar_get(uid:int,db:Session=Depends(dep_db)):
         x=db.get(User,uid)
         if not x or not x.avatar:raise HTTPException(404,"Profile photo not found")
         # avatar_url is versioned from the storage key, so a replacement gets a new URL immediately.
-        return StreamingResponse(media_store.stream(x.avatar),media_type="image/jpeg",headers={"Cache-Control":"private,max-age=86400"})
+        # Uploaded avatars may be JPEG, PNG or WebP; the old endpoint incorrectly
+        # returned image/jpeg for all three formats. Inspect the actual bytes.
+        source=iter(media_store.stream(x.avatar))
+        first=next(source,b'')
+        if first.startswith(b"\xff\xd8\xff"):mime="image/jpeg"
+        elif first.startswith(b"\x89PNG\r\n\x1a\n"):mime="image/png"
+        elif first[:4]==b"RIFF" and first[8:12]==b"WEBP":mime="image/webp"
+        else:raise HTTPException(415,"Unsupported profile photo data")
+        def chunks():
+            try:
+                if first:yield first
+                yield from source
+            finally:
+                if hasattr(source,"close"):source.close()
+        return StreamingResponse(chunks(),media_type=mime,headers={"Cache-Control":"private,max-age=86400","X-Content-Type-Options":"nosniff"})
 
     # -------- groups --------
     @router.get("/v24/groups")
