@@ -298,7 +298,8 @@ private fun Home(vm:LemmiqViewModel){
         floatingActionButton={
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
-                if(!qFullScreen && vm.active==null && vm.activeGroup==null)FloatingActionButton(
+                // V21342_HIDE_Q_OVER_CREATOR: no floating assistant over any More/Professional chat composer.
+                if(!qFullScreen && !showMore && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,

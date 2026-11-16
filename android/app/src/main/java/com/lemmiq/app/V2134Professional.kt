@@ -101,6 +101,7 @@ internal class ProfessionalApiV2134(private val context:Context,private val sess
         mapOf("message" to message,"request_key" to UUID.randomUUID().toString())))
     suspend fun act(id:Int,action:String):ProRequestV2134=from(call("/requests/$id/$action","POST"))
     suspend fun send(tid:String,message:String):ProMessageSentV2134=from(call("/chats/$tid/messages","POST",mapOf("text" to message)))
+    suspend fun finish(tid:String):ProChatV2134=from(call("/chats/$tid/complete","POST",emptyMap<String,Any>()))
     suspend fun offer(tid:String,itemId:Int,q:Double):ProOfferV2134=from(call("/chats/$tid/offers","POST",
         mapOf("item_id" to itemId,"price_q" to q,"request_key" to UUID.randomUUID().toString())))
     suspend fun unlock(id:Int):Map<String,Any> = from(call("/offers/$id/unlock","POST",
@@ -183,7 +184,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
     LaunchedEffect(tab,selected,showLegacy){
         while(!showLegacy && (tab==1 || selected!=null)){
             kotlinx.coroutines.delay(9000)
-            refresh++
+            if(selected==null || draft.isBlank())refresh++
         }
     }
     if(showLegacy){
@@ -242,15 +243,24 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                         }
                     }
                 }
-                if(allowed){Row(Modifier.padding(10.dp),verticalAlignment=Alignment.CenterVertically){
-                    OutlinedTextField(draft,{draft=it},Modifier.weight(1f),label={Text(if(isCreator)"Reply as creator" else "Message creator")},maxLines=3)
-                    Spacer(Modifier.width(6.dp))
-                    Button(onClick={val value=draft.trim();draft="";scope.launch{busy=true;try{api.send(selected!!,value);reload()}
-                        catch(e:Exception){error=e.message;draft=value}finally{busy=false}}},enabled=draft.isNotBlank()&&!busy){Text("Send")}
-                }}else Card(Modifier.fillMaxWidth().padding(10.dp)){Column(Modifier.padding(12.dp)){
-                    Text("🔒 This professional chat is read-only or awaiting a reply",fontSize=12.sp)
-                    if(!isCreator)TextButton({tab=1;selected=null;reload()}){Text("Request another paid chat")}
-                }}
+                if(p?.status=="ACTIVE"){
+                    val hint=if(isCreator){
+                        if(p.creator_remaining==0)"Waiting for the fan's next message." else "You have ${p.creator_remaining} paid replies to deliver."
+                    }else{
+                        if(p.fan_remaining==0)"All ${p.max_messages} fan messages used. Waiting for ${p.creator_remaining} creator reply/replies."
+                        else "${p.fan_remaining} fan message(s) remaining in this paid pass."
+                    }
+                    Text(hint,modifier=Modifier.padding(horizontal=16.dp,vertical=5.dp),fontSize=12.sp,color=ProMuted)
+                    if(!isCreator && p.fan_sent>0 && p.creator_sent>0 && p.creator_sent==p.fan_sent){
+                        OutlinedButton(onClick={confirmOp="Complete this paid conversation and settle its Q payment?" to {
+                            scope.launch{busy=true;error=null;try{api.finish(selected!!);reload()}
+                            catch(e:Exception){error=e.message}finally{busy=false}}
+                        }},modifier=Modifier.fillMaxWidth().padding(horizontal=13.dp)){
+                            Text("Complete pass / request another")
+                        }
+                    }
+                }
+                // V21342_ANDROID_COMPOSER: gallery above composer; Send never sits beneath the Q orb.
                 // V21341: no numeric gallery ID and no personal-chat PPV endpoint.
                 if(isCreator){Card(Modifier.fillMaxWidth().padding(10.dp)){
                     Column(Modifier.padding(12.dp)){
@@ -262,6 +272,16 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                     }
                 }
                 }
+                if(allowed){Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=7.dp).imePadding(),verticalAlignment=Alignment.CenterVertically){
+                    OutlinedTextField(draft,{draft=it},Modifier.weight(1f),label={Text(if(isCreator)"Reply as creator" else "Message creator")},maxLines=3)
+                    Spacer(Modifier.width(6.dp))
+                    Button(onClick={val value=draft.trim();draft="";scope.launch{busy=true;try{api.send(selected!!,value);reload()}
+                        catch(e:Exception){error=e.message;draft=value}finally{busy=false}}},enabled=draft.isNotBlank()&&!busy){Text("Send")}
+                }}else Card(Modifier.fillMaxWidth().padding(10.dp)){Column(Modifier.padding(12.dp)){
+                    Text("🔒 This professional chat is read-only or awaiting a reply",fontSize=12.sp)
+                    if(!isCreator && p?.status!="ACTIVE")TextButton({tab=1;selected=null;reload()}){Text("Request another paid chat")}
+                }}
+
             }
         }else when(tab){
             0->LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){

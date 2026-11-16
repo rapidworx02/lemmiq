@@ -80,7 +80,9 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
     var publishPrice by remember{mutableStateOf("50")}
     var assetsChosen by remember{mutableStateOf<Set<Int>>(emptySet())}
     var confirmSend by remember{mutableStateOf(false)}
-    val chooseFile=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->uploadUri=uri}
+    // V21342_MEDIA_PICKER: system Photos/Gallery picker instead of unrestricted file browser.
+    val choosePhoto=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri:Uri?->uploadUri=uri}
+    val chooseVideo=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri:Uri?->uploadUri=uri}
     fun refresh(){revision++}
     LaunchedEffect(revision){
         busy=true
@@ -142,10 +144,17 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
                         FilterChip(uploadLevel=="MAINSTREAM",{uploadLevel="MAINSTREAM"},{Text("Mainstream")})
                         FilterChip(uploadLevel=="GLAMOUR",{uploadLevel="GLAMOUR"},{Text("Non-explicit glamour")})
                     }
-                    OutlinedButton(onClick={chooseFile.launch("*/*")},modifier=Modifier.fillMaxWidth()){
-                        Text(uploadUri?.lastPathSegment?.takeLast(35)?:"Choose photo or video")
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        OutlinedButton(onClick={choosePhoto.launch("image/*")},modifier=Modifier.weight(1f)){
+                            Text("📷 Choose photo",fontSize=12.sp)
+                        }
+                        OutlinedButton(onClick={chooseVideo.launch("video/*")},modifier=Modifier.weight(1f)){
+                            Text("🎬 Choose video",fontSize=12.sp)
+                        }
                     }
-                    Text("JPG/PNG/WebP ≤20 MB · MP4/WebM ≤100 MB. Uploaded media remains pending until moderation approval.",fontSize=10.sp,color=GalleryMutedV21341)
+                    Text(if(uploadUri==null)"No file selected" else "Selected from your phone: ${uploadUri?.lastPathSegment?.takeLast(55)}",
+                        fontSize=11.sp,color=GalleryMutedV21341)
+                    Text("Select phone photo/video → Upload → Admin approves file → Create item → Admin approves item → Send PPV. JPG/PNG/WebP ≤20 MB or MP4/WebM ≤100 MB. HEIC photos are converted to JPEG on Android.",fontSize=10.sp,color=GalleryMutedV21341)
                     Button(onClick={scope.launch{
                         busy=true;error=null
                         try{client.uploadAsset(uploadUri!!,uploadTitle.trim(),uploadLevel);uploadTitle="";uploadUri=null

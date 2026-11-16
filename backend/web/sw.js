@@ -1,4 +1,4 @@
-const CACHE = "lemmiq-v21341-gallery-1";
+const CACHE = "lemmiq-v21342-creator-chat-gallery";
 const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
@@ -33,11 +33,12 @@ const SHELL = [
   "/web/brand-icon.png",
   "/web/v2132_call_recovery.js?v=2.13.2",
   "/web/v2132_call_recovery.css?v=2.13.2",
-  "/web/v2134_professional.js?v=2.13.4",
+  "/web/v2134_professional.js?v=2.13.4.2",
   "/web/v2134_professional.css?v=2.13.4",
 
   "/web/v21341_gallery_picker.css?v=2.13.4.1",
-  "/web/v21341_gallery_picker.js?v=2.13.4.1",
+  "/web/v21341_gallery_picker.js?v=2.13.4.2",
+  "/web/v21342_professional_layout.css?v=2.13.4.2",
 ];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});

@@ -85,7 +85,15 @@
  }
  function renderThread(data){
    const isCreator=data.role==='CREATOR',title=isCreator?'Fan · '+(data.fan?.display_name||'LEMMIQ user'):data.creator.stage_name;
-   const p=data.pass,active=p?.status==='ACTIVE';const allowed=!!(active&&(isCreator?p.creator_remaining>0:p.fan_remaining>0));
+   // V21342_CHAT_EXPLANATIONS: status ACTIVE does not mean unlimited messaging.
+    const p=data.pass,active=p?.status==='ACTIVE';
+    const fanLeft=Math.max(0,Number(p?.fan_remaining||0));
+    const creatorOwed=Math.max(0,Number(p?.creator_remaining||0));
+    const allowed=!!(active&&(isCreator?creatorOwed>0:fanLeft>0));
+    const canFinish=!!(active&&!isCreator&&Number(p.fan_sent)>0&&Number(p.creator_sent)>0&&Number(p.creator_sent)===Number(p.fan_sent));
+    const reason=active?(isCreator?(creatorOwed===0?'Waiting for the fan to send the next message.':'Reply to the remaining '+creatorOwed+' message(s).'):
+       (fanLeft===0?'You have sent all '+p.max_messages+' messages in this pass. '+(creatorOwed?'Waiting for '+creatorOwed+' creator reply/replies.':'All replies received: complete this pass to request another.'):'You can still send '+fanLeft+' message(s).')):
+       (p?.status==='EXPIRED'?'Your paid chat pass expired.':'Your paid chat pass is completed or no longer active.');
    host().innerHTML=head(title,isCreator?'Professional Creator Inbox · @'+data.creator.handle:'Professional chat · @'+data.creator.handle)+
     `<div class="v2134-thread-menu"><button class="ghost" data-v2134="back">‹ Inbox</button><span>✦ ${active?'Paid pass active':'Read-only professional history'} · ${terms(p)}</span></div>
     <div class="v2134-messages" id="v2134Messages">${(data.messages||[]).map(m=>{
@@ -94,7 +102,8 @@
       return `<div class="v2134-bubble ${own?'mine':''}">${esc(m.body)}<small>${time(m.created_at)}</small></div>`
     }).join('')||'<p class="v2134-empty">Chat will begin when the fan sends their first included message.</p>'}</div>
     ${allowed?`<form class="v2134-composer" id="v2134MessageForm"><input name="text" maxlength="4000" placeholder="${isCreator?'Reply as @'+data.creator.handle:'Message the professional creator'}" required><button class="primary">Send</button></form>`:
-    `<div class="v2134-locked">🔒 ${active?'Your allowance is used or awaiting the next reply.':'This paid chat pass is completed or expired.'} ${!isCreator?'<button class="ghost" data-v2134="requestAgain">Request another chat</button>':''}</div>`}
+    `<div class="v2134-locked" role="status">🔒 ${esc(reason)} ${!active&&!isCreator?'<button class="ghost" data-v2134="requestAgain">Request another chat pass</button>':''}</div>`}
+     ${canFinish?'<div class="v2134-early-finish"><small>You may close this pass after receiving the replies owed so far. This releases the agreed Q payment and lets you request another pass.</small><button class="ghost" type="button" data-v2134="finish">Complete paid chat</button></div>':''}
     ${isCreator?`<div class="v2134-offer"><strong>Send exclusive photos, videos or albums</strong><p class="micro">Choose approved creator content or upload new media for moderation. Personal Chats are never used.</p><button type="button" class="primary" data-v21341="picker">🖼 Choose from My Gallery / Upload</button></div>`:''}`;
    const sc=by('v2134Messages');if(sc)sc.scrollTop=sc.scrollHeight;
  }
@@ -116,6 +125,11 @@
    if(b.dataset.v2134==='personal')return setView('chats');
    if(b.dataset.v2134==='back'){selectedThread=null;tab='inbox';return refresh()}
    if(b.dataset.v2134==='search'){query=by('v2134Search')?.value.trim()||'';return refresh()}
+    if(b.dataset.v2134==='finish'){
+      if(!selectedThread)return;
+      if(!confirm('Confirm this professional chat was delivered? The reserved Q will be settled and your pass closed.'))return;
+      try{await post('/chats/'+encodeURIComponent(selectedThread)+'/complete',{});toastPro('Chat completed. You can request another paid pass.');return refresh()}catch(e){return fail(e)}
+    }
    if(b.dataset.v2134==='requestAgain'){
      const d=await apiPro('/chats/'+encodeURIComponent(selectedThread));
      return requestNew(d.creator.public_id,(await apiPro('/profiles/'+encodeURIComponent(d.creator.public_id))).profile.chat_q);

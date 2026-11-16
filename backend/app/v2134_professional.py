@@ -490,11 +490,11 @@ def register_v2134_professional(app,current_user,get_db,push):
         if close_expired(db,p):db.commit();raise HTTPException(409,'Paid chat pass expired')
         role='CREATOR' if u.id==t.creator_id else 'FAN'
         if role=='FAN':
-            if p.fan_sent>=p.max_messages:raise HTTPException(402,'Fan message allowance used')
+            if p.fan_sent>=p.max_messages:raise HTTPException(402,'All included fan messages have been sent. Wait for creator replies, then request another pass.')
             p.fan_sent+=1
         else:
             if p.creator_sent>=p.fan_sent or p.creator_sent>=p.max_messages:
-                raise HTTPException(402,'No paid creator reply is currently due')
+                raise HTTPException(402,'No paid creator reply is due yet. Wait for the fan to send their next message.')
             p.creator_sent+=1
             if p.creator_sent==p.max_messages and p.fan_sent==p.max_messages:
                 r=db.get(CreatorRequest,p.request_id)
@@ -506,6 +506,31 @@ def register_v2134_professional(app,current_user,get_db,push):
         other=t.fan_id if u.id==t.creator_id else t.creator_id
         await push(other,{'type':'creator_professional_message','thread_id':tid})
         return {'message':message_json(db,m,u.id),'pass':pass_json(p)}
+
+    # V21342_FAN_FINISH: fan may voluntarily complete a delivered partial pass.
+    # Never settle a service with outstanding creator replies or zero delivered replies.
+    @router.post('/chats/{tid}/complete')
+    def complete_professional_chat(tid:str,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        t=require_thread(db,tid,u.id)
+        if u.id!=t.fan_id:raise HTTPException(403,'Only the paying fan can confirm completion')
+        db.execute(select(User.id).where(User.id.in_(sorted((t.creator_id,t.fan_id)))).order_by(User.id).with_for_update()).all()
+        db.execute(select(ProfessionalThread.id).where(ProfessionalThread.id==tid).with_for_update()).all()
+        p=latest_pass(db,t,lock=True)
+        if not p:raise HTTPException(409,'No paid chat pass exists')
+        if p.status=='COMPLETED':return thread_json(db,t,u.id)
+        if p.status!='ACTIVE':raise HTTPException(409,'Only an active pass can be completed')
+        if close_expired(db,p):db.commit();raise HTTPException(409,'The pass expired; contact support for settlement')
+        if p.fan_sent<1 or p.creator_sent<1:
+            raise HTTPException(409,'At least one fan message and one creator reply must be delivered')
+        if p.creator_sent!=p.fan_sent:
+            raise HTTPException(409,'Wait for all outstanding creator replies before completing')
+        r=db.get(CreatorRequest,p.request_id)
+        payment=db.get(CreatorPayment,r.payment_id)
+        if payment.status=='HELD':settle_held(db,payment)
+        elif payment.status!='CAPTURED':raise HTTPException(409,'Payment is unavailable for settlement')
+        p.status='COMPLETED';r.status='COMPLETED';r.updated_at=utcnow();t.updated_at=utcnow()
+        db.commit()
+        return thread_json(db,t,u.id)
 
     @router.post('/chats/{tid}/offers')
     async def offer(tid:str,body:OfferIn,u:User=Depends(current_user),db:Session=Depends(get_db)):

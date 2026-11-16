@@ -119,8 +119,30 @@ internal class CreatorApiV2131(private val context: Context, private val session
     private suspend fun upload(path: String, uri: Uri, fields: Map<String, String>): String = withContext(Dispatchers.IO) {
         val mime = context.contentResolver.getType(uri)?.lowercase()?.substringBefore(';')
             ?: throw IOException("Cannot determine photo/video type")
+        // V21342_HEIC_TO_JPEG: many Android camera galleries return image/heic.
+        // Decode through Android and encode as a bounded JPEG before uploading.
+        if (mime in setOf("image/heic", "image/heif", "image/heic-sequence")) {
+            if (android.os.Build.VERSION.SDK_INT < 28)
+                throw IOException("HEIC conversion needs Android 9+. Export photo as JPEG.")
+            val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+            val bmp = android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val width=info.size.width;val height=info.size.height
+                val scale=maxOf(1.0, maxOf(width/2500.0,height/2500.0))
+                decoder.setTargetSize(maxOf(1,(width/scale).toInt()),maxOf(1,(height/scale).toInt()))
+            }
+            val out = java.io.ByteArrayOutputStream()
+            try { if(!bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG,88,out))
+                  throw IOException("Could not convert HEIC photo") }
+            finally { bmp.recycle() }
+            val jpg=out.toByteArray()
+            if (jpg.size>20*1024*1024)throw IOException("Converted photo exceeds 20 MB")
+            val form=MultipartBody.Builder().setType(MultipartBody.FORM)
+            fields.forEach{(key,value)->form.addFormDataPart(key,value)}
+            form.addFormDataPart("file", "creator_photo.jpg", jpg.toRequestBody("image/jpeg".toMediaType()))
+            return@withContext raw(builder(path).post(form.build()).build())
+        }
         if (mime !in setOf("image/jpeg", "image/png", "image/webp", "video/mp4", "video/webm"))
-            throw IOException("Only JPG, PNG, WebP, MP4 and WebM are supported")
+            throw IOException("Choose JPG/PNG/WebP photos or MP4/WebM videos. Export MOV as MP4 before uploading.")
         val maxBytes = if (mime.startsWith("image/")) 20L * 1024 * 1024 else 100L * 1024 * 1024
         val length = runCatching {
             context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
