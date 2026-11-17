@@ -1,0 +1,5 @@
+/* LEMMIQ V2.13.5.1 personal avatar diagnostics and accessible loading state. */
+#profilePhotoStatus{min-height:1.2em;line-height:1.45;display:block;margin-top:7px;font-size:12px;color:var(--muted,#a9acc8)}
+#profilePhotoStatus[data-error="true"]{color:#f28f9d}
+#meAvatar.v21351-busy{opacity:.58;filter:grayscale(.2)}
+.v2135-avatar img{object-fit:cover}

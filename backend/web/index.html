@@ -37,6 +37,7 @@
   <link rel="stylesheet" href="/web/v21342_professional_layout.css?v=2.13.4.2">
   <link rel="stylesheet" href="/web/v2135_avatar_call.css?v=2.13.5">
   <link rel="stylesheet" href="/web/v2135_creator_media.css?v=2.13.5">
+  <link rel="stylesheet" href="/web/v21351_avatar_status.css?v=2.13.5.2">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -510,8 +511,8 @@
           <article class="profile-card glass">
             <div id="meAvatar" class="profile-avatar"><img src="/web/brand-icon.png" alt=""></div>
             <h3 id="meName">LEMMIQ User</h3>
-            <div class="profile-photo-actions"><label class="upload ghost">📷 Add / change photo<input id="profilePhotoInput" type="file" accept="image/*" hidden></label><button id="removeProfilePhotoBtn" class="ghost">Remove photo</button></div>
-            <p id="meUsername">@username</p>
+            <div class="profile-photo-actions"><label class="upload ghost">📷 Add / change photo<input id="profilePhotoInput" type="file" accept="image/jpeg,image/png,image/webp" hidden></label><button id="removeProfilePhotoBtn" class="ghost">Remove photo</button></div>
+            <small id="profilePhotoStatus" role="status" aria-live="polite"></small><p id="meUsername">@username</p>
             <button id="v2123SupportMe" class="ghost full" type="button">💬 Chat with Lemmiq.Official Support (@lemmiq)</button>
             <button id="v213SwitchProfessional" class="ghost full" type="button">✨ Switch to Professional Creator</button>
             <button id="logoutBtn" class="danger">Log out</button>
@@ -560,7 +561,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.13.5" defer></script>
+  <script src="/web/app.js?v=2.13.5.2" defer></script>
   <script src="/web/v28.js?v=2.12.4.1" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>

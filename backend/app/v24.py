@@ -127,11 +127,49 @@ def register_routes(current_user):
         if mime not in {"image/jpeg","image/png","image/webp"}:raise HTTPException(415,"Use JPEG, PNG or WebP")
         data=await file.read(5*1024*1024+1)
         if not data or len(data)>5*1024*1024:raise HTTPException(413,"Profile photo must be 5 MB or less")
-        u.avatar=media_store.store(data);db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
+        if mime=="image/jpeg" and not data.startswith(b"\xff\xd8\xff"):
+            raise HTTPException(415,"Invalid JPEG photo")
+        if mime=="image/png" and not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise HTTPException(415,"Invalid PNG photo")
+        if mime=="image/webp" and not (data[:4]==b"RIFF" and data[8:12]==b"WEBP"):
+            raise HTTPException(415,"Invalid WebP photo")
+        new_key=media_store.store(data)
+        # Avoid showing successful upload when object storage cannot serve it.
+        try:
+            source=iter(media_store.stream(new_key))
+            try:stored=next(source,b'')
+            finally:
+                if hasattr(source,"close"):source.close()
+        except Exception as exc:
+            raise HTTPException(503,"Photo storage could not verify upload; check object storage") from exc
+        if stored[:12]!=data[:12]:
+            raise HTTPException(503,"Photo storage verification failed")
+        u.avatar=new_key;db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
 
     @router.delete("/v24/profile/avatar")
     async def profile_avatar_delete(u=Depends(current_user),db:Session=Depends(dep_db)):
         u.avatar=None;db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
+
+    # V21351_AVATAR_STATUS — authenticated self-diagnostic, never exposes storage object keys.
+    @router.get("/v24/profile/avatar/status")
+    def personal_photo_status(u=Depends(current_user)):
+        if not u.avatar:
+            return {"has_photo":False,"stored_ok":False,"reason":"NO_PHOTO","avatar_url":None}
+        try:
+            source=iter(media_store.stream(u.avatar))
+            try:prefix=next(source,b'')
+            finally:
+                if hasattr(source,"close"):source.close()
+            is_jpg=prefix.startswith(b"\xff\xd8\xff")
+            is_png=prefix.startswith(b"\x89PNG\r\n\x1a\n")
+            is_webp=prefix[:4]==b"RIFF" and prefix[8:12]==b"WEBP"
+            valid=is_jpg or is_png or is_webp
+            return {"has_photo":True,"stored_ok":valid,
+                    "reason":"OK" if valid else "INVALID_FILE_DATA",
+                    "avatar_url":_user_json(u).get("avatar_url")}
+        except Exception:
+            return {"has_photo":True,"stored_ok":False,
+                    "reason":"STORAGE_UNAVAILABLE","avatar_url":_user_json(u).get("avatar_url")}
 
     @router.get("/v24/profile/avatar/{uid}")
     def profile_avatar_get(uid:int,db:Session=Depends(dep_db)):

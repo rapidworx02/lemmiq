@@ -58,12 +58,14 @@ private fun v24AvatarUrl(user:UserDto):String?{
 fun V24Avatar(user:UserDto,size:Int=50){
     val ctx=LocalContext.current
     val url=v24AvatarUrl(user)
+    var loadFailed by remember(url){mutableStateOf(false)}
     Box(Modifier.size(size.dp).clip(CircleShape).background(V24Soft),contentAlignment=Alignment.Center){
-        if(url!=null)AsyncImage(
+        if(url!=null && !loadFailed)AsyncImage(
             model=ImageRequest.Builder(ctx).data(url).memoryCacheKey(url).diskCacheKey(url).crossfade(true).build(),
-            contentDescription=user.display_name,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop
+            contentDescription=user.display_name,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop,
+            onError={loadFailed=true}
         )
-        else Text(user.display_name.firstOrNull()?.uppercase()?:"?",color=V24Purple,fontWeight=FontWeight.Bold,fontSize=(size*.36).sp)
+        if(url==null||loadFailed)Text(user.display_name.firstOrNull()?.uppercase()?:"?",color=V24Purple,fontWeight=FontWeight.Bold,fontSize=(size*.36).sp)
     }
 }
 
@@ -78,6 +80,7 @@ fun V24GroupAvatar(g:GroupDto,size:Int=50){
 
 @Composable
 fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThread:()->Unit){
+    LaunchedEffect(Unit){vm.refreshChats()}
     var search by remember{mutableStateOf("")}
     var mode by remember{mutableStateOf("ALL")}
     val unreadTotal=vm.chats.sumOf{it.unread}+vm.groups.sumOf{it.unread}+vm.qThread.unread_count
@@ -686,12 +689,22 @@ fun V24PrivacyCard(vm:LemmiqViewModel){
 @Composable
 fun V24ProfilePhotoCard(vm:LemmiqViewModel){
     val picker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)vm.uploadProfilePhoto(uri)}
+    LaunchedEffect(Unit){vm.refreshMe()}
     val u=vm.currentUser?:UserDto(vm.store.userId,vm.store.username.orEmpty(),vm.store.displayName.orEmpty())
     Card(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=6.dp)){
         Row(Modifier.fillMaxWidth().padding(14.dp),verticalAlignment=Alignment.CenterVertically){
             V24Avatar(u,64);Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)){Text("Profile photo",fontWeight=FontWeight.Bold);Text("Shown in chats, groups and calls",fontSize=10.sp,color=V24Muted)}
-            Column{TextButton({picker.launch("image/*")}){Text("Change")};TextButton({vm.removeProfilePhoto()}){Text("Remove")}}
+            Column(Modifier.weight(1f)){
+                Text("Profile photo",fontWeight=FontWeight.Bold)
+                Text(if(u.avatar_url.isNullOrBlank())"No photo saved for this account" else "Saved to your personal profile",fontSize=10.sp,color=V24Muted)
+                vm.profilePhotoStatus?.let { Text(it,fontSize=10.sp,color=if(it.startsWith("Photo saved"))Color(0xFF157F65) else V24Muted) }
+                if(vm.profilePhotoUploading)LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
+            Column{
+                TextButton({picker.launch("image/*")},enabled=!vm.profilePhotoUploading){Text("Change")}
+                TextButton({vm.removeProfilePhoto()},enabled=!vm.profilePhotoUploading){Text("Remove")}
+                TextButton({vm.refreshMe();vm.refreshChats()},enabled=!vm.profilePhotoUploading){Text("Refresh")}
+            }
         }
     }
 }

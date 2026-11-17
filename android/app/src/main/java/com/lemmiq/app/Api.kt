@@ -561,6 +561,9 @@ class Api(private val store:SessionStore){
     }
     suspend fun removeProfilePhoto():UserDto =
         gson.fromJson(req(b("$base/v24/profile/avatar").delete().build()),UserDto::class.java)
+    // V21351: self-only avatar availability diagnostic.
+    suspend fun avatarStatusV21351():AvatarStatusV21351 =
+        gson.fromJson(req(b("$base/v24/profile/avatar/status").get().build()),AvatarStatusV21351::class.java)
 
     suspend fun editMessage(mid:Int,text:String):MessageDto{
         val rb=gson.toJson(mapOf("text" to text)).toRequestBody(json)

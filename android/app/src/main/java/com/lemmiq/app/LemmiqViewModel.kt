@@ -191,7 +191,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             error=e.message ?: "Unable to open LEMMIQ Official Support"
         }
     }
-    fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{chats=it}.onFailure{error=it.message}}
+    fun refreshChats()=viewModelScope.launch{runCatching{api.chats()}.onSuccess{updated->
+        chats=updated
+        // Keep an open conversation header in sync when its contact changes avatar.
+        val existing=active
+        if(existing!=null)active=updated.firstOrNull{it.id==existing.id}?:existing
+    }.onFailure{error=it.message}}
     fun search(q:String)=viewModelScope.launch{
         if(q.length<2){users=emptyList();return@launch}
         runCatching{api.search(q)}.onSuccess{users=it.filter{x->x.id!=store.userId}}.onFailure{error=it.message}
@@ -1068,19 +1073,27 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun scanSocialIq()=viewModelScope.launch{agentBusy=true;try{api.scanSocial();socialBrief=api.socialBrief()}catch(e:Exception){error=e.message}finally{agentBusy=false}}
     fun deleteSocialMemory(id:Int)=viewModelScope.launch{runCatching{api.deleteSocialMemory(id);socialBrief=api.socialBrief()}.onFailure{error=it.message}}
 
+    // V21351_AVATAR_RELIABILITY: normalize HEIC/large images, verify actual server save.
+    var profilePhotoUploading by mutableStateOf(false)
+    var profilePhotoStatus by mutableStateOf<String?>(null)
     fun uploadProfilePhoto(uri:Uri)=viewModelScope.launch{
+        profilePhotoUploading=true;profilePhotoStatus="Preparing photo…";error=null
         try{
-            val data=withContext(Dispatchers.IO){
-                val cr=appCtx.contentResolver;var name="profile.jpg"
-                cr.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{c->if(c.moveToFirst())name=c.getString(0)?:name}
-                val bytes=cr.openInputStream(uri)?.use{it.readBytes()}?:throw IllegalArgumentException("Cannot read photo")
-                if(bytes.size>5*1024*1024)throw IllegalArgumentException("Profile photo exceeds 5 MB")
-                Triple(name,cr.getType(uri)?:"image/jpeg",bytes)
-            }
-            currentUser=api.uploadProfilePhoto(data.first,data.second,data.third)
-            // Versioned avatar URLs force Coil to display the new photo immediately everywhere.
-            refreshMe();refreshChats();refreshGroups();refreshStatuses();refreshCalls()
-        }catch(e:Exception){error=e.message}
+            val data=V21351AvatarCodec.encode(appCtx,uri)
+            profilePhotoStatus="Uploading and verifying…"
+            val uploaded=api.uploadProfilePhoto(data.first,data.second,data.third)
+            if(uploaded.avatar_url.isNullOrBlank())throw IllegalStateException("Server did not save the profile photo")
+            val fresh=api.me()
+            if(fresh.avatar_url.isNullOrBlank())throw IllegalStateException("Profile photo missing after server refresh")
+            val status=api.avatarStatusV21351()
+            if(!status.has_photo || !status.stored_ok)
+                throw IllegalStateException("Server cannot retrieve saved photo: ${status.reason}")
+            currentUser=fresh
+            profilePhotoStatus="Photo saved. Chats will refresh automatically."
+            refreshChats();refreshGroups();refreshStatuses();refreshCalls()
+        }catch(e:Exception){
+            error=e.message;profilePhotoStatus=e.message?:"Could not upload photo"
+        }finally{profilePhotoUploading=false}
     }
     fun removeProfilePhoto()=viewModelScope.launch{runCatching{
         currentUser=api.removeProfilePhoto();refreshMe();refreshChats();refreshGroups();refreshStatuses();refreshCalls()

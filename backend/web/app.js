@@ -112,6 +112,13 @@ function showApp(){
   $("meName").textContent=state.user?.display_name||"LEMMIQ User";
   $("meUsername").textContent="@"+(state.user?.username||"");
   renderMeAvatar();
+  // V21351_SELF_REFRESH: refresh stale cached user data upon opening the app.
+  api("/me").then(fresh=>{
+    if(!fresh || state.user?.id!==fresh.id)return;
+    state.user={...state.user,...fresh};
+    localStorage.setItem("lemmiq_user",JSON.stringify(state.user));
+    renderMeAvatar();
+  }).catch(()=>{});
   connectSocket();
   const requested=(location.hash||"").replace(/^#/,"");
   const directViews = new Set(["chats","updates","agent","q-economy","q-predict","calls","more","trust","business","activity","money","me","q-admin","q-creators"]);
@@ -1529,7 +1536,45 @@ async function scanSocial(){
   }catch(e){toast(e.message,true)}
 }
 
-async function uploadProfilePhoto(file){if(!file)return;const fd=new FormData();fd.append("file",file);try{const u=await api("/v24/profile/avatar",{method:"POST",body:fd});state.user={...state.user,...u};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));renderMeAvatar();await loadChats();toast("Profile photo updated")}catch(e){toast(e.message,true)}}
+// V21351_PWA_PHOTO: resize camera photos to 1600px JPEG, verify upload with /me + storage status.
+async function uploadProfilePhoto(file){
+  if(!file)return;
+  const note=$("profilePhotoStatus"),avatar=$("meAvatar");
+  if(note){note.textContent="Preparing photo…";note.dataset.error="false"}
+  avatar?.classList.add("v21351-busy");
+  try{
+    let payload=file;
+    const mime=file.type.toLowerCase();
+    if(!["image/jpeg","image/png","image/webp"].includes(mime)){
+      throw Error("Choose JPG, PNG or WebP. For HEIC/HEIF photos, save as JPG first.");
+    }
+    const bmp=await createImageBitmap(file);
+    try{
+      const scale=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+      const canvas=document.createElement("canvas");
+      canvas.width=Math.max(1,Math.round(bmp.width*scale));canvas.height=Math.max(1,Math.round(bmp.height*scale));
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw Error("Image conversion is unavailable in this browser");
+      ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(bmp,0,0,canvas.width,canvas.height);
+      let q=.88;
+      let blob=await new Promise(ok=>canvas.toBlob(ok,"image/jpeg",q));
+      while(blob?.size>5*1024*1024 && q>.52){q-=.12;blob=await new Promise(ok=>canvas.toBlob(ok,"image/jpeg",q))}
+      if(!blob||blob.size>5*1024*1024)throw Error("Unable to prepare photo below 5 MB");
+      payload=new File([blob],"profile.jpg",{type:"image/jpeg"});
+    }finally{bmp.close?.()}
+    const fd=new FormData();fd.append("file",payload);
+    if(note)note.textContent="Uploading and verifying…";
+    await api("/v24/profile/avatar",{method:"POST",body:fd});
+    const [fresh,diagnostic]=await Promise.all([api("/me"),api("/v24/profile/avatar/status")]);
+    if(!fresh.avatar_url || diagnostic.stored_ok!==true)throw Error("Upload completed but photo could not be retrieved: "+(diagnostic.reason||"unknown"));
+    state.user={...state.user,...fresh};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));
+    renderMeAvatar();await loadChats(true);
+    if(note)note.textContent="Photo uploaded and verified. Your contacts will see it after refreshing.";
+    toast("Profile photo saved");
+  }catch(e){if(note){note.textContent=e.message;note.dataset.error="true"}toast(e.message,true)}
+  finally{avatar?.classList.remove("v21351-busy")}
+}
 async function removeProfilePhoto(){try{const u=await api("/v24/profile/avatar",{method:"DELETE"});state.user={...state.user,...u};localStorage.setItem("lemmiq_user",JSON.stringify(state.user));renderMeAvatar();await loadChats();toast("Profile photo removed")}catch(e){toast(e.message,true)}}
 
 document.addEventListener("DOMContentLoaded",()=>{

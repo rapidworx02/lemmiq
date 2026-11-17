@@ -1,5 +1,7 @@
-const CACHE = "lemmiq-v2135-avatar-calls-creator-media-1";
+const CACHE = "lemmiq-v21352-personal-avatar-1";
 const SHELL = [
+  "/web/v21351_avatar_status.css?v=2.13.5.2",
+  "/web/app.js?v=2.13.5.2",
   "/web/v2135_creator_media.js?v=2.13.5",
   "/web/v2135_creator_media.css?v=2.13.5",
   "/web/v2135_avatar_refresh.js?v=2.13.5",
