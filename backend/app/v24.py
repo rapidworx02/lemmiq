@@ -144,11 +144,27 @@ def register_routes(current_user):
             raise HTTPException(503,"Photo storage could not verify upload; check object storage") from exc
         if stored[:12]!=data[:12]:
             raise HTTPException(503,"Photo storage verification failed")
-        u.avatar=new_key;db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
+        # V21353_UPLOAD_DB_SESSION: change the User attached to the same db Session we commit.
+        account = db.get(User, u.id)
+        if account is None:
+            raise HTTPException(401, "User not found")
+        account.avatar = new_key
+        db.commit()
+        db.refresh(account)
+        await notify_avatar_change(db, account.id)
+        return _user_json(account)
 
     @router.delete("/v24/profile/avatar")
     async def profile_avatar_delete(u=Depends(current_user),db:Session=Depends(dep_db)):
-        u.avatar=None;db.commit();await notify_avatar_change(db,u.id);return _user_json(u)
+        # V21353_DELETE_DB_SESSION: change the User attached to the same db Session we commit.
+        account = db.get(User, u.id)
+        if account is None:
+            raise HTTPException(401, "User not found")
+        account.avatar = None
+        db.commit()
+        db.refresh(account)
+        await notify_avatar_change(db, account.id)
+        return _user_json(account)
 
     # V21351_AVATAR_STATUS — authenticated self-diagnostic, never exposes storage object keys.
     @router.get("/v24/profile/avatar/status")

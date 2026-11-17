@@ -1,3 +1,4 @@
+/* V21354_CREATOR_AUTOPUBLISH */
 /* LEMMIQ V2.13.4 — personal vs professional identities, separate creator threads. */
 (()=>{
  'use strict';
@@ -105,7 +106,7 @@
     ${allowed?`<form class="v2134-composer" id="v2134MessageForm"><input name="text" maxlength="4000" placeholder="${isCreator?'Reply as @'+data.creator.handle:'Message the professional creator'}" required><button class="primary">Send</button></form>`:
     `<div class="v2134-locked" role="status">🔒 ${esc(reason)} ${!active&&!isCreator?'<button class="ghost" data-v2134="requestAgain">Request another chat pass</button>':''}</div>`}
      ${canFinish?'<div class="v2134-early-finish"><small>You may close this pass after receiving the replies owed so far. This releases the agreed Q payment and lets you request another pass.</small><button class="ghost" type="button" data-v2134="finish">Complete paid chat</button></div>':''}
-    ${isCreator?`<div class="v2134-offer"><strong>Send exclusive photos, videos or albums</strong><p class="micro">Choose approved creator content or upload new media for moderation. Personal Chats are never used.</p><button type="button" class="primary" data-v21341="picker">🖼 Choose from My Gallery / Upload</button></div>`:''}`;
+    ${isCreator?`<div class="v2134-offer"><strong>Send exclusive photos, videos or albums</strong><p class="micro">Choose existing published creator content or send new media immediately. Admin can audit or remove content afterwards. Personal Chats are never used.</p><button type="button" class="primary" data-v21341="picker">🖼 Choose from My Gallery / Upload</button></div>`:''}`;
    window.v2135RefreshThread=()=>refresh();
    if(window.v2135SetupThread)window.v2135SetupThread(data);
    const sc=by('v2134Messages');if(sc)sc.scrollTop=sc.scrollHeight;

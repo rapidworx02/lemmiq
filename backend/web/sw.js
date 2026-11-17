@@ -1,4 +1,5 @@
-const CACHE = "lemmiq-v21352-personal-avatar-1";
+/* V21354_CREATOR_AUTOPUBLISH */
+const CACHE = "lemmiq-v21354-creator-autopublish-avatar";
 const SHELL = [
   "/web/v21351_avatar_status.css?v=2.13.5.2",
   "/web/app.js?v=2.13.5.2",
@@ -27,10 +28,10 @@ const SHELL = [
   "/web/v2122_image_edit.js?v=2.12.2",
   "/web/v2123_support.js?v=2.12.3",
   "/web/v213_creators.css?v=2.13.0",
-  "/web/v213_creators.js?v=2.13.1",
-  "/web/v2131_exclusives.js?v=2.13.1",
+  "/web/v213_creators.js?v=2.13.5.4",
+  "/web/v2131_exclusives.js?v=2.13.5.4",
   "/web/v2131_exclusives.css?v=2.13.1",
-  "/web/v213_creators_admin.js?v=2.13.1",
+  "/web/v213_creators_admin.js?v=2.13.5.4",
   "/web/v2124_admin_layout.js?v=2.13.0",
   "/web/v2124_admin_layout.css?v=2.12.4",
   "/web/manifest.webmanifest",
@@ -39,7 +40,7 @@ const SHELL = [
   "/web/brand-icon.png",
   "/web/v2132_call_recovery.js?v=2.13.2",
   "/web/v2132_call_recovery.css?v=2.13.2",
-  "/web/v2134_professional.js?v=2.13.4.2",
+  "/web/v2134_professional.js?v=2.13.5.4",
   "/web/v2134_professional.css?v=2.13.4",
 
   "/web/v21341_gallery_picker.css?v=2.13.4.1",

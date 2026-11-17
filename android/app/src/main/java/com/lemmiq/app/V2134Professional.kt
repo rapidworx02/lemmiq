@@ -1,3 +1,4 @@
+/* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
 
 import android.content.Context
@@ -271,7 +272,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                 if(isCreator){Card(Modifier.fillMaxWidth().padding(10.dp)){
                     Column(Modifier.padding(12.dp)){
                         Text("Send exclusive photo, video or album",fontSize=12.sp,fontWeight=FontWeight.Bold)
-                        Text("Choose approved media. New uploads require moderation.",fontSize=11.sp,color=ProMuted)
+                        Text("Choose published media or upload new media immediately. Admins may audit it.",fontSize=11.sp,color=ProMuted)
                         Button(onClick={showGalleryPicker=true},modifier=Modifier.fillMaxWidth()){
                             Text("🖼 Choose from My Gallery / Upload")
                         }
@@ -367,7 +368,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                     catch(e:Exception){error=e.message}finally{busy=false}}},enabled=(count.toIntOrNull()?.let{it in 1..25}==true)&&(hours.toIntOrNull()?.let{it in 1..168}==true)&&!busy){Text("Save Chat Allowance")}
                 OutlinedButton({showLegacy=true},modifier=Modifier.fillMaxWidth()){Text("Open Creator Studio / Exclusive Gallery")}
                 if(identity.creator_status=="APPROVED")OutlinedButton({showGalleryPicker=true},modifier=Modifier.fillMaxWidth()){Text("🖼 Manage My Media Library & Gallery")}
-                Text("Set Q pricing in Creator Studio. Media remains subject to moderation. Explicit material is not enabled in this Android app.",fontSize=11.sp,color=ProMuted)
+                Text("Set Q pricing in Creator Studio. Admins can audit or remove content after publishing. Explicit material is not enabled in this Android app.",fontSize=11.sp,color=ProMuted)
             }
         }
     }

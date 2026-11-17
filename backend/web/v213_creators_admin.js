@@ -1,3 +1,4 @@
+/* V21354_CREATOR_AUTOPUBLISH */
 /* LEMMIQ V2.13 — Master Admin creator moderation and accounting. */
 (()=>{
  'use strict';
@@ -13,21 +14,21 @@
  const btn=(action,id,label,cl='ghost')=>`<button type="button" data-ca="${e(action)}" data-id="${Number(id)}" class="${cl}">${e(label)}</button>`;
  const formatProfile=p=>`#${p.id} @${p.username} · ${p.display_name} · ${p.category} · ${p.level}`;
  function show(){const el=card();if(!el||!data)return;const c=data.config;
-   const profiles=data.profiles||[],posts=data.pending_posts||[],pays=data.payments||[];
+   const profiles=data.profiles||[],posts=data.recent_posts||[],pays=data.payments||[];
    el.innerHTML=`<div class="section-head"><div><span class="eyebrow">Q CREATORS</span><h3>Moderation & Monetisation</h3><p class="micro">Mainstream creator programme only. Explicit content remains disabled.</p></div><button class="ghost" type="button" data-ca="refresh" data-id="0">↻ Refresh</button></div>
-   <div class="v213-earnings-grid"><div><small>Creator applications</small><strong>${profiles.filter(x=>x.status==='PENDING').length}</strong></div><div><small>Posts awaiting review</small><strong>${posts.length}</strong></div><div><small>LEMMIQ commission wallet</small><strong>${q(data.fee_wallet_q)} Q</strong></div></div>
+   <div class="v213-earnings-grid"><div><small>Creator applications</small><strong>${profiles.filter(x=>x.status==='PENDING').length}</strong></div><div><small>Recent creator posts</small><strong>${posts.length}</strong></div><div><small>LEMMIQ commission wallet</small><strong>${q(data.fee_wallet_q)} Q</strong></div></div>
    <details open><summary>Commission & payment controls</summary><form class="v213-admin-config" id="v213AdminCreatorConfig"><label>LEMMIQ creator commission %<input name="fee_percent" min="0" max="40" step="0.01" required type="number" value="${c.fee_percent}"></label><label class="v213-check"><input name="payments_enabled" type="checkbox" ${c.payments_enabled?'checked':''}> Enable mainstream Q payments</label><button type="submit" class="primary">Save controls</button></form><p class="micro">New rate applies to future transactions only. Turning off prevents new charges, not existing refunds or earnings transfers.</p></details>
    <details open><summary>Creator applications & status (${profiles.length})</summary><div class="v213-stack">${profiles.map(p=>line(formatProfile(p),`Status ${p.status}${p.adult_requested?' · 18+ requested (unavailable)':''} · subscription ${q(p.monthly_q)} Q`,
      (p.status!=='APPROVED'?btn('APPROVE_CREATOR',p.id,'Approve'):'')+btn('SUSPEND_CREATOR',p.id,'Suspend')+btn('REJECT_CREATOR',p.id,'Reject'))).join('')||'<p class="micro">No creator applications.</p>'}</div></details>
-   <details><summary>Posts awaiting content review (${posts.length})</summary><div class="v213-stack">${posts.map(p=>line(`#${p.id} ${p.title}`,`@${p.creator_username} · ${p.level} · ${p.visibility} · ${p.kind} · ${p.price_q} Q · ${p.teaser||''}`,
-    btn('VIEW_POST',p.id,'View content')+btn('APPROVE_POST',p.id,'Approve','primary')+btn('REJECT_POST',p.id,'Reject'))).join('')||'<p class="micro">No posts pending.</p>'}</div></details>
+   <details><summary>Published content audit (${posts.length} recent posts)</summary><div class="v213-stack">${posts.map(p=>line(`#${p.id} ${p.title}`,`@${p.creator_username} · ${p.level} · ${p.visibility} · ${p.kind} · ${p.price_q} Q · ${p.review} · ${p.teaser||''}`,
+    btn('VIEW_POST',p.id,'Audit view')+(p.review==='REJECTED'?btn('RESTORE_POST',p.id,'Restore'):btn('REMOVE_POST',p.id,'Remove')))).join('')||'<p class="micro">No posts pending.</p>'}</div></details>
    <details><summary>Creator payments (${pays.length} recent)</summary><div class="v213-stack">${pays.map(p=>line(`Payment #${p.id} · ${p.kind} · ${p.status}`,`Fan #${p.fan_id} → Creator #${p.creator_id} · Gross ${q(p.gross_q)} Q · Fee ${q(p.fee_q)} Q · Creator ${q(p.net_q)} Q`, p.status==='REFUNDED'?'':btn('REFUND',p.id,'Refund / review'))).join('')||'<p class="micro">No payments yet.</p>'}</div></details>
    <details><summary>Service requests needing action (${(data.open_requests||[]).length})</summary><div class="v213-stack">${(data.open_requests||[]).map(x=>line(`${x.kind} #${x.id}`,`Creator #${x.creator_id} · Fan #${x.fan_id} · ${x.status}`)).join('')||'<p class="micro">None.</p>'}</div></details>
    <button type="button" class="ghost" data-ca="export" data-id="0">Export loaded finance CSV</button>`;
  }
  async function load(){const h=host();if(!h||!document.querySelector('#view-q-admin.active'))return;try{data=await call('/admin/overview');show()}catch(err){const x=card();if(x)x.innerHTML=`<p class="micro">Creator Admin: ${e(err.message)}</p>`}}
  function reviewReason(action){const reason=prompt(`Reason for ${action} (minimum 8 characters; do not include passwords):`);if(reason===null)return null;if(reason.trim().length<8){toast('Reason must have at least 8 characters',true);return null}return reason.trim()}
- async function previewPost(id){const p=(data?.pending_posts||[]).find(x=>x.id===id);if(!p)return;openModal(`<h3>${e(p.title)}</h3><p class="micro">${e(p.creator_username)} · ${e(p.level)} · ${e(p.visibility)}</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">${e(p.body||'')}</p><div id="v213AdminMediaPreview">${p.kind==='TEXT'?'Text-only post':'Loading media…'}</div><p class="micro">Review content against your legal and moderation requirements. Explicit content is not permitted in this app.</p>`);
+ async function previewPost(id){const p=await call(`/admin/posts/${id}/audit`);if(!p)return;openModal(`<h3>${e(p.title)}</h3><p class="micro">${e(p.creator_username)} · ${e(p.level)} · ${e(p.visibility)}</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">${e(p.body||'')}</p><div id="v213AdminMediaPreview">${p.kind==='TEXT'?'Text-only post':'Loading media…'}</div><p class="micro">Review content against your legal and moderation requirements. Explicit content is not permitted in this app.</p>`);
   if(p.kind!=='TEXT'){try{const r=await fetch(`/v2131/exclusives/admin/posts/${id}/media`,{headers:authHeaders()});if(!r.ok)throw Error('Media unavailable');const type=r.headers.get('content-type')||'';previewUrl=URL.createObjectURL(await r.blob());const node=document.createElement(type.startsWith('video/')?'video':'img');node.src=previewUrl;node.controls=type.startsWith('video/');node.style.maxWidth='100%';const box=$('v213AdminMediaPreview');if(box)box.replaceChildren(node)}catch(e){if($('v213AdminMediaPreview'))$('v213AdminMediaPreview').textContent=e.message}}
  }
  async function handleClick(ev){const b=ev.target.closest('[data-ca]');if(!b)return;const action=b.dataset.ca,id=Number(b.dataset.id);try{
@@ -37,7 +38,7 @@
   const reason=reviewReason(action);if(!reason)return;
   if(!confirm(`Confirm ${action} #${id}?`))return;
   if(action.endsWith('_CREATOR'))await call(`/admin/profiles/${id}/review`,json('POST',{action:action.split('_')[0],reason}));
-  else if(action.endsWith('_POST'))await call(`/admin/posts/${id}/review`,json('POST',{action:action.split('_')[0],reason}));
+  else if(action==='REMOVE_POST'||action==='RESTORE_POST')await call(`/admin/posts/${id}/review`,json('POST',{action:action==='REMOVE_POST'?'REJECT':'APPROVE',reason}));
   else if(action==='REFUND')await call(`/admin/payments/${id}/refund`,json('POST',{action:'REFUND',reason}));
   toast('Creator admin action recorded');await load();
  }catch(e){toast(e.message||String(e),true)}}

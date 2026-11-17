@@ -1,3 +1,4 @@
+/* V21354_CREATOR_AUTOPUBLISH */
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
@@ -50,8 +51,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=72
-        versionName="2.13.5.2"
+        versionCode=73
+        versionName="2.13.5.4"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }

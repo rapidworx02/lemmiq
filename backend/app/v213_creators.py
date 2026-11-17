@@ -1,3 +1,4 @@
+# V21354_CREATOR_AUTOPUBLISH
 """LEMMIQ V2.13 Q Creators — mainstream beta.
 
 Feature boundaries: public professional profiles, follows, moderated mainstream posts,
@@ -457,7 +458,7 @@ def register_v213_creators(app,current_user,get_db):
         if visibility=='PPV' and price==0:raise HTTPException(422,'Paid media must have a price')
         if visibility!='PPV' and price:raise HTTPException(422,'Only pay-per-view posts can specify a price')
         if not body.body.strip():raise HTTPException(422,'Enter content before submitting')
-        post=CreatorPost(creator_id=u.id,title=body.title.strip(),teaser=body.teaser.strip(),body=body.body.strip(),visibility=visibility,price_micros=price,level=level,review='PENDING')
+        post=CreatorPost(creator_id=u.id,title=body.title.strip(),teaser=body.teaser.strip(),body=body.body.strip(),visibility=visibility,price_micros=price,level=level,review='APPROVED')
         db.add(post);db.commit();db.refresh(post)
         return post_json(db,post,u.id)
 
@@ -465,7 +466,8 @@ def register_v213_creators(app,current_user,get_db):
     async def upload_media(post_id:int,file:UploadFile=File(...),u:User=Depends(current_user),db:Session=Depends(get_db)):
         post=db.get(CreatorPost,post_id)
         if not post or post.creator_id!=u.id:raise HTTPException(404,'Post not found')
-        if post.review=='APPROVED':raise HTTPException(409,'Approved posts cannot replace their media; create a new post')
+        if post.review=='REJECTED':raise HTTPException(403,'Removed posts cannot be edited; create new permitted content')
+        if post.object_key:raise HTTPException(409,'Post already has media; create a new post to replace it')
         mime=(file.content_type or '').lower().split(';')[0]
         allowed={'image/jpeg':('PHOTO',20*1024*1024),'image/png':('PHOTO',20*1024*1024),'image/webp':('PHOTO',20*1024*1024),'video/mp4':('VIDEO',100*1024*1024),'video/webm':('VIDEO',100*1024*1024)}
         if mime not in allowed:raise HTTPException(415,'Only JPEG, PNG, WebP, MP4 and WebM are supported')
@@ -474,8 +476,8 @@ def register_v213_creators(app,current_user,get_db):
         signatures={'image/jpeg':lambda b:b.startswith(b'\xff\xd8\xff'),'image/png':lambda b:b.startswith(b'\x89PNG\r\n\x1a\n'),'image/webp':lambda b:b[:4]==b'RIFF' and b[8:12]==b'WEBP','video/mp4':lambda b:b[4:8]==b'ftyp','video/webm':lambda b:b.startswith(b'\x1a\x45\xdf\xa3')}
         if not signatures[mime](data):raise HTTPException(415,'Media content does not match its declared format')
         post.object_key=media_store.store(data)
-        post.mime_type=mime;post.kind=kind;post.review='PENDING';db.commit()
-        return {'id':post.id,'kind':kind,'review':'PENDING','message':'Media submitted for moderation'}
+        post.mime_type=mime;post.kind=kind;post.review='APPROVED';db.commit()
+        return {'id':post.id,'kind':kind,'review':'APPROVED','message':'Media published immediately'}
 
     @router.get('/posts/{post_id}/media')
     def media(post_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -597,13 +599,13 @@ def register_v213_creators(app,current_user,get_db):
         admin_only(db,u)
         cfg=settings(db)
         profiles=db.scalars(select(CreatorProfile).order_by(CreatorProfile.created_at.desc()).limit(200)).all()
-        posts=db.scalars(select(CreatorPost).where(CreatorPost.review=='PENDING').order_by(CreatorPost.id.desc()).limit(100)).all()
+        posts=db.scalars(select(CreatorPost).order_by(CreatorPost.id.desc()).limit(100)).all()
         payments=db.scalars(select(CreatorPayment).order_by(CreatorPayment.id.desc()).limit(100)).all()
         requests=db.scalars(select(CreatorRequest).where(CreatorRequest.status.in_(['REQUESTED','ACCEPTED','DELIVERED'])).order_by(CreatorRequest.id.desc()).limit(100)).all()
         db.commit()
         return {'config':{'fee_percent':cfg.fee_bps/100,'payments_enabled':cfg.payments_enabled},
           'profiles':[dict(profile_json(db,p,u.id),adult_requested=p.adult_requested) for p in profiles],
-          'pending_posts':[dict(post_json(db,p,p.creator_id),creator_username=db.get(User,p.creator_id).username) for p in posts],
+          'pending_posts':[], 'recent_posts':[{'id':p.id,'creator_id':p.creator_id, 'creator_username':(db.get(User,p.creator_id).username if db.get(User,p.creator_id) else str(p.creator_id)), 'title':p.title,'teaser':p.teaser,'visibility':p.visibility,'level':p.level, 'kind':p.kind,'price_q':q(p.price_micros),'review':p.review} for p in posts],
           'payments':[{'id':x.id,'fan_id':x.fan_id,'creator_id':x.creator_id,'kind':x.kind,'gross_q':q(x.gross_micros),'fee_q':q(x.fee_micros),'net_q':q(x.net_micros),'status':x.status} for x in payments],
           'open_requests':[{'id':r.id,'creator_id':r.creator_id,'fan_id':r.fan_id,'status':r.status,'kind':r.kind} for r in requests],
           'fee_wallet_q':q(system(db,'CREATOR_FEES').balance_micros)}
@@ -627,15 +629,29 @@ def register_v213_creators(app,current_user,get_db):
         p.updated_at=now();_audit(db,u.id,'CREATOR_PROFILE_REVIEW',target_user_id=creator_id,before={'status':before},after={'status':p.status},reason=body.reason)
         db.commit();return {'ok':True,'status':p.status}
 
+    # V21354: auditing a creator post (including text-only) is logged per inspection.
+    @router.get('/admin/posts/{post_id}/audit')
+    def admin_post_audit(post_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        admin_only(db,u)
+        p=db.get(CreatorPost,post_id)
+        if not p:raise HTTPException(404,'Creator post not found')
+        _audit(db,u.id,'CREATOR_POST_INSPECT',target_user_id=p.creator_id,
+               after={'post_id':p.id,'kind':p.kind,'visibility':p.visibility},
+               reason='Authorised creator content audit')
+        db.commit()
+        owner=db.get(User,p.creator_id)
+        return dict(post_json(db,p,p.creator_id),creator_username=owner.username if owner else str(p.creator_id))
+
     @router.post('/admin/posts/{post_id}/review')
     def review_post(post_id:int,body:ReviewIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
         admin_only(db,u)
         p=db.get(CreatorPost,post_id)
         if not p:raise HTTPException(404,'Post not found')
         if body.action.upper() not in ('APPROVE','REJECT'):raise HTTPException(422,'Invalid review action')
-        creator_ready(db,p.creator_id)
+        if body.action.upper()=='APPROVE':creator_ready(db,p.creator_id)
+        before=p.review
         p.review='APPROVED' if body.action.upper()=='APPROVE' else 'REJECTED'
-        _audit(db,u.id,'CREATOR_POST_REVIEW',target_user_id=p.creator_id,before={'review':'PENDING'},after={'post_id':p.id,'review':p.review},reason=body.reason)
+        _audit(db,u.id,'CREATOR_POST_REVIEW',target_user_id=p.creator_id,before={'review':before},after={'post_id':p.id,'review':p.review},reason=body.reason)
         db.commit();return {'ok':True,'review':p.review}
 
     @router.post('/admin/payments/{payment_id}/refund')

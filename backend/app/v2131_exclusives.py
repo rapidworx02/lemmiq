@@ -1,3 +1,4 @@
+# V21354_CREATOR_AUTOPUBLISH
 """LEMMIQ V2.13.1 — moderated Creator Media Library, Exclusive Gallery, Chat PPV.
 
 Mainstream/non-explicit only. Admin auditing is logged and disclosed to creators.
@@ -208,6 +209,27 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
     def v2131_startup():
         from .database import engine
         Base.metadata.create_all(bind=engine)
+        # One-time, idempotent legacy-pending-content activation; never restore REJECTED items.
+        from .database import SessionLocal
+        with SessionLocal() as session:
+            approved=set(session.scalars(select(CreatorProfile.user_id).where(
+                CreatorProfile.status=='APPROVED')).all())
+            if approved:
+                session.execute(update(CreatorMediaAsset).where(
+                    CreatorMediaAsset.creator_id.in_(approved),CreatorMediaAsset.review=='PENDING'
+                ).values(review='APPROVED'))
+                session.execute(update(CreatorPost).where(
+                    CreatorPost.creator_id.in_(approved),CreatorPost.review=='PENDING'
+                ).values(review='APPROVED'))
+                pending=session.scalars(select(CreatorGalleryItem).where(
+                    CreatorGalleryItem.creator_id.in_(approved),CreatorGalleryItem.review=='PENDING'
+                )).all()
+                for item in pending:
+                    ids=linked_asset_ids(session,item.id)
+                    if ids and all((asset:=session.get(CreatorMediaAsset,aid)) and
+                                   asset.review=='APPROVED' for aid in ids):
+                        item.review='APPROVED'
+                session.commit()
 
     @router.get('/library')
     def my_library(u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -230,7 +252,7 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         if len(data)<12 or len(data)>size:raise HTTPException(413,'Invalid media size')
         if not signature(data):raise HTTPException(415,'File signature does not match content type')
         a=CreatorMediaAsset(creator_id=u.id,title=name,level=level.upper(),kind=kind,mime_type=mime,
-                            object_key=media_store.store(data),size_bytes=len(data),review='PENDING')
+                            object_key=media_store.store(data),size_bytes=len(data),review='APPROVED')
         db.add(a);db.commit();db.refresh(a)
         return asset_json(a)
 
@@ -252,14 +274,14 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         if kind=='ALBUM' and len(unique_ids)<2:raise HTTPException(422,'Albums need at least two files')
         assets=[db.get(CreatorMediaAsset,aid) for aid in unique_ids]
         if any(not a or a.creator_id!=u.id or a.review!='APPROVED' for a in assets):
-            raise HTTPException(403,'Every file must belong to you and be approved first')
+            raise HTTPException(403,'Every file must belong to you and be available for publishing')
         if kind in ('PHOTO','VIDEO') and assets[0].kind!=kind:
             raise HTTPException(422,'Selected media does not match item type')
         price=to_micros(body.price_q,allow_zero=True)
         if visibility=='PPV' and price<=0:raise HTTPException(422,'PPV content requires a Q price')
         if visibility=='SUBSCRIBERS' and price:raise HTTPException(422,'Subscriber-included content has no extra PPV charge')
         item=CreatorGalleryItem(creator_id=u.id,title=body.title.strip(),teaser=body.teaser.strip(),
-                                kind=kind,visibility=visibility,price_micros=price,review='PENDING')
+                                kind=kind,visibility=visibility,price_micros=price,review='APPROVED')
         db.add(item);db.flush()
         for i,a in enumerate(assets):db.add(CreatorGalleryAsset(item_id=item.id,asset_id=a.id,position=i))
         db.commit();db.refresh(item)
@@ -400,9 +422,14 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         lim=min(200,max(1,limit));off=min(10000,max(0,offset))
         assets=db.scalars(select(CreatorMediaAsset).order_by(CreatorMediaAsset.id.desc()).offset(off).limit(lim)).all()
         posts=db.scalars(select(CreatorPost).where(CreatorPost.object_key!='').order_by(CreatorPost.id.desc()).offset(off).limit(lim)).all()
+        galleries=db.scalars(select(CreatorGalleryItem).order_by(CreatorGalleryItem.id.desc()).offset(off).limit(lim)).all()
         def owner(uid):
             x=db.get(User,uid);return x.username if x else str(uid)
         return {'library':[dict(asset_json(a),creator_id=a.creator_id,username=owner(a.creator_id)) for a in assets],
+                'gallery':[{'id':i.id,'creator_id':i.creator_id,'username':owner(i.creator_id),'title':i.title,
+                            'kind':i.kind,'visibility':i.visibility,'review':i.review,
+                            'price_q':q(i.price_micros),'asset_ids':linked_asset_ids(db,i.id),
+                            'created_at':i.created_at.isoformat()} for i in galleries],
                 'posts':[{'id':p.id,'creator_id':p.creator_id,'username':owner(p.creator_id),'title':p.title,'kind':p.kind,
                           'review':p.review,'visibility':p.visibility,'created_at':p.created_at.isoformat()} for p in posts],
                 'next_offset':off+lim}

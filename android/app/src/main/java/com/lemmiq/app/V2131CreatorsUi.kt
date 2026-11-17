@@ -1,3 +1,4 @@
+/* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
 
 import android.content.Intent
@@ -251,7 +252,7 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
             }
         }
         if (tab == 0) {
-            if (page?.posts.isNullOrEmpty()) item { CreatorEmpty("No posts yet", "Creator posts will appear after approval") }
+            if (page?.posts.isNullOrEmpty()) item { CreatorEmpty("No posts yet", "Creator posts appear once published") }
             items(page?.posts.orEmpty(), key = { it.id }) { post ->
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -269,7 +270,7 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
                                 confirm = "Unlock post for ${qText(post.price_q)} Q" to suspend { client.unlockPost(post.id); refresh++; Unit }
                             }, enabled = config.payments_enabled && post.visibility == "PPV") { Text("Unlock ${qText(post.price_q)} Q") }
                         }
-                        if (p.mine) Text("Moderation: ${post.review}", fontSize = 10.sp, color = CreatorMuted)
+                        if (p.mine) Text("Content status: ${post.review}", fontSize = 10.sp, color = CreatorMuted)
                     }
                 }
             }
@@ -288,7 +289,7 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
                             CreatorTag(if (item.visibility == "PPV") "${qText(item.price_q)} Q" else "Subscribers")
                         }
                         if (item.teaser.isNotBlank()) Text(item.teaser, fontSize = 12.sp)
-                        if (p.mine) Text("Moderation: ${item.review}", color = CreatorMuted, fontSize = 10.sp)
+                        if (p.mine) Text("Content status: ${item.review}", color = CreatorMuted, fontSize = 10.sp)
                         if (item.unlocked) Button(onClick = { viewer = item.id }) { Text("View media") }
                         else Button(onClick = {
                             confirm = "Unlock exclusive for ${qText(item.price_q)} Q" to suspend { client.unlockGallery(item.id); refresh++; Unit }
@@ -371,7 +372,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
     val libraryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) scope.launch {
             busy = true
-            try { client.uploadAsset(uri, assetTitle.trim(), level); assetTitle = ""; refresh++; onSuccess("Upload submitted for moderation. It cannot be sold until approved.") }
+            try { client.uploadAsset(uri, assetTitle.trim(), level); assetTitle = ""; refresh++; onSuccess("Media uploaded and ready for publishing.") }
             catch (e: Exception) { onError(e.message ?: "Upload failed") }
             finally { busy = false }
         }
@@ -455,17 +456,17 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                             val post = client.createPost(postTitle, postTeaser, postBody, postVisibility, price, level)
                             postMedia?.let { client.uploadPostMedia(post.id, it) }
                             postTitle = ""; postTeaser = ""; postBody = ""; postMedia = null
-                            onSuccess("Post submitted to Master Admin moderation.")
+                            onSuccess("Post published. Admins can review or remove it later.")
                         } catch (e: Exception) { onError(e.message ?: "Cannot publish post") }
                         finally { busy = false } }
-                    }, enabled = !busy && postTitle.trim().length >= 3 && postBody.trim().isNotEmpty()) { Text("Submit post for approval") }
+                    }, enabled = !busy && postTitle.trim().length >= 3 && postBody.trim().isNotEmpty()) { Text("Publish post") }
                 }
                 "Media Library" -> {
                     Text("Creator Media Library", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Upload approved photos and videos once, then reuse them for posts, albums and chat offers.", fontSize = 12.sp, color = CreatorMuted)
+                    Text("Upload photos and videos once, then reuse them for posts, albums and professional chat offers.", fontSize = 12.sp, color = CreatorMuted)
                     OutlinedTextField(assetTitle, { assetTitle = it.take(140) }, Modifier.fillMaxWidth(), label = { Text("Media title") })
                     Button(onClick = { libraryPicker.launch("*/*") }, enabled = assetTitle.trim().length >= 3 && !busy) { Text("Upload photo or video") }
-                    OutlinedButton({ refresh++ }) { Text("Refresh moderation status") }
+                    OutlinedButton({ refresh++ }) { Text("Refresh content") }
                     assets.forEach { a ->
                         Card { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(if (a.kind == "VIDEO") "▶" else "▧", fontSize = 24.sp)
@@ -477,7 +478,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                 }
                 "Exclusive Gallery" -> {
                     Text("Exclusive photos & videos", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    Text("Select one approved photo/video or multiple files for an album.", fontSize = 11.sp, color = CreatorMuted)
+                    Text("Select one available photo/video or multiple files for an album.", fontSize = 11.sp, color = CreatorMuted)
                     OutlinedTextField(itemTitle, { itemTitle = it.take(140) }, Modifier.fillMaxWidth(), label = { Text("Gallery item title") })
                     OutlinedTextField(itemTeaser, { itemTeaser = it.take(240) }, Modifier.fillMaxWidth(), label = { Text("Teaser") })
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -486,7 +487,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                         }
                     }
                     if (itemVisibility == "PPV") OutlinedTextField(itemPrice, { itemPrice = it }, Modifier.fillMaxWidth(), label = { Text("Unlock price Q") })
-                    Text("Choose approved media (${selectedAssets.size}/20)", fontWeight = FontWeight.SemiBold)
+                    Text("Choose available media (${selectedAssets.size}/20)", fontWeight = FontWeight.SemiBold)
                     assets.filter { it.review == "APPROVED" }.forEach { a ->
                         Row(Modifier.fillMaxWidth().clickable {
                             if (selectedAssets.contains(a.id)) selectedAssets.remove(a.id)
@@ -508,7 +509,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                         scope.launch { try {
                             client.createGallery(itemTitle, itemTeaser, kind, itemVisibility, price, selectedAssets.toList())
                             itemTitle = ""; itemTeaser = ""; selectedAssets.clear(); refresh++
-                            onSuccess("Exclusive item submitted for Master Admin review.")
+                            onSuccess("Exclusive gallery published immediately.")
                         } catch (e: Exception) { onError(e.message ?: "Gallery creation failed") }
                         finally { busy = false } }
                     }, enabled = !busy && selectedAssets.isNotEmpty() && itemTitle.trim().length >= 3) { Text("Create exclusive item") }
@@ -673,7 +674,7 @@ private fun CreatorMediaPreview(client: CreatorApiV2131, path: String, kind: Str
                     ctx.startActivity(Intent.createChooser(intent, "View creator video"))
                 } catch (e: Exception) { error = e.message ?: "Unable to play video" }
                 finally { videoLoading = false }
-            } }, enabled = !videoLoading) { Text(if (videoLoading) "Loading private video…" else "▶ Open approved video") }
+            } }, enabled = !videoLoading) { Text(if (videoLoading) "Loading private video…" else "▶ Open video") }
             Text("Video is opened using an installed player. Do not share creator media without permission.", fontSize = 10.sp, color = CreatorMuted)
         }
         error?.let { Text(it, color = Color.Red, fontSize = 12.sp) }
@@ -743,7 +744,7 @@ fun V2131SendPpvSheet(vm: LemmiqViewModel, chatId: Int, onClose: () -> Unit, onS
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Send PPV photo / video", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("Choose approved media from Creator Studio. Recipients must follow or subscribe to you. The price can differ from the public Exclusive Gallery price.", fontSize = 12.sp, color = CreatorMuted)
+            Text("Choose published media from Creator Studio. Recipients must follow or subscribe to you. The price can differ from the public Exclusive Gallery price.", fontSize = 12.sp, color = CreatorMuted)
             Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 gallery.forEach { item ->
                     Card(Modifier.fillMaxWidth().clickable { selected = item; price = qText(item.price_q) },
@@ -754,7 +755,7 @@ fun V2131SendPpvSheet(vm: LemmiqViewModel, chatId: Int, onClose: () -> Unit, onS
                         }
                     }
                 }
-                if (gallery.isEmpty()) CreatorEmpty("No approved exclusive items", "Upload media, create a gallery item and wait for Master Admin approval.")
+                if (gallery.isEmpty()) CreatorEmpty("No published exclusive items", "Upload media and publish a gallery item immediately after your creator profile is approved.")
             }
             OutlinedTextField(price, { price = it }, Modifier.fillMaxWidth(), label = { Text("Private unlock price (Q)") })
             error?.let { Text(it, color = Color.Red, fontSize = 12.sp) }
