@@ -1,3 +1,4 @@
+/* V21360_CREATOR_UX */
 /* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
 
@@ -203,6 +204,10 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
             if(identity.identity!=null)Text("@${identity.identity?.handle}",color=Color.White,fontSize=11.sp)
         }
         if(selected==null){
+            Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=4.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                OutlinedButton(onClick={showLegacy=true},modifier=Modifier.weight(1f)) { Text("✦ Creator Studio",fontSize=12.sp) }
+                OutlinedButton(onClick={showGalleryPicker=true},modifier=Modifier.weight(1f),enabled=identity.creator_status=="APPROVED") { Text("My Gallery",fontSize=12.sp) }
+            }
             androidx.compose.foundation.lazy.LazyRow(Modifier.padding(7.dp),horizontalArrangement=Arrangement.spacedBy(5.dp)){
                 items(listOf("Creator Chats","Requests","Discover","My Professional")){name->
                     val i=listOf("Creator Chats","Requests","Discover","My Professional").indexOf(name)

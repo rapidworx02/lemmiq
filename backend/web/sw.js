@@ -1,9 +1,12 @@
+/* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21356-creator-studio-delete";
+const CACHE = "lemmiq-v21360-creator-ux";
 const SHELL = [
+  "/web/v2136_creator_ux.js?v=2.13.6.0",
+  "/web/v2136_creator_ux.css?v=2.13.6.0",
   "/web/v21351_avatar_status.css?v=2.13.5.2",
-  "/web/app.js?v=2.13.5.2",
+  "/web/app.js?v=2.13.6.0",
   "/web/v2135_creator_media.js?v=2.13.5",
   "/web/v2135_creator_media.css?v=2.13.5",
   "/web/v2135_avatar_refresh.js?v=2.13.5",
@@ -11,7 +14,6 @@ const SHELL = [
   "/web/",
   "/web/index.html?v=2.10.11",
   "/web/styles.css?v=2.10.7",
-  "/web/app.js?v=2.13.2",
   "/web/v28.js?v=2.12.4.1",
   "/web/v29.js?v=2.10.7",
   "/web/v2104.js?v=2.10.7",
@@ -29,7 +31,7 @@ const SHELL = [
   "/web/v2122_image_edit.js?v=2.12.2",
   "/web/v2123_support.js?v=2.12.3",
   "/web/v213_creators.css?v=2.13.0",
-  "/web/v213_creators.js?v=2.13.5.4",
+  "/web/v213_creators.js?v=2.13.6.0",
   "/web/v2131_exclusives.js?v=2.13.5.6",
   "/web/v2131_exclusives.css?v=2.13.1",
   "/web/v213_creators_admin.js?v=2.13.5.4",
@@ -45,7 +47,7 @@ const SHELL = [
   "/web/v2134_professional.css?v=2.13.4",
 
   "/web/v21341_gallery_picker.css?v=2.13.4.1",
-  "/web/v21341_gallery_picker.js?v=2.13.5.6",
+  "/web/v21341_gallery_picker.js?v=2.13.6.0",
   "/web/v21342_professional_layout.css?v=2.13.4.2",
 ];
 

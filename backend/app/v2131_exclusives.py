@@ -1,3 +1,4 @@
+# V21360_CREATOR_UX
 # V21356_STUDIO_DELETE
 # V21354_CREATOR_AUTOPUBLISH
 """LEMMIQ V2.13.1 — moderated Creator Media Library, Exclusive Gallery, Chat PPV.
@@ -160,7 +161,7 @@ def gallery_can_read(db,item,uid):
     if item.review not in ('APPROVED','DELETED'):return False
     prof=db.get(CreatorProfile,item.creator_id)
     if not prof or prof.status!='APPROVED':return False
-    if item.visibility=='SUBSCRIBERS' and active_subscription(db,uid,item.creator_id):return True
+    if item.review=='APPROVED' and item.visibility=='SUBSCRIBERS' and active_subscription(db,uid,item.creator_id):return True
     if db.scalar(select(CreatorGalleryUnlock.id).where(CreatorGalleryUnlock.fan_id==uid,CreatorGalleryUnlock.item_id==item.id)):
         return True
     # A private PPV purchase also unlocks the same approved gallery item.

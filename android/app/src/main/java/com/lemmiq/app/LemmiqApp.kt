@@ -1,3 +1,4 @@
+/* V21360_CREATOR_UX */
 package com.lemmiq.app
 
 import androidx.compose.foundation.background
@@ -216,16 +217,17 @@ private fun Home(vm:LemmiqViewModel){
     var newGroup by remember{mutableStateOf(false)}
     var qSheet by remember{mutableStateOf(false)}
     var qFullScreen by remember{mutableStateOf(false)}
+    var qPredictOpen by remember{mutableStateOf(false)}
     var qThreadOpen by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){
         // Keep launch fast: only load the messenger shell. Heavy tabs refresh when opened.
         vm.refreshChats();vm.refreshGroups();vm.refreshQThread()
     }
-    LaunchedEffect(tab,showMore,morePage){
+    LaunchedEffect(tab,showMore,morePage,qPredictOpen){
         when{
-            !showMore && tab==1 -> {vm.refreshStatuses();vm.refreshMoments()}
-            !showMore && tab==3 -> vm.refreshPredict()
-            !showMore && tab==4 -> vm.refreshCalls()
+            showMore && morePage=="updates" -> {vm.refreshStatuses();vm.refreshMoments()}
+            !showMore && tab==2 && qPredictOpen -> vm.refreshPredict()
+            !showMore && tab==3 -> vm.refreshCalls()
             showMore && morePage=="trust" -> vm.refreshTrustHistory()
             showMore && morePage=="business" -> vm.refreshBusiness()
             showMore && morePage=="me" -> {vm.refreshMe();vm.refreshPrivacy()}
@@ -246,10 +248,10 @@ private fun Home(vm:LemmiqViewModel){
         when(r.type){
             "chat"->r.id?.let{id->vm.chats.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.open(it);LemmiqLaunchRouterV2103.consume()}}
             "group"->r.id?.let{id->vm.groups.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.openGroup(it);LemmiqLaunchRouterV2103.consume()}}
-            "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=3;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
-            "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
+            "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=2;qPredictOpen=true;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
+            "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;qPredictOpen=false;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_to_q"->{tab=0;qThreadOpen=true;qFullScreen=false;showMore=false;vm.refreshQThread(markRead=true);LemmiqLaunchRouterV2103.consume()}
-            "q_creators"->{showMore=true;morePage="creators";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
+            "q_creators"->{tab=1;showMore=false;morePage=null;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "creator_inbox"->{showMore=true;morePage="creator-inbox";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_assistant","q_analysis"->{qFullScreen=true;qThreadOpen=false;showMore=false;LemmiqLaunchRouterV2103.consume()}
             else->{if(r.type.isNotBlank()){showMore=true;morePage="notifications";qFullScreen=false;LemmiqLaunchRouterV2103.consume()}}
@@ -257,9 +259,8 @@ private fun Home(vm:LemmiqViewModel){
     }
     val nav=listOf(
         "💬" to "Chats",
-        "⭕" to "Updates",
-        "Q+" to "Q Economy",
-        "◈" to "Q Predict",
+        "✦" to "Creators",
+        "Q+" to "Q",
         "📞" to "Calls",
         "☰" to "More"
     )
@@ -270,15 +271,16 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=!qFullScreen && if(i==5) showMore else (!showMore && tab==i),
+                        selected=!qFullScreen && if(i==4) showMore else (!showMore && tab==i),
                         onClick={
                             qFullScreen=false
                             qThreadOpen=false
                             morePage=null
-                            if(i==5){
+                            if(i==4){
                                 showMore=true
                             }else{
                                 tab=i
+                                if(i==2)qPredictOpen=false
                                 showMore=false
                             }
                         },
@@ -299,7 +301,7 @@ private fun Home(vm:LemmiqViewModel){
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
                 // V21342_HIDE_Q_OVER_CREATOR: no floating assistant over any More/Professional chat composer.
-                if(!qFullScreen && !showMore && vm.active==null && vm.activeGroup==null)FloatingActionButton(
+                if(!qFullScreen && !showMore && tab!=1 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,
@@ -316,6 +318,7 @@ private fun Home(vm:LemmiqViewModel){
                     Box(Modifier.weight(1f)){ChatAgent(vm)}
                 }
                 showMore->when(morePage){
+                    "updates"->V241MoreSubPage("Updates",{morePage=null}){V24Updates(vm)}
                     "trust"->V241MoreSubPage("Trust / Fact Check",{morePage=null}){V24Trust(vm)}
                     "business"->V241MoreSubPage("Business Agent",{morePage=null}){BusinessScreen(vm)}
                     "activity"->V241MoreSubPage("Activity",{morePage=null}){ActivityScreen(vm)}
@@ -333,10 +336,19 @@ private fun Home(vm:LemmiqViewModel){
                         qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
                     },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)})
-                    1->V24Updates(vm)
-                    2->V28QEconomyScreen(vm)
-                    3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
-                    4->V241CallsScreen(vm)
+                    1->V2134ProfessionalHub(vm,2)
+                    2->Column(Modifier.fillMaxSize()) {
+                        Row(Modifier.fillMaxWidth().padding(6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                            FilterChip(!qPredictOpen,{qPredictOpen=false},label={Text("Q Wallet",fontSize=11.sp)})
+                            FilterChip(qPredictOpen,{qPredictOpen=true},label={Text("Q Predict",fontSize=11.sp)})
+                            OutlinedButton(onClick={qFullScreen=true},contentPadding=PaddingValues(horizontal=10.dp)) { Text("Ask Q",fontSize=11.sp) }
+                        }
+                        Box(Modifier.weight(1f)) {
+                            if(qPredictOpen)V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
+                            else V28QEconomyScreen(vm)
+                        }
+                    }
+                    3->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
@@ -432,12 +444,12 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
 @Composable
 private fun V241MoreMenu(onOpen:(String)->Unit){
     val menuItems=listOf(
+        Triple("⭕","Updates","24-hour status stories and moments") to "updates",
         Triple("🔔","Notifications","Unread alerts and recent LEMMIQ activity") to "notifications",
         Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
         Triple("💳","Money","Review detected payment insights") to "money",
-        Triple("✨","Q Creators","Discover profiles, exclusive content and creator studio") to "creators",
         Triple("🙂","Me / Profile","Photo, account and sign out") to "me",
         Triple("⚙","Settings","Notifications, app version and controls") to "settings",
         Triple("🔒","Privacy & Security","Profile, last-seen and status privacy") to "privacy"
@@ -503,7 +515,7 @@ private fun V2102SettingsScreen(vm:LemmiqViewModel){
         Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(20.dp)){
             Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
                 Text("Q & app controls",fontWeight=FontWeight.Bold,fontSize=17.sp)
-                Text("Q assistant, Q Economy, Q Predict and Calls remain separate main tabs. Profile, Trust, Business and privacy live under More.",fontSize=11.sp,color=Muted)
+                Text("Chats, Creators, Q, Calls and More are the main tabs. Updates and settings live under More.",fontSize=11.sp,color=Muted)
             }
         }
     }

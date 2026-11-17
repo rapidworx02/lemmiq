@@ -1,3 +1,4 @@
+/* V21360_CREATOR_UX */
 package com.lemmiq.app
 
 import android.graphics.BitmapFactory
@@ -80,6 +81,7 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
     var publishPrice by remember{mutableStateOf("50")}
     var assetsChosen by remember{mutableStateOf<Set<Int>>(emptySet())}
     var confirmSend by remember{mutableStateOf(false)}
+    var pendingDelete by remember{mutableStateOf<Pair<String,Int>?>(null)}
     // V21342_MEDIA_PICKER: system Photos/Gallery picker instead of unrestricted file browser.
     val choosePhoto=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri:Uri?->uploadUri=uri}
     val chooseVideo=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri:Uri?->uploadUri=uri}
@@ -97,7 +99,7 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
         Column(Modifier.fillMaxWidth().heightIn(max=745.dp).verticalScroll(rememberScrollState())
             .padding(horizontal=17.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
             Text(if(threadId==null)"Creator Gallery Manager" else "Send locked PPV media",fontSize=21.sp,fontWeight=FontWeight.Bold)
-            Text("Only your professional creator identity is used. Approved media only.",fontSize=11.sp,color=GalleryMutedV21341)
+            Text("Your professional identity stays separate from personal chats.",fontSize=11.sp,color=GalleryMutedV21341)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
                 listOf("My Gallery","Upload New","Create Item").forEachIndexed{index,label->
                     FilterChip(tab==index,{tab=index},{Text(label,fontSize=11.sp)})
@@ -108,7 +110,7 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
             if(notice.isNotBlank())Text(notice,color=Color(0xFF148265),fontSize=12.sp)
             when(tab){
                 0->{
-                    if(gallery.isEmpty())Text("No items yet. Upload media, await Master Admin approval, then create an exclusive item.",fontSize=12.sp,color=GalleryMutedV21341)
+                    if(gallery.isEmpty())Text("No gallery items yet. Upload media and publish an item.",fontSize=12.sp,color=GalleryMutedV21341)
                     gallery.forEach{item->
                         val ready=item.review=="APPROVED"
                         val active=chosen==item.id
@@ -125,6 +127,7 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
                                         color=if(ready)GalleryPurpleV21341 else Color(0xFFB6791B))
                                 }
                                 if(active)Text("✓",color=GalleryPurpleV21341,fontSize=22.sp)
+                                TextButton(onClick={pendingDelete="GALLERY" to item.id},enabled=!busy){Text("Delete",color=Color.Red,fontSize=12.sp)}
                             }
                         }
                     }
@@ -135,7 +138,7 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
                         Button(onClick={confirmSend=true},modifier=Modifier.fillMaxWidth(),
                             enabled=!busy&&chosen!=null&&value!=null&&value.isFinite()&&value>0&&value<=100000){Text("🔒 Send approved media to this fan")}
                     }
-                    OutlinedButton(onClick={refresh()},modifier=Modifier.fillMaxWidth(),enabled=!busy){Text("Refresh approvals")}
+                    OutlinedButton(onClick={refresh()},modifier=Modifier.fillMaxWidth(),enabled=!busy){Text("Refresh content")}
                 }
                 1->{
                     Text("Upload photo/video to your private media library",fontWeight=FontWeight.Bold)
@@ -154,16 +157,20 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
                     }
                     Text(if(uploadUri==null)"No file selected" else "Selected from your phone: ${uploadUri?.lastPathSegment?.takeLast(55)}",
                         fontSize=11.sp,color=GalleryMutedV21341)
-                    Text("Select phone photo/video → Upload → Admin approves file → Create item → Admin approves item → Send PPV. JPG/PNG/WebP ≤20 MB or MP4/WebM ≤100 MB. HEIC photos are converted to JPEG on Android.",fontSize=10.sp,color=GalleryMutedV21341)
+                    Text("Choose photo/video → Upload → Create item → Publish or send PPV. JPG/PNG/WebP ≤20 MB or MP4/WebM ≤100 MB. HEIC photos are converted to JPEG on Android.",fontSize=10.sp,color=GalleryMutedV21341)
                     Button(onClick={scope.launch{
                         busy=true;error=null
                         try{client.uploadAsset(uploadUri!!,uploadTitle.trim(),uploadLevel);uploadTitle="";uploadUri=null
-                            notice="Upload submitted — awaiting Master Admin review";refresh()}
+                            notice="Photo or video uploaded. Ready for publishing.";refresh()}
                         catch(e:Exception){error=e.message}finally{busy=false}
-                    }},modifier=Modifier.fillMaxWidth(),enabled=!busy&&uploadUri!=null&&uploadTitle.trim().length in 3..140){Text("Upload for approval")}
+                    }},modifier=Modifier.fillMaxWidth(),enabled=!busy&&uploadUri!=null&&uploadTitle.trim().length in 3..140){Text("Upload to library")}
                     Text("My library",fontWeight=FontWeight.Bold)
-                    library.forEach{a->Text("${a.title} · ${a.kind} · ${a.review}",fontSize=12.sp,
-                        color=if(a.review=="APPROVED")Color(0xFF177F5D) else GalleryMutedV21341)}
+                    library.forEach{a->
+                        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                            Text("${a.title} · ${a.kind}",fontSize=12.sp,modifier=Modifier.weight(1f))
+                            TextButton(onClick={pendingDelete="LIBRARY" to a.id},enabled=!busy){Text("Delete",color=Color.Red,fontSize=12.sp)}
+                        }
+                    }
                 }
                 else->{
                     Text("Create one exclusive photo, video or an album",fontWeight=FontWeight.Bold)
@@ -193,14 +200,29 @@ internal fun V21341GalleryPicker(vm:LemmiqViewModel,threadId:String?,onDismiss:(
                     Button(onClick={scope.launch{
                         busy=true;error=null
                         try{client.createGallery(publishTitle.trim(),teaser.trim(),kind,visibility,price?:0.0,assetsChosen.toList());
-                            notice="Gallery item submitted for moderation";assetsChosen=emptySet();publishTitle="";teaser="";tab=0;refresh()}
+                            notice="Gallery item published.";assetsChosen=emptySet();publishTitle="";teaser="";tab=0;refresh()}
                         catch(e:Exception){error=e.message}finally{busy=false}
                     }},modifier=Modifier.fillMaxWidth(),enabled=!busy&&publishTitle.trim().length in 3..140&&validCount&&
-                        price!=null&&price.isFinite()&&(visibility!="PPV"||price>0)&&price<=100000){Text("Create gallery item for approval")}
+                        price!=null&&price.isFinite()&&(visibility!="PPV"||price>0)&&price<=100000){Text("Publish gallery item")}
                 }
             }
             Spacer(Modifier.height(20.dp))
         }
+    }
+    pendingDelete?.let{target->
+        AlertDialog(onDismissRequest={pendingDelete=null},title={Text("Delete creator content?")},
+            text={Text("This removes the item from your studio and new sales. Existing paid unlocks and admin audit records remain accessible.")},
+            confirmButton={Button(onClick={pendingDelete=null;scope.launch{
+                busy=true;error=null
+                try{
+                    if(target.first=="GALLERY")client.deleteGalleryItem(target.second)
+                    else client.deleteLibraryAsset(target.second)
+                    if(chosen==target.second)chosen=null
+                    notice="Creator item deleted";refresh()
+                }catch(e:Exception){error=e.message?:"Could not delete item"}
+                finally{busy=false}
+            }}){Text("Delete")}},
+            dismissButton={TextButton(onClick={pendingDelete=null}){Text("Cancel")}})
     }
     if(confirmSend&&threadId!=null){
         val item=gallery.firstOrNull{it.id==chosen}

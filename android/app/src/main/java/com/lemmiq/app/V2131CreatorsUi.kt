@@ -1,3 +1,4 @@
+/* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
@@ -82,6 +83,7 @@ fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
     var profiles by remember { mutableStateOf<List<CreatorProfileNative>>(emptyList()) }
     var mine by remember { mutableStateOf(CreatorMineNative()) }
     var config by remember { mutableStateOf(CreatorConfigNative()) }
+    var configLoaded by remember { mutableStateOf(false) }
     var selectedId by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -90,10 +92,11 @@ fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
 
     fun refresh() { reload++ }
     LaunchedEffect(tab, query, category, reload) {
+        if ((tab==0 || tab==1) && query.isNotBlank()) kotlinx.coroutines.delay(300)
         busy = true
         error = null
         try {
-            config = client.config()
+            if (!configLoaded) { config = client.config(); configLoaded = true }
             if (tab == 0 || tab == 1) profiles = client.discover(query, category, tab == 1)
             if (tab == 2 || tab == 3) mine = client.mine()
         } catch (e: Exception) { error = e.message ?: "Unable to load Q Creators" }

@@ -1,3 +1,4 @@
+/* V21360_CREATOR_UX */
 const state = {
   token: localStorage.getItem("lemmiq_token") || "",
   user: JSON.parse(localStorage.getItem("lemmiq_user") || "null"),
@@ -147,8 +148,8 @@ function setView(name){
   if(name!=="chats")$("globalQOrb")?.classList.remove("q2106-hide-orb");
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me","q-admin","q-creators"];
-  const navName=name==="professional-inbox"?"chats":(secondary.includes(name)?"more":name);
+  const secondary=["trust","business","activity","money","me","q-admin","updates"];
+  const navName=name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":((name==="q-predict"||name==="agent")?"q-economy":name));
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],

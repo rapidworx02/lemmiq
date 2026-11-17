@@ -1,0 +1,24 @@
+/* LEMMIQ 2.13.6 creator navigation and independent media controls */
+#nav {gap:2px}
+#nav button[data-view="q-creators"] span {font-weight:900;color:#b69dff}
+.v2136-q-switcher,.v2136-creator-shortcuts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 16px}
+.v2136-q-switcher button,.v2136-creator-shortcuts button{padding:10px 14px;border:1px solid var(--line,rgba(140,140,170,.25));background:var(--card,rgba(125,100,255,.09));color:inherit;border-radius:14px;font-size:13px;cursor:pointer}
+.v2136-q-switcher button.active{background:linear-gradient(120deg,#6855ed,#466ce9);border-color:transparent;color:white;font-weight:700}
+.v2136-creator-shortcuts{margin:8px 0 15px}
+.v2136-creator-shortcuts button{flex:1;min-width:120px}
+.v2136-creator-shortcuts button:focus-visible,.v2136-q-switcher button:focus-visible,.v2136-delete:focus-visible{outline:2px solid #8860ee;outline-offset:2px}
+.v2136-gallery-wrap{display:flex;flex-direction:column;min-width:0;gap:6px}
+.v2136-gallery-wrap>.v21341-item{flex:1}
+.v2136-delete{background:transparent!important;color:#d74c65!important;border:1px solid rgba(215,76,101,.48)!important;border-radius:10px!important;cursor:pointer!important;padding:8px 12px!important;font-size:12px!important;white-space:nowrap}
+.v2136-delete:hover{background:rgba(215,76,101,.10)!important}
+.v2136-library-manager{display:grid;gap:6px;margin-top:10px}
+.v2136-library-row{display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px solid rgba(120,120,155,.16);padding:9px 0}
+.v2136-library-row span{min-width:0;overflow-wrap:anywhere;flex:1}
+#v21341GalleryDialog .v21341-grid{gap:10px}
+#v2131CreatorTools .v21355-actions{display:flex;gap:6px;flex-wrap:wrap}
+@media(max-width:690px){
+ .v2136-q-switcher{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+ .v2136-q-switcher button{font-size:11px;padding:9px 4px}
+ .v2136-creator-shortcuts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+ .v2136-creator-shortcuts button{font-size:10px;min-width:0;padding:9px 3px}
+}
