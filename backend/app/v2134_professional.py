@@ -1,3 +1,4 @@
+# V21356_STUDIO_DELETE
 """LEMMIQ V2.13.4: separate creator identity + dedicated professional inbox.
 
 The professional chat is stored outside Chat/Message. Fan-facing endpoints never
@@ -566,10 +567,11 @@ def register_v2134_professional(app,current_user,get_db,push):
         o=db.get(ProfessionalOffer,offer_id)
         if not o or u.id!=o.fan_id:raise HTTPException(404,'Private offer not found')
         item=db.get(CreatorGalleryItem,o.item_id)
-        if not item or item.review!='APPROVED':raise HTTPException(404,'Content unavailable')
+        if not item or item.review not in ('APPROVED','DELETED'):raise HTTPException(404,'Content unavailable')
         creator_ready(db,o.creator_id)
         if blocked(db,o.creator_id,o.fan_id):raise HTTPException(403,'Conversation blocked')
         if gallery_can_read(db,item,u.id):return {'unlocked':True,'charged_q':0}
+        if item.review=='DELETED':raise HTTPException(410,'Creator removed this item from sale')
         payment,created=create_payment(db,u.id,o.creator_id,'DM_PPV',o.id,o.price_micros,body.request_key)
         if payment.status!='CAPTURED':raise HTTPException(409,'Payment not valid')
         existing=db.scalar(select(CreatorGalleryUnlock.id).where(

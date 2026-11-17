@@ -1,3 +1,4 @@
+/* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
 /* LEMMIQ V2.13.1 — Creator library, galleries, chat PPV, Master Admin audit.
  * The server authorises every media request and calculates every Q debit.
@@ -15,7 +16,7 @@
  const S={context:null,library:[],mineGallery:[],chatList:[],currentGallery:[],offers:[],adminOffset:0,isAdmin:false,adminData:null,adminQueue:null,adminLogs:null,blobs:new Set(),modalBlob:null,renderSeq:0};
  function clearModalBlob(){revokeBlobs()}
  function revokeBlobs(){for(const b of S.blobs)URL.revokeObjectURL(b);S.blobs.clear();S.modalBlob=null}
- const galleryCard=(item,own=false)=>`<article class="v2131-gallery-card" data-item="${item.id}"><div class="v2131-placeholder"><span>🔒</span><strong>${esc(item.kind)}</strong><small>${item.media_count} file${item.media_count===1?'':'s'}</small></div><h4>${esc(item.title)}</h4><p>${esc(item.teaser||'Exclusive creator media')}</p><div class="v2131-card-bottom"><span>${item.visibility==='PPV'?num(item.price_q)+' Q':'Subscriber included'}</span>${own?`<small>${esc(item.review)}</small>`:item.unlocked?`<button class="ghost" type="button" data-xaction="view" data-id="${item.id}">View</button>`:item.visibility==='PPV'?`<button class="primary" type="button" data-xaction="unlock" data-id="${item.id}">Unlock</button>`:`<small>Subscribe to view</small>`}</div>${own?`<button type="button" class="ghost" data-xaction="view" data-id="${item.id}">Preview</button>`:''}</article>`;
+ const galleryCard=(item,own=false)=>`<article class="v2131-gallery-card" data-item="${item.id}"><div class="v2131-placeholder"><span>🔒</span><strong>${esc(item.kind)}</strong><small>${item.media_count} file${item.media_count===1?'':'s'}</small></div><h4>${esc(item.title)}</h4><p>${esc(item.teaser||'Exclusive creator media')}</p><div class="v2131-card-bottom"><span>${item.visibility==='PPV'?num(item.price_q)+' Q':'Subscriber included'}</span>${own?`<small>${esc(item.review)}</small>`:item.unlocked?`<button class="ghost" type="button" data-xaction="view" data-id="${item.id}">View</button>`:item.visibility==='PPV'?`<button class="primary" type="button" data-xaction="unlock" data-id="${item.id}">Unlock</button>`:`<small>Subscribe to view</small>`}</div>${own?`<div class="v21355-actions"><button type="button" class="ghost" data-xaction="view" data-id="${item.id}">Preview</button><button type="button" class="danger" data-xaction="deletegallery" data-id="${item.id}">Delete</button></div>`:''}</article>`;
  const gallerySection=(items,own)=>`<section class="v2131-section" id="v2131GallerySection"><div class="v2131-title"><div><span class="eyebrow">Q CREATORS</span><h3>Exclusive Photos & Videos</h3><p class="micro">Private albums and single-media offers. Files remain locked until you qualify for access.</p></div></div><div class="v2131-gallery-grid">${items.map(x=>galleryCard(x,own)).join('')||'<p class="micro">No exclusive items published yet.</p>'}</div></section>`;
  const libraryBox=()=>{
   const approved=S.library.filter(a=>a.review==='APPROVED');const chats=S.chatList;
@@ -23,7 +24,7 @@
    <p class="v2131-policy">Content safety: Creator uploads, including locked/private media and rejected submissions, may be accessed by authorised LEMMIQ administrators for moderation, compliance and abuse investigations. Reviews are recorded in an internal access log; individual review notifications are not sent. Explicit content is not permitted in this app.</p>
    <div class="v2131-studio-grid"><form id="v2131UploadForm" class="v2131-form"><h4>1. Upload to private library</h4><label>File name / title<input name="title" minlength="3" maxlength="140" required placeholder="My photoshoot"></label><label>Media category<select name="level"><option value="MAINSTREAM">Mainstream</option><option value="GLAMOUR">Glamour · non-explicit</option></select></label><label>Photo or video<input type="file" name="file" required accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"></label><button type="submit" class="primary">Upload to library</button></form>
    <form id="v2131PublishForm" class="v2131-form"><h4>2. Make an exclusive item</h4><label>Title<input name="title" minlength="3" maxlength="140" required placeholder="Exclusive collection"></label><label>Public teaser<input name="teaser" maxlength="240" placeholder="Short description (no private media)"></label><label>Type<select name="kind"><option value="PHOTO">Single photo</option><option value="VIDEO">Single video</option><option value="ALBUM">Photo / video album (2–20)</option></select></label><label>Access<select name="visibility"><option value="PPV">Pay to unlock</option><option value="SUBSCRIBERS">Included for subscribers</option></select></label><label>PPV price in Q (0 for subscriber included)<input name="price_q" type="number" min="0" max="100000" step="0.01" value="50" required></label><label>Available files (select 1; Ctrl-click for albums)<select name="assets" multiple size="5" required>${approved.map(a=>`<option value="${a.id}">#${a.id} ${esc(a.kind)} · ${esc(a.title)}</option>`).join('')}</select></label><button type="submit" class="primary" ${approved.length?'':'disabled'}>Publish gallery item</button></form></div>
-   <details><summary>My media library (${S.library.length})</summary><div class="v2131-rows">${S.library.map(a=>`<div><span><strong>#${a.id} · ${esc(a.title)}</strong><small>${esc(a.kind)} · ${esc(a.review)}</small></span><button type="button" class="ghost" data-xaction="libraryview" data-id="${a.id}">Preview</button></div>`).join('')||'<p class="micro">No uploaded media.</p>'}</div></details>
+   <details><summary>My media library (${S.library.length})</summary><div class="v2131-rows">${S.library.map(a=>`<div><span><strong>#${a.id} · ${esc(a.title)}</strong><small>${esc(a.kind)} · ${esc(a.review)}</small></span><div class="v21355-actions"><button type="button" class="ghost" data-xaction="libraryview" data-id="${a.id}">Preview</button><button type="button" class="danger" data-xaction="deletelibrary" data-id="${a.id}">Delete</button></div></div>`).join('')||'<p class="micro">No uploaded media.</p>'}</div></details>
    <details><summary>My exclusive gallery (${S.mineGallery.length})</summary><div class="v2131-gallery-grid">${S.mineGallery.map(i=>galleryCard(i,true)).join('')||'<p class="micro">No gallery items.</p>'}</div></details>
     <details><summary>Send PPV in Professional Chat</summary><p class="micro">To protect your personal identity, send PPV only through the separate Professional Inbox.</p><button class="ghost" type="button" data-xaction="professionalpicker">Open Professional Inbox</button></details>
    <p id="v2131Notice" role="status" aria-live="polite"></p></section>`;
@@ -81,6 +82,18 @@
   $('v2131OfferConfirm').onclick=async()=>{try{if(!x.unlocked){if(!confirm(makeNoticeOfPurchase(x.price_q,x.title)))return;await call(`/offers/${offerId}/unlock`,json('POST',{request_key:key()}))}closeModal();await viewItem(x.item_id);if($('messageList'))window.v2131HydrateChatOffers?.()}catch(e){toast(e.message,true)}};
  }
  async function handleAction(b){const what=b.dataset.xaction,id=Number(b.dataset.id);try{
+  if(what==='deletegallery'||what==='deletelibrary'){
+    const gallery=what==='deletegallery';
+    const item=(gallery?S.mineGallery:S.library).find(x=>x.id===id);
+    if(!item)throw Error('Item is no longer in your creator studio');
+    const warning=gallery?'This gallery item will disappear from your studio and public sales.':'This library file AND its linked gallery items will disappear from your studio and public sales.';
+    if(!confirm(`Delete “${item.title}”?\n${warning}\nExisting paid unlocks and admin audit records remain accessible. There is no self-service undo.`))return;
+    const result=await call(gallery?`/gallery/${id}`:`/library/${id}`,{method:'DELETE'});
+    await decorate(S.context);
+    const count=Array.isArray(result?.hidden_gallery_ids)?result.hidden_gallery_ids.length:0;
+    notify(count?`Media deleted from Studio. ${count} linked gallery item(s) also removed.`:'Deleted from Creator Studio.');
+    return;
+  }
   if(what==='view')await viewItem(id);
    if(what==='professionalpicker'){window.openCreatorProfessionalInbox?.('inbox');return}
   if(what==='unlock')await unlockGallery(id);

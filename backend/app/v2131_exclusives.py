@@ -1,3 +1,4 @@
+# V21356_STUDIO_DELETE
 # V21354_CREATOR_AUTOPUBLISH
 """LEMMIQ V2.13.1 — moderated Creator Media Library, Exclusive Gallery, Chat PPV.
 
@@ -156,7 +157,7 @@ def active_subscription(db,fan,creator):
 
 def gallery_can_read(db,item,uid):
     if item.creator_id==uid:return True
-    if item.review!='APPROVED':return False
+    if item.review not in ('APPROVED','DELETED'):return False
     prof=db.get(CreatorProfile,item.creator_id)
     if not prof or prof.status!='APPROVED':return False
     if item.visibility=='SUBSCRIBERS' and active_subscription(db,uid,item.creator_id):return True
@@ -231,9 +232,38 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
                         item.review='APPROVED'
                 session.commit()
 
+    # Creator deletion is a reversible-in-database soft removal. Kept bytes are needed
+    # for existing paid PPV unlocks and are still available to logged Master Admin audits.
+    @router.delete('/library/{asset_id}')
+    def creator_delete_asset(asset_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        a=db.get(CreatorMediaAsset,asset_id)
+        if not a or a.creator_id!=u.id:raise HTTPException(404,'Creator library item not found')
+        if a.review=='REJECTED':raise HTTPException(409,'Moderator-removed media needs support review before erasure')
+        linked=db.scalars(select(CreatorGalleryItem).join(
+            CreatorGalleryAsset,CreatorGalleryAsset.item_id==CreatorGalleryItem.id
+        ).where(CreatorGalleryAsset.asset_id==asset_id,CreatorGalleryItem.creator_id==u.id)).all()
+        removed=[]
+        for item in linked:
+            if item.review in ('APPROVED','PENDING'):
+                item.review='DELETED'
+                removed.append(item.id)
+        a.review='DELETED'
+        db.commit()
+        return {'deleted':True,'asset_id':a.id,'hidden_gallery_ids':removed,'retained_for_paid_access':True}
+
+    @router.delete('/gallery/{item_id}')
+    def creator_delete_gallery(item_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        item=db.get(CreatorGalleryItem,item_id)
+        if not item or item.creator_id!=u.id:raise HTTPException(404,'Creator gallery item not found')
+        # Never turn an admin safety rejection into purchasable content.
+        if item.review=='REJECTED':raise HTTPException(409,'Moderator-removed gallery needs support review before erasure')
+        item.review='DELETED'
+        db.commit()
+        return {'deleted':True,'gallery_id':item.id,'retained_for_paid_access':True}
+
     @router.get('/library')
     def my_library(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        rows=db.scalars(select(CreatorMediaAsset).where(CreatorMediaAsset.creator_id==u.id)
+        rows=db.scalars(select(CreatorMediaAsset).where(CreatorMediaAsset.creator_id==u.id,CreatorMediaAsset.review!='DELETED')
                         .order_by(CreatorMediaAsset.id.desc()).limit(200)).all()
         return [asset_json(a) for a in rows]
 
@@ -289,7 +319,7 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
 
     @router.get('/gallery/mine')
     def my_gallery(u:User=Depends(current_user),db:Session=Depends(get_db)):
-        rows=db.scalars(select(CreatorGalleryItem).where(CreatorGalleryItem.creator_id==u.id)
+        rows=db.scalars(select(CreatorGalleryItem).where(CreatorGalleryItem.creator_id==u.id,CreatorGalleryItem.review!='DELETED')
                         .order_by(CreatorGalleryItem.id.desc()).limit(100)).all()
         return [gallery_json(db,item,u.id) for item in rows]
 
@@ -299,9 +329,10 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         if not profile or (profile.status!='APPROVED' and creator_id!=u.id):
             raise HTTPException(404,'Creator unavailable')
         stmt=select(CreatorGalleryItem).where(CreatorGalleryItem.creator_id==creator_id)
-        if creator_id!=u.id:stmt=stmt.where(CreatorGalleryItem.review=='APPROVED')
+        if creator_id!=u.id:stmt=stmt.where(CreatorGalleryItem.review.in_(('APPROVED','DELETED')))
         rows=db.scalars(stmt.order_by(CreatorGalleryItem.id.desc()).limit(100)).all()
-        return [gallery_json(db,item,u.id) for item in rows]
+        return [gallery_json(db,item,u.id) for item in rows
+                if item.review!='DELETED' or (u.id!=creator_id and gallery_can_read(db,item,u.id))]
 
     @router.get('/gallery/{item_id}/assets')
     def gallery_media_list(item_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -318,16 +349,18 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         if not item or not gallery_can_read(db,item,u.id):raise HTTPException(403,'Content is locked')
         linked=db.scalar(select(CreatorGalleryAsset.id).where(CreatorGalleryAsset.item_id==item_id,CreatorGalleryAsset.asset_id==asset_id))
         a=db.get(CreatorMediaAsset,asset_id)
-        if not linked or not a or a.review!='APPROVED':raise HTTPException(404,'Approved media unavailable')
+        if not linked or not a or not (a.review=='APPROVED' or (item.review=='DELETED' and a.review=='DELETED')):
+            raise HTTPException(404,'Media unavailable')
         return private_stream(a.object_key,a.mime_type)
 
     @router.post('/gallery/{item_id}/unlock')
     def unlock_gallery(item_id:int,body:UnlockIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
         item=db.get(CreatorGalleryItem,item_id)
-        if not item or item.review!='APPROVED' or item.visibility!='PPV':raise HTTPException(404,'PPV item unavailable')
+        if not item or item.review not in ('APPROVED','DELETED') or item.visibility!='PPV':raise HTTPException(404,'PPV item unavailable')
         creator_ready(db,item.creator_id)
         stable_lock_wallet(db,u.id)
         if gallery_can_read(db,item,u.id):return {'unlocked':True,'charged_q':0}
+        if item.review=='DELETED':raise HTTPException(410,'Creator removed this item from sale')
         payment,created=create_payment(db,u.id,item.creator_id,'GALLERY',item.id,item.price_micros,body.request_key)
         if created:db.add(CreatorGalleryUnlock(fan_id=u.id,item_id=item.id,payment_id=payment.id))
         elif payment.status=='REFUNDED':raise HTTPException(409,'Previous payment refunded; use a new transaction key')
@@ -385,7 +418,9 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
     def offers_inbox(u:User=Depends(current_user),db:Session=Depends(get_db)):
         rows=db.scalars(select(CreatorPrivateOffer).where(CreatorPrivateOffer.fan_id==u.id)
                         .order_by(CreatorPrivateOffer.id.desc()).limit(100)).all()
-        return [offer_json(db,x,u.id) for x in rows if db.get(CreatorGalleryItem,x.item_id).review=='APPROVED']
+        return [offer_json(db,x,u.id) for x in rows
+                if (item:=db.get(CreatorGalleryItem,x.item_id)) and
+                (item.review=='APPROVED' or (item.review=='DELETED' and gallery_can_read(db,item,u.id)))]
 
     @router.get('/offers/{offer_id}')
     def offer_details(offer_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -398,10 +433,11 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         offer=db.get(CreatorPrivateOffer,offer_id)
         if not offer or offer.fan_id!=u.id:raise HTTPException(404,'Private offer not found')
         item=db.get(CreatorGalleryItem,offer.item_id)
-        if not item or item.review!='APPROVED':raise HTTPException(404,'Content unavailable')
+        if not item or item.review not in ('APPROVED','DELETED'):raise HTTPException(404,'Content unavailable')
         creator_ready(db,offer.creator_id)
         stable_lock_wallet(db,u.id)
         if gallery_can_read(db,item,u.id):return {'unlocked':True,'charged_q':0,'item_id':item.id}
+        if item.review=='DELETED':raise HTTPException(410,'Creator removed this item from sale')
         payment,created=create_payment(db,u.id,offer.creator_id,'DM_PPV',offer.id,offer.price_micros,body.request_key)
         if created:db.add(CreatorOfferUnlock(fan_id=u.id,offer_id=offer.id,payment_id=payment.id))
         elif payment.status=='REFUNDED':raise HTTPException(409,'Previous payment refunded; use a new transaction key')
@@ -452,6 +488,7 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         if not a:raise HTTPException(404,'Media missing')
         action=body.action.upper()
         if action not in ('APPROVE','REJECT'):raise HTTPException(422,'Use APPROVE or REJECT')
+        if a.review=='DELETED' and action=='APPROVE':raise HTTPException(409,'Creator-deleted media cannot be restored by admin approval')
         old=a.review;a.review='APPROVED' if action=='APPROVE' else 'REJECTED'
         # If a previously approved file is removed for safety, linked galleries
         # must also be removed from sale until a fresh compliance review.
@@ -472,6 +509,7 @@ def register_v2131_exclusives(app,current_user,get_db,push,msg_json):
         action=body.action.upper()
         if action not in ('APPROVE','REJECT'):raise HTTPException(422,'Use APPROVE or REJECT')
         if action=='APPROVE':
+            if item.review=='DELETED':raise HTTPException(409,'Creator-deleted gallery cannot be restored by admin approval')
             for aid in linked_asset_ids(db,item.id):
                 a=db.get(CreatorMediaAsset,aid)
                 if not a or a.review!='APPROVED':raise HTTPException(409,'Approve all linked assets first')

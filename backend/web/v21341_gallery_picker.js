@@ -1,3 +1,4 @@
+/* V21356_STUDIO_DELETE */
 /* LEMMIQ V2.13.4.1 — professional gallery picker and private media management.
    Only professional threads may receive an offer. Never use personal /chats endpoints.
    Prices and media access are authorised by the backend. */
@@ -148,4 +149,72 @@
     try{await load()}catch(e){msg('Cannot load gallery: '+e.message,true)}
   }
   window.LEMMIQCreatorGalleryV21341={openPicker:(id,onSent)=>open(id,onSent),openManager:()=>open()};
+
+  // V21356_STUDIO_DELETE: markup-independent creator-owned deletion controls.
+  // The upstream gallery manager may use a different library row template.
+  function v21356DecorateManager(){
+    const root=document.getElementById('v21341Root');
+    const dlg=document.getElementById('v21341GalleryDialog');
+    if(!root||!dlg||!dlg.open)return;
+    const mode=s.tab;
+    if(mode!=='gallery'&&mode!=='upload')return;
+    const entries=mode==='gallery'?s.gallery:s.library;
+    if(!Array.isArray(entries))return;
+    let panel=root.querySelector('#v21356DeletePanel');
+    if(!panel){panel=document.createElement('section');panel.id='v21356DeletePanel';panel.style.cssText='margin:14px 0;padding:12px;border:1px solid rgba(145,144,198,.4);border-radius:12px;display:grid;gap:8px';root.appendChild(panel)}
+    const signature=mode+'|'+entries.map(x=>String(x.id)+':'+String(x.title)).join('|');
+    if(panel.dataset.renderSignature===signature)return;
+    panel.dataset.renderSignature=signature;
+    panel.replaceChildren();
+    const title=document.createElement('strong');
+    title.textContent=mode==='gallery'?'Manage my gallery items':'Manage my library files';
+    panel.appendChild(title);
+    const hint=document.createElement('small');
+    hint.textContent='Deleting stops new sales and removes this item from your studio. Existing paid access and admin audit records remain available.';
+    panel.appendChild(hint);
+    if(!entries.length){const empty=document.createElement('p');empty.textContent='No items to manage.';panel.appendChild(empty)}
+    for(const item of entries){
+      const row=document.createElement('div');row.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap';
+      const name=document.createElement('span');name.textContent='#'+item.id+' · '+(item.title||'Untitled');
+      name.style.cssText='overflow-wrap:anywhere;min-width:0;flex:1';
+      const button=document.createElement('button');button.type='button';button.className='danger';button.textContent='Delete';
+      button.style.cssText='padding:7px 11px';
+      button.onclick=async()=>{
+        if(s.busy)return;
+        const gallery=mode==='gallery';
+        const text=gallery?'this gallery item':'this library file and its linked gallery items';
+        if(!confirm('Delete “'+(item.title||'Untitled')+'”? This removes '+text+' from your studio and new sales. Existing paid unlocks and audit records remain accessible. There is no self-service undo.'))return;
+        button.disabled=true;
+        try{
+          await req(gallery?'/gallery/'+item.id:'/library/'+item.id,{method:'DELETE'});
+          if(s.selected===item.id)s.selected=null;
+          await load();
+          msg('Deleted from Creator Studio.');
+        }catch(e){msg(e.message||'Deletion failed',true)}
+        finally{button.disabled=false}
+      };
+      row.append(name,button);panel.appendChild(row);
+    }
+    // Earlier manager strings must not imply an unnecessary second approval.
+    const headline=root.querySelector('.v21341-header p');
+    if(headline&&/reviewed before publication/i.test(headline.textContent||''))
+      headline.textContent='Approved creators can publish immediately; admins may audit content later.';
+    for(const node of root.querySelectorAll('button')){
+      const label=node.textContent.trim();
+      if(label==='Upload for approval')node.textContent='Upload to library';
+      if(label==='Submit gallery item for approval')node.textContent='Publish gallery item';
+    }
+    for(const node of root.querySelectorAll('p')){
+      if(/Master Admin approves the FILE/.test(node.textContent||''))
+        node.textContent='Photos up to 20 MB · videos up to 100 MB. Uploaded media can be published immediately by approved creators. Admins may review and remove content later.';
+    }
+  }
+  // Watch only for DOM replacement; the signature check avoids re-render loops.
+  function v21356StartManagerEnhancement(){
+    const observer=new MutationObserver(v21356DecorateManager);
+    observer.observe(document.body,{childList:true,subtree:true});
+    v21356DecorateManager();
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',v21356StartManagerEnhancement,{once:true});
+  else v21356StartManagerEnhancement();
 })();

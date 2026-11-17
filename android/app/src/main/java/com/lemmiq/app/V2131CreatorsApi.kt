@@ -1,3 +1,4 @@
+/* V21356_STUDIO_DELETE */
 package com.lemmiq.app
 
 import android.content.Context
@@ -93,6 +94,8 @@ internal class CreatorApiV2131(private val context: Context, private val session
         parse(write("/v213/creators/posts", mapOf("title" to title, "teaser" to teaser, "body" to body,
             "visibility" to visibility, "price_q" to priceQ, "level" to level)))
 
+    suspend fun deleteLibraryAsset(id: Int): Unit { raw(builder("/v2131/exclusives/library/$id").delete().build()) }
+    suspend fun deleteGalleryItem(id: Int): Unit { raw(builder("/v2131/exclusives/gallery/$id").delete().build()) }
     suspend fun library(): List<CreatorAssetNative> = parse(get("/v2131/exclusives/library"))
     suspend fun galleryMine(): List<CreatorGalleryNative> = parse(get("/v2131/exclusives/gallery/mine"))
     suspend fun gallery(id: Int): List<CreatorGalleryNative> = parse(get("/v2131/exclusives/profile/$id/gallery"))

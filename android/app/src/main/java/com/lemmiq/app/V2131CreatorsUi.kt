@@ -1,3 +1,4 @@
+/* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
 
@@ -362,12 +363,38 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
     var transferAmount by remember { mutableStateOf("") }
     var refresh by remember { mutableIntStateOf(0) }
     var viewGallery by remember { mutableStateOf<Int?>(null) }
+    var pendingRemove by remember { mutableStateOf<Pair<String, Int>?>(null) }
 
     LaunchedEffect(profile?.status, refresh) {
         if (profile?.status == "APPROVED") {
             try { assets = client.library(); gallery = client.galleryMine(); earnings = client.earnings() }
             catch (e: Exception) { onError(e.message ?: "Studio refresh failed") }
         }
+    }
+    pendingRemove?.let { target ->
+        CreatorConfirm(
+            title = "Delete from Creator Studio?",
+            detail = if (target.first == "ASSET")
+                "This file and every linked gallery item will be removed from your Studio and new sales. Existing paid unlocks and admin audits remain available. No self-service undo."
+            else "This gallery item will stop being sold. Existing paid unlocks and admin audits remain available. No self-service undo.",
+            confirmText = "Delete",
+            onCancel = { pendingRemove = null },
+            onConfirm = {
+                pendingRemove = null
+                busy = true
+                scope.launch {
+                    try {
+                        if (target.first == "ASSET") {
+                            client.deleteLibraryAsset(target.second)
+                            selectedAssets.remove(target.second)
+                        } else client.deleteGalleryItem(target.second)
+                        refresh++
+                        onSuccess("Deleted from Creator Studio")
+                    } catch (e: Exception) { onError(e.message ?: "Delete failed") }
+                    finally { busy = false }
+                }
+            }
+        )
     }
     val libraryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) scope.launch {
@@ -473,6 +500,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) { Text(a.title, fontWeight = FontWeight.SemiBold); Text("#${a.id} · ${a.review}", color = CreatorMuted, fontSize = 11.sp) }
                             if (a.review == "APPROVED") CreatorTag("Ready")
+                            TextButton(onClick = { pendingRemove = "ASSET" to a.id }, enabled = !busy) { Text("Delete", color = Color.Red) }
                         } }
                     }
                 }
@@ -520,6 +548,7 @@ private fun CreatorStudio(client: CreatorApiV2131, mine: CreatorMineNative, conf
                         Card { Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) { Text(item.title, fontWeight = FontWeight.SemiBold); Text("${item.review} · ${item.visibility} · ${qText(item.price_q)} Q", fontSize = 11.sp, color = CreatorMuted) }
                             if (item.unlocked) TextButton({ viewGallery = item.id }) { Text("View") }
+                            TextButton(onClick = { pendingRemove = "GALLERY" to item.id }, enabled = !busy) { Text("Delete", color = Color.Red) }
                         } }
                     }
                 }
