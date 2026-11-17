@@ -1,3 +1,4 @@
+# V21361_NAV_TRANSFER_SCHEDULE
 # V21354_CREATOR_AUTOPUBLISH
 """LEMMIQ V2.13 Q Creators — mainstream beta.
 
@@ -588,11 +589,26 @@ def register_v213_creators(app,current_user,get_db):
     def transfer(body:TransferIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
         creator_ready(db,u.id)
         amount=to_micros(body.amount_q)
+        # All creator income was already received into the Q system escrow.
+        # Lock escrow before earnings to match the purchase/settlement lock order.
+        system(db,'CREATOR_ESCROW')
+        reserve=db.execute(select(QSystemWallet).where(
+            QSystemWallet.key=='CREATOR_ESCROW').with_for_update()).scalar_one()
         earnings(db,u.id)
-        r=db.execute(update(CreatorEarnings).where(CreatorEarnings.creator_id==u.id,CreatorEarnings.available_micros>=amount).values(available_micros=CreatorEarnings.available_micros-amount,transferred_micros=CreatorEarnings.transferred_micros+amount))
-        if r.rowcount!=1:raise HTTPException(409,'Insufficient available creator earnings')
+        e=db.execute(select(CreatorEarnings).where(
+            CreatorEarnings.creator_id==u.id).with_for_update()).scalar_one()
+        if amount>e.available_micros:
+            raise HTTPException(409,'Insufficient available creator earnings. Refresh your Creator Wallet.')
+        if amount>reserve.balance_micros:
+            # Do not fabricate Q to balance a treasury shortage. No debit is made.
+            raise HTTPException(409,'Creator settlement reserve is unavailable. No Q has moved. Contact LEMMIQ Support for an escrow reconciliation.')
+        # This call debits escrow, credits the user's main wallet and writes the Q ledger.
         from_system(db,'CREATOR_ESCROW',u.id,amount,'CREATOR_EARNINGS_TRANSFER',f'creator:{u.id}')
-        db.commit();return {'transferred_q':q(amount)}
+        e.available_micros-=amount
+        e.transferred_micros+=amount
+        db.commit()
+        return {'ok':True,'transferred_q':q(amount),
+                'available_q':q(e.available_micros),'transferred_total_q':q(e.transferred_micros)}
 
     @router.get('/admin/overview')
     def admin_overview(u:User=Depends(current_user),db:Session=Depends(get_db)):

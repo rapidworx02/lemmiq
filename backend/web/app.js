@@ -1,3 +1,4 @@
+/* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 const state = {
   token: localStorage.getItem("lemmiq_token") || "",
@@ -149,7 +150,7 @@ function setView(name){
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
   const secondary=["trust","business","activity","money","me","q-admin","updates"];
-  const navName=name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":((name==="q-predict"||name==="agent")?"q-economy":name));
+  const navName=name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name));
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],

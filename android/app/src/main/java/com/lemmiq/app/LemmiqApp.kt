@@ -1,3 +1,4 @@
+/* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 package com.lemmiq.app
 
@@ -226,8 +227,8 @@ private fun Home(vm:LemmiqViewModel){
     LaunchedEffect(tab,showMore,morePage,qPredictOpen){
         when{
             showMore && morePage=="updates" -> {vm.refreshStatuses();vm.refreshMoments()}
-            !showMore && tab==2 && qPredictOpen -> vm.refreshPredict()
-            !showMore && tab==3 -> vm.refreshCalls()
+            !showMore && tab==3 -> vm.refreshPredict()
+            !showMore && tab==4 -> vm.refreshCalls()
             showMore && morePage=="trust" -> vm.refreshTrustHistory()
             showMore && morePage=="business" -> vm.refreshBusiness()
             showMore && morePage=="me" -> {vm.refreshMe();vm.refreshPrivacy()}
@@ -248,7 +249,7 @@ private fun Home(vm:LemmiqViewModel){
         when(r.type){
             "chat"->r.id?.let{id->vm.chats.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.open(it);LemmiqLaunchRouterV2103.consume()}}
             "group"->r.id?.let{id->vm.groups.firstOrNull{it.id==id}?.let{tab=0;showMore=false;qFullScreen=false;vm.openGroup(it);LemmiqLaunchRouterV2103.consume()}}
-            "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=2;qPredictOpen=true;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
+            "q_predict","q_predict_result","q_predict_close","q_predict_void","q_predict_watch"->{tab=3;qPredictOpen=true;showMore=false;qFullScreen=false;r.id?.let{vm.openPredictMarket(it)};LemmiqLaunchRouterV2103.consume()}
             "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->{tab=2;qPredictOpen=false;showMore=false;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
             "q_to_q"->{tab=0;qThreadOpen=true;qFullScreen=false;showMore=false;vm.refreshQThread(markRead=true);LemmiqLaunchRouterV2103.consume()}
             "q_creators"->{tab=1;showMore=false;morePage=null;qFullScreen=false;LemmiqLaunchRouterV2103.consume()}
@@ -261,6 +262,7 @@ private fun Home(vm:LemmiqViewModel){
         "💬" to "Chats",
         "✦" to "Creators",
         "Q+" to "Q",
+        "◈" to "Q Predict",
         "📞" to "Calls",
         "☰" to "More"
     )
@@ -271,12 +273,12 @@ private fun Home(vm:LemmiqViewModel){
             NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
-                        selected=!qFullScreen && if(i==4) showMore else (!showMore && tab==i),
+                        selected=!qFullScreen && if(i==5) showMore else (!showMore && tab==i),
                         onClick={
                             qFullScreen=false
                             qThreadOpen=false
                             morePage=null
-                            if(i==4){
+                            if(i==5){
                                 showMore=true
                             }else{
                                 tab=i
@@ -348,7 +350,8 @@ private fun Home(vm:LemmiqViewModel){
                             else V28QEconomyScreen(vm)
                         }
                     }
-                    3->V241CallsScreen(vm)
+                    3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
+                    4->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)

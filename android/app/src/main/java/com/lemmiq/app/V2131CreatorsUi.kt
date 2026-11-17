@@ -1,3 +1,4 @@
+/* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
@@ -191,6 +192,8 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
     var requestKind by remember { mutableStateOf<String?>(null) }
     var requestMessage by remember { mutableStateOf("") }
     var scheduleAt by remember { mutableStateOf("") }
+    val scheduleContext = LocalContext.current
+    val localScheduleZone = java.time.ZoneId.systemDefault()
     var tipValue by remember { mutableStateOf("10") }
     var busy by remember { mutableStateOf(false) }
 
@@ -319,14 +322,40 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
             text = { Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("Q is reserved until the request is confirmed or cancelled, under LEMMIQ's settlement rules.", fontSize = 12.sp)
                 OutlinedTextField(requestMessage, { requestMessage = it }, label = { Text("Message / request details") })
-                if (kind != "CHAT") OutlinedTextField(scheduleAt, { scheduleAt = it },
-                    label = { Text("Date/time with timezone (ISO 8601)") },
-                    placeholder = { Text("2026-12-01T18:00:00+11:00") })
+                if (kind != "CHAT") {
+                    Text("Session date and time · ${localScheduleZone.id}", fontSize = 12.sp, color = CreatorMuted)
+                    OutlinedButton(onClick = {
+                        val now = java.time.ZonedDateTime.now(localScheduleZone)
+                        val cal = android.app.DatePickerDialog(scheduleContext, { _, year, month, day ->
+                            android.app.TimePickerDialog(scheduleContext, { _, hour, minute ->
+                                try {
+                                    val chosen = java.time.LocalDateTime.of(year,month+1,day,hour,minute)
+                                        .atZone(localScheduleZone)
+                                    scheduleAt = chosen.toOffsetDateTime().toString()
+                                } catch (_:Exception) { scheduleAt="" }
+                            }, 18, 0, false).show()
+                        }, now.year, now.monthValue-1, now.dayOfMonth)
+                        cal.datePicker.minDate=System.currentTimeMillis()-60000L
+                        cal.datePicker.maxDate=System.currentTimeMillis()+60L*24*60*60*1000
+                        cal.show()
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        val label = runCatching {
+                            java.time.OffsetDateTime.parse(scheduleAt).atZoneSameInstant(localScheduleZone)
+                                .format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM yyyy · h:mm a"))
+                        }.getOrNull()
+                        Text(label ?: "📅 Choose date and time")
+                    }
+                    Text("Choose a time between 5 minutes and 60 days from now. Your device timezone is used automatically.", fontSize = 11.sp, color = CreatorMuted)
+                }
             } }, confirmButton = { Button(onClick = {
                 val k = kind; val m = requestMessage; val whenAt = if (kind == "CHAT") null else scheduleAt.trim()
                 requestKind = null
-                scope.launch { try { client.request(p.id, k, m, whenAt) } catch (e: Exception) { onError(e.message ?: "Request failed") } }
-            }, enabled = config.payments_enabled && requestMessage.trim().length >= 3 && (kind == "CHAT" || scheduleAt.contains('T'))) { Text("Reserve Q & request") } },
+                scope.launch { try { client.request(p.id, k, m, whenAt); scheduleAt=""; onUpdated() }
+                    catch (e: Exception) { onError(e.message ?: "Request failed") } }
+            }, enabled = config.payments_enabled && requestMessage.trim().length >= 3 && (kind == "CHAT" || runCatching {
+                val chosen=java.time.OffsetDateTime.parse(scheduleAt).toInstant()
+                chosen.isAfter(java.time.Instant.now().plusSeconds(300)) && chosen.isBefore(java.time.Instant.now().plusSeconds(60L*86400))
+            }.getOrDefault(false))) { Text("Reserve Q & request") } },
             dismissButton = { TextButton({ requestKind = null }) { Text("Cancel") } })
     }
 }
