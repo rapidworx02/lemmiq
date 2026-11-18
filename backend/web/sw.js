@@ -1,11 +1,14 @@
+/* V21362_REFERRAL_LINKS */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21361-creator-navigation-wallet-schedule";
+const CACHE = "lemmiq-v21362-referral-invitations";
 const SHELL = [
   "/web/v2136_creator_ux.js?v=2.13.6.0",
   "/web/v2136_creator_ux.css?v=2.13.6.0",
+  "/web/v21362_referral_links.js?v=2.13.6.2",
+  "/web/v21362_referral_links.css?v=2.13.6.2",
   "/web/v21351_avatar_status.css?v=2.13.5.2",
   "/web/app.js?v=2.13.6.1",
   "/web/v2135_creator_media.js?v=2.13.5",

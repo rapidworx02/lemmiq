@@ -1,3 +1,4 @@
+/* V21362_REFERRAL_LINKS */
 /* LEMMIQ V2.8.3 Q Economy */
 (()=>{
   const v28={wallet:null,ledger:[],referrals:null,payments:[],listings:[],myListings:[],orders:[],admin:null,adminWallets:[],adminWalletMatrix:[],adminPackageRules:[],adminUsers:[],adminAudit:[],adminPayments:[],adminLedger:[],adminMarket:[],adminRoles:{roles:[],items:[]},adminReferralRules:[],adminReferralOverview:null};
@@ -44,6 +45,7 @@
       :`Basic daily allowance: ${fmtQ(w.basic_daily_q)} Q. Cash-out is disabled in V2.8.`;
     $("q28ClaimDaily").disabled=!!w.basic_claimed_today;
     $("q28ReferralCode").textContent=w.referral_code||"—";
+    window.LEMMIQReferralLinksV21362?.refresh(w.referral_code||"");
     $("q28ReferralInfo").textContent=`Referral reward: ${fmtQ(w.referral_reward_q)} Q · Signup bonus: ${fmtQ(w.signup_bonus_q)} Q.`;
     $("q28Subscriptions").innerHTML=(w.packages||[]).length?(w.packages||[]).map(p=>{
       const pct=p.cap_usd?Math.min(100,(Number(p.accrued_usd_reference||0)/Number(p.cap_usd))*100):0;

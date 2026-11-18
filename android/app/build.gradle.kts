@@ -1,3 +1,4 @@
+/* V21362_REFERRAL_LINKS */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
@@ -54,8 +55,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=77
-        versionName="2.13.6.1"
+        versionCode=78
+        versionName="2.13.6.2"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }

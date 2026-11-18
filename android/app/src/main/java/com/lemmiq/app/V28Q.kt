@@ -1,4 +1,7 @@
+/* V21362_REFERRAL_LINKS */
 package com.lemmiq.app
+
+import android.content.Intent
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -656,6 +659,10 @@ private fun Q28MarketTab(vm:LemmiqViewModel,onDispute:(QMarketOrderDto)->Unit){
 @Composable
 private fun Q28ReferralTab(vm:LemmiqViewModel){
     val clipboard=LocalClipboardManager.current
+    val shareContext=LocalContext.current
+    val referralCode=vm.qWallet?.referral_code.orEmpty().trim().uppercase()
+    val referralLink=if(Regex("^Q[1-9][0-9]*-[A-F0-9]{6}$").matches(referralCode))
+        "https://app.lemmiq.com/web/?ref=$referralCode" else ""
     var code by remember{mutableStateOf("")}
     val r=vm.qReferrals
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
@@ -666,6 +673,21 @@ private fun Q28ReferralTab(vm:LemmiqViewModel){
                 Text(vm.qWallet?.referral_code?:"—",fontSize=25.sp,fontWeight=FontWeight.Black,color=Q28Purple,modifier=Modifier.padding(vertical=10.dp))
                 Text("Free signup referral: ${q28Q(vm.qWallet?.referral_reward_q?:0.0)} Q. Package referrals are paid when the referred user's package payment is approved.",fontSize=11.sp,color=Q28Muted)
                 Button(onClick={clipboard.setText(AnnotatedString(vm.qWallet?.referral_code?:""))}){Text("Copy referral code")}
+                Spacer(Modifier.height(10.dp))
+                Text("Your invitation link",fontWeight=FontWeight.Bold,fontSize=13.sp)
+                if(referralLink.isNotBlank()){
+                    Text(referralLink,fontSize=11.sp,color=Q28Muted)
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                        Button(onClick={clipboard.setText(AnnotatedString(referralLink))}){Text("Copy link")}
+                        OutlinedButton(onClick={
+                            val intent=Intent(Intent.ACTION_SEND).apply{
+                                type="text/plain"
+                                putExtra(Intent.EXTRA_TEXT,"Join me on LEMMIQ! $referralLink")
+                            }
+                            shareContext.startActivity(Intent.createChooser(intent,"Share LEMMIQ invitation"))
+                        }){Text("Share link")}
+                    }
+                }else Text("Your referral link will appear when Q Wallet loads.",fontSize=11.sp,color=Q28Muted)
             }}
         }
         item{
