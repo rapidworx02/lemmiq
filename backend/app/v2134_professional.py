@@ -1,3 +1,4 @@
+# V2138_COMBINED
 # V21356_STUDIO_DELETE
 """LEMMIQ V2.13.4: separate creator identity + dedicated professional inbox.
 
@@ -160,7 +161,11 @@ def protect_personal_direct(db, sender, other):
     # Only incoming NEW personal conversations to a published creator are blocked.
     # A creator may still personally initiate an ordinary conversation by choice.
     p=db.get(CreatorProfile,other)
-    if p and p.status=='APPROVED' and identity(db,other):return False
+    # V2138: personal username lookup may open an ordinary direct chat.
+    # Never expose the creator's personal account through professional discovery.
+    # Existing legacy paid threads remain excluded by the check above.
+    # The standard user blocks/privacy checks still apply to the direct-chat API.
+    # published creator status no longer blocks independently initiated personal chats.
     return True
 
 

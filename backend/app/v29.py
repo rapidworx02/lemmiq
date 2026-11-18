@@ -1,3 +1,4 @@
+# V2138_COMBINED
 # V2137_NOTIFICATIONS_CRICKET
 """LEMMIQ V2.10.5 — Q Predict on the main LEMMIQ Q wallet.
 
@@ -468,6 +469,8 @@ def _create_market(db: Session, body: PredictMarketIn, *, creator_id: int | None
 
 
 def _stake_q(db: Session, u: User, m: PredictMarket, outcome: str, amount_micros: int):
+    # V2.13.8: legacy Q Economy staking retired. Q is NOT a wagering balance.
+    raise HTTPException(410, "Q-based prediction staking has been retired. Use the separate non-redeemable Q Predict Demo wallet.")
     cfg = _config(db)
     # Legal/operational safety interlock; the admin toggle alone never opens real-value sports wagering.
     if os.getenv("LEMMIQ_REAL_Q_AUTHORIZED", "false").lower() != "true":
@@ -1073,6 +1076,8 @@ def register_v29(app, current_user, get_db):
     def admin_save_config(body:PredictConfigIn, u:User=Depends(current_user), db:Session=Depends(get_db)):
         _require_admin(db,u,"FULL"); c=_config(db)
         if body.real_q_enabled is not None:
+            if body.real_q_enabled:
+                raise HTTPException(409,"Q staking retired in V2.13.8; the Real USDT environment is separately locked")
             if body.real_q_enabled and os.getenv("LEMMIQ_REAL_Q_AUTHORIZED", "false").lower() != "true":
                 raise HTTPException(403, "Real Q requires legal authorization before activation")
             c.real_q_enabled = bool(body.real_q_enabled)

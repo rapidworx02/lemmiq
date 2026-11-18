@@ -1,3 +1,4 @@
+/* V2138_COMBINED */
 /* V2137_NOTIFICATIONS_CRICKET */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
@@ -165,7 +166,7 @@ function setView(name){
     money:["Money","Review and correct notification-derived payment insights."],
     me:["Me","Your profile photo, account and LEMMIQ access."],
     "q-economy":["Q Economy","Wallet, mining, subscriptions, referrals and Q Market."],
-    "q-predict":["Q Predict","Prediction markets using your LEMMIQ Q wallet."],
+    "q-predict":["Q Predict","Demo USDT predictions. Real USDT is locked."],
     "q-admin":["Q Admin","Treasury, Q Predict, USDT payments, marketplace and economy controls."],
     "q-creators":["Q Creators","Discover, follow and support professional creators."],
     "professional-inbox":["Professional Creator Inbox","Paid creator messages separate from your personal chats."]
@@ -491,8 +492,15 @@ function showSuggestion(reply){
 function discardSuggestion(){$("suggestionCard").classList.add("hidden");$("suggestionCard").innerHTML=""}
 
 async function checkMessage(id){
-  const m=state.messages.find(x=>x.id===id); if(!m)return;
-  await runTrust(m.text);
+  const m=state.messages.find(x=>x.id===id); if(!m||window.__v2138TrustBusy)return;
+  window.__v2138TrustBusy=true;
+  try{
+    setView("trust");
+    const result=document.getElementById("trustResult");
+    if(result){result.classList.remove("hidden");result.innerHTML='<div class="v2138-fact-pending">⏳ Q is analysing this message… Checking claims and scam indicators.</div>'}
+    await runTrust(m.text);
+  }catch(e){toast(e.message||"Unable to analyse message",true)}
+  finally{window.__v2138TrustBusy=false}
 }
 async function runTrust(text){
   $("trustResult").classList.remove("hidden");
@@ -855,9 +863,13 @@ async function reactMessage(id,emoji){try{await api(`/v24/messages/${id}/reactio
 async function openMessageMenu(id){
   const m=state.messages.find(x=>x.id===id);if(!m)return;const mine=m.sender_id===state.user?.id;
   openModal(`<h3>Message actions</h3><div class="modal-actions">
-    <button id="maReply" class="ghost">↩ Reply</button><button id="maReact" class="ghost">❤️ React</button><button id="maForward" class="ghost">↗ Forward</button>
+    ${!m.deleted_for_everyone?`<button id="maCopy" class="ghost">📋 Copy message</button>`:""}<button id="maReply" class="ghost">↩ Reply</button><button id="maReact" class="ghost">❤️ React</button><button id="maForward" class="ghost">↗ Forward</button>
     ${mine&&!m.deleted_for_everyone?`<button id="maEdit" class="ghost">✏ Edit</button><button id="maDeleteAll" class="danger">🗑 Delete for everyone</button>`:""}
     <button id="maDeleteMe" class="danger">Delete for me</button></div>`);
+  if($("maCopy"))$("maCopy").onclick=async()=>{
+    try{await navigator.clipboard.writeText(m.text||"");closeModal();toast("Message copied to clipboard")}
+    catch(e){toast("Clipboard permission unavailable",true)}
+  };
   $("maReply").onclick=()=>{closeModal();setReplyPreview(m)};
   $("maReact").onclick=()=>{closeModal();openModal(`<h3>React</h3><div class="reaction-picker">${["👍","❤️","😂","😮","😢","🙏"].map(x=>`<button class="ghost" data-react="${x}">${x}</button>`).join("")}</div>`);qsa("[data-react]").forEach(b=>b.onclick=async()=>{await reactMessage(id,b.dataset.react);closeModal()})};
   $("maForward").onclick=()=>{closeModal();openForwardDialog(m)};

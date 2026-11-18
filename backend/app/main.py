@@ -1,3 +1,4 @@
+# V2138_COMBINED
 # V2137_NOTIFICATIONS_CRICKET
 from .trust import check_text, media_capabilities, unavailable_result
 import os, hashlib, hmac, secrets, logging, re, json, time
@@ -1152,6 +1153,10 @@ register_v2135_direct_media(app, current_user, get_db, push)
 # V2137_NOTIFICATIONS_CRICKET
 from .v2137_cricket import register_v2137_cricket
 register_v2137_cricket(app, current_user, get_db, push_tokens)
+
+# V2138_COMBINED: separate, non-redeemable Demo USDT prediction wallet
+from .v2138_predict import register_v2138_predict
+register_v2138_predict(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

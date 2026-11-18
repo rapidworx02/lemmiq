@@ -1,3 +1,4 @@
+// V2138_COMBINED
 /* V21360_CREATOR_UX */
 /* V21354_CREATOR_AUTOPUBLISH */
 package com.lemmiq.app
@@ -246,7 +247,12 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                                     else if(!isCreator)Button(onClick={confirmOp="Unlock for ${o.price_q} Q?" to {
                                         scope.launch{busy=true;try{api.unlock(o.id);reload()}catch(e:Exception){error=e.message}finally{busy=false}}}},
                                         enabled=!busy){Text("Unlock ${o.price_q} Q")}
-                                }else Text(msg.body)
+                                }else V2138LinkedText(msg.body,Color(0xFF17182A))
+                                if(msg.body.isNotBlank())TextButton(onClick={
+                                    val cb=ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    cb.setPrimaryClip(android.content.ClipData.newPlainText("LEMMIQ creator message",msg.body))
+                                    android.widget.Toast.makeText(ctx,"Message copied",android.widget.Toast.LENGTH_SHORT).show()
+                                }){Text("Copy message",fontSize=10.sp)}
                                 Text(msg.role,fontSize=9.sp,color=ProMuted)
                             }
                         }

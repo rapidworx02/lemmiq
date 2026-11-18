@@ -1,0 +1,29 @@
+/* V2138_COMBINED */
+#view-q-predict.v2138-active > :not(#v2138PredictRoot){display:none!important}
+#v2138PredictRoot{padding:10px 0 110px;max-width:1060px;margin:0 auto;color:var(--text)}
+.v2138-hero{border-radius:22px;background:linear-gradient(125deg,#24205a,#472980,#215971);color:white;padding:22px;margin-bottom:15px}
+.v2138-hero h2{font-size:clamp(23px,4vw,32px);margin:10px 0}.v2138-hero p{color:#e1e5ff}
+.v2138-balances{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0}.v2138-balances>div{background:rgba(255,255,255,.13);padding:15px;border-radius:17px;display:flex;flex-direction:column;gap:4px}
+.v2138-balances strong{font-size:clamp(23px,5vw,36px);font-variant-numeric:tabular-nums}.v2138-balances small,.v2138-balances span{color:#e3dcff}.v2138-mode{background:rgba(0,0,0,.25);padding:10px 13px;border-radius:12px;font-size:12px}
+.v2138-tools,.v2138-actions{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}.v2138-market{border:1px solid var(--line);background:rgba(110,90,225,.09);padding:16px;margin:10px 0;border-radius:17px}.v2138-market h3{margin:5px 0 10px}.v2138-tag{color:#b2a1fa;font-size:11px;font-weight:750;letter-spacing:.06em}.v2138-market button{margin-top:7px}.v2138-aux{border:1px solid var(--line);background:rgba(106,83,225,.12);padding:15px;border-radius:17px;margin:14px 0}.v2138-row{padding:9px;border-bottom:1px solid var(--line)}
+.v2138-admin{margin:18px 0;border:1px solid rgba(129,108,240,.45);padding:16px;border-radius:18px;background:rgba(104,80,225,.09)}.v2138-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px}.v2138-admin-grid label{font-size:12px}.v2138-admin p{overflow-wrap:anywhere}
+/* high-contrast global status notices across both themes */
+#toast.toast,#toast.toast.error{background:#141b2c!important;color:#fff!important;border:1px solid #8c98b8!important;text-shadow:none!important;box-shadow:0 12px 34px rgba(0,0,0,.28)!important;z-index:10001!important;max-width:calc(100vw - 22px);overflow-wrap:anywhere;white-space:normal}
+#toast.toast.error{background:#5c1b25!important;color:#fff2f2!important;border-color:#ff8796!important}
+#v2137Admin{display:none!important} /* superseded by locked real-mode controls */
+/* Auto-growing textareas; JS calculates current scroll height. */
+#messageInput,#groupMessageInput{min-height:44px!important;max-height:150px!important;overflow-y:auto;resize:none;line-height:21px}
+.v2138-chat-link{color:#9deaff!important;text-decoration:underline!important;overflow-wrap:anywhere;word-break:break-word}
+.v2138-fact-pending{display:flex;gap:8px;align-items:center;padding:10px;border-radius:10px;background:rgba(132,108,238,.15);font-size:12px}
+.v2138-notif-back{margin:7px 0 15px}
+.v2138-notif-open{grid-column:1/-1}
+#v2138NotificationDetail{padding:6px 0 120px}
+#v2138NotificationDetail .v2137-card{margin:0}
+/* Mobile safe-area for all navigable views and More cards. Avoid fixed bottom bars obscuring content. */
+@media(max-width:800px){
+ .workspace .view:not(#view-chats){padding-bottom:calc(105px + env(safe-area-inset-bottom,0px))!important;min-height:calc(100dvh - 160px)}
+ #view-more .more-grid{padding-bottom:calc(120px + env(safe-area-inset-bottom,0px))!important}
+ .chat-inner .composer{padding-bottom:calc(11px + env(safe-area-inset-bottom,0px))!important}
+ .composer{min-width:0}.composer textarea{min-width:0}
+ .v2138-balances{grid-template-columns:1fr 1fr}
+}

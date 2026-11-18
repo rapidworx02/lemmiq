@@ -1,3 +1,4 @@
+// V2138_COMBINED
 /* V2137_NOTIFICATIONS_CRICKET */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
@@ -262,7 +263,7 @@ private fun Home(vm:LemmiqViewModel){
     val nav=listOf(
         "💬" to "Chats",
         "✦" to "Creators",
-        "Q+" to "Q",
+        "Q+" to "Q Economy",
         "◈" to "Q Predict",
         "📞" to "Calls",
         "☰" to "More"
@@ -294,7 +295,7 @@ private fun Home(vm:LemmiqViewModel){
                                 }
                             }else Text(x.first,fontWeight=FontWeight.Bold,fontSize=if(i==2)15.sp else 17.sp)
                         },
-                        label={Text(x.second,fontSize=8.sp,maxLines=1)},
+                        label={Text(x.second,fontSize=if(i==2)7.sp else 8.sp,maxLines=1)},
                         alwaysShowLabel=true
                     )
                 }
@@ -347,11 +348,11 @@ private fun Home(vm:LemmiqViewModel){
                             OutlinedButton(onClick={qFullScreen=true},contentPadding=PaddingValues(horizontal=10.dp)) { Text("Ask Q",fontSize=11.sp) }
                         }
                         Box(Modifier.weight(1f)) {
-                            if(qPredictOpen)V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
+                            if(qPredictOpen)V2138PredictScreen()
                             else V28QEconomyScreen(vm)
                         }
                     }
-                    3->V29PredictScreen(vm){prompt->qFullScreen=true;vm.askAgent(prompt)}
+                    3->V2138PredictScreen()
                     4->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true
@@ -735,8 +736,8 @@ private fun Chat(vm:LemmiqViewModel){
                         modifier=Modifier.clickable{showAttach=!showAttach}.padding(horizontal=5.dp))
                     OutlinedTextField(
                         draft,{draft=it},Modifier.weight(1f),placeholder={Text("Message ${c.other_user.display_name}…")},
-                        singleLine=true,shape=RoundedCornerShape(24.dp),
-                        keyboardOptions=KeyboardOptions(imeAction=ImeAction.Send),
+                        singleLine=false,minLines=1,maxLines=6,shape=RoundedCornerShape(24.dp),
+                        keyboardOptions=KeyboardOptions(imeAction=ImeAction.Default),
                         keyboardActions=KeyboardActions(onSend={if(draft.isNotBlank()){vm.send(draft);draft=""}})
                     )
                     Spacer(Modifier.width(6.dp))
@@ -827,6 +828,12 @@ private fun Chat(vm:LemmiqViewModel){
         var editText by remember(m.id){mutableStateOf(m.text)}
         AlertDialog(onDismissRequest={actionMessage=null},title={Text("Message actions")},
             text={Column{
+                if(!m.deleted_for_everyone) TextButton({
+                    val cb=ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("LEMMIQ message",m.text))
+                    android.widget.Toast.makeText(ctx,"Message copied",android.widget.Toast.LENGTH_SHORT).show()
+                    actionMessage=null
+                }){Text("📋 Copy message")}
                 TextButton({vm.setReply(m);actionMessage=null}){Text("↩ Reply")}
                 TextButton({forwardMessage=m;actionMessage=null}){Text("↗ Forward")}
                 Row{listOf("👍","❤️","😂","😮","😢","🙏").forEach{e->Text(e,fontSize=24.sp,modifier=Modifier.clickable{vm.reactMessage(m.id,e);actionMessage=null}.padding(5.dp))}}
@@ -1080,7 +1087,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                             }}){Text("Open / share",color=if(mine)Color.White else Purple)}
                         }
                     }
-                }else Text(m.text,color=if(mine)Color.White else Ink)
+                }else V2138LinkedText(m.text,if(mine)Color.White else Ink)
 
                 if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp),modifier=Modifier.padding(horizontal=if(isPhoto)7.dp else 0.dp)){
                     m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}

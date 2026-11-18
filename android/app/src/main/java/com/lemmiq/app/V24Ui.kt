@@ -1,3 +1,4 @@
+// V2138_COMBINED
 package com.lemmiq.app
 
 import androidx.compose.foundation.Image
@@ -290,7 +291,7 @@ fun V24GroupChat(vm:LemmiqViewModel){
                     else mic.launch(Manifest.permission.RECORD_AUDIO)
                 },shape=CircleShape,color=if(recording)Color(0xFFFFE7EA) else V24Soft){Box(contentAlignment=Alignment.Center){Text(if(recording)"■" else "🎙")}}
                 Spacer(Modifier.width(7.dp))
-                OutlinedTextField(draft,{draft=it},Modifier.weight(1f),singleLine=true,placeholder={Text("Message group")})
+                OutlinedTextField(draft,{draft=it},Modifier.weight(1f),singleLine=false,minLines=1,maxLines=6,placeholder={Text("Message group")})
                 Spacer(Modifier.width(6.dp));Button({if(draft.isNotBlank()){vm.sendGroup(draft);draft=""}}){Text("➤")}
             }
         }}
@@ -324,6 +325,7 @@ fun V24GroupChat(vm:LemmiqViewModel){
 @Composable
 private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     val mine=m.sender_id==vm.store.userId
+    val ctx=LocalContext.current
     val a=m.attachment
     val isPhoto=isLemmiqImageAttachmentV2102(a)
     val mediaId=a?.media_id
@@ -370,11 +372,16 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
                                 else Text("Unable to load this photo",fontSize=11.sp,color=if(mine)Color.White else V24Muted)
                             }
                         }
-                        if(m.text.isNotBlank())Text(m.text,color=if(mine)Color.White else V24Ink,modifier=Modifier.padding(horizontal=7.dp,vertical=6.dp))
+                        if(m.text.isNotBlank())V2138LinkedText(m.text,if(mine)Color.White else V24Ink)
                         if(mediaId!=null)TextButton(onClick={editPhotoV2122=true}){Text("✨ Edit with Q", fontSize=11.sp, color=if(mine)Color.White else V24Purple)}
                     }
-                    else -> Text(m.text,color=if(mine)Color.White else V24Ink)
+                    else -> V2138LinkedText(m.text,if(mine)Color.White else V24Ink)
                 }
+                if(m.text.isNotBlank())TextButton(onClick={
+                    val cb=ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    cb.setPrimaryClip(android.content.ClipData.newPlainText("LEMMIQ group message",m.text))
+                    android.widget.Toast.makeText(ctx,"Message copied",android.widget.Toast.LENGTH_SHORT).show()
+                }){Text("Copy",fontSize=10.sp,color=if(mine)Color.White else V24Purple)}
                 Text(v24Time(m.created_at),fontSize=9.sp,color=if(mine)Color.White.copy(alpha=.75f) else V24Muted,modifier=Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp))
             }
         }
