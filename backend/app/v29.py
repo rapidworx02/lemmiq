@@ -1,4 +1,4 @@
-/* V2137_NOTIFICATIONS_CRICKET */
+# V2137_NOTIFICATIONS_CRICKET
 """LEMMIQ V2.10.5 — Q Predict on the main LEMMIQ Q wallet.
 
 New prediction markets use the authoritative V2.8 Q wallet and Q ledger.

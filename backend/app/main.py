@@ -1,4 +1,4 @@
-/* V2137_NOTIFICATIONS_CRICKET */
+# V2137_NOTIFICATIONS_CRICKET
 from .trust import check_text, media_capabilities, unavailable_result
 import os, hashlib, hmac, secrets, logging, re, json, time
 from pathlib import Path
