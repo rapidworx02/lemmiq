@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 const state = {
@@ -1672,6 +1673,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 window.openChat=openChat;
+window.LEMMIQV2137={state,connectSocket};
 window.openGroup=openGroup;
 window.openQThread=openQThread;
 window.loadQThread=loadQThread;

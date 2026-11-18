@@ -1,0 +1,7 @@
+/* V2137_NOTIFICATIONS_CRICKET */
+.v2137-card{padding:18px;border:1px solid rgba(160,146,244,.32);border-radius:20px;background:linear-gradient(130deg,rgba(74,51,142,.2),rgba(34,38,74,.4));margin-bottom:16px;color:inherit}
+.v2137-card h3{margin:0 0 8px}.v2137-card #v2137PushStatus{font-size:12px;line-height:1.5;color:#d1c7ff}
+.v2137-actions{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.v2137-actions button{font-size:12px;min-height:40px}
+.v2137-toggle{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(180,180,220,.14);gap:10px;font-size:13px}.v2137-toggle input{width:20px;height:20px;accent-color:#8664fb}
+.v2137-cricket{margin-top:14px; padding:16px}.v2137-fixture{display:flex;flex-direction:column;gap:4px;padding:12px 4px;border-bottom:1px solid rgba(180,180,220,.18)}.v2137-fixture span{font-size:11px;opacity:.7}
+.v2137-admin{margin:16px 0;padding:12px;border:1px solid rgba(160,146,244,.5);border-radius:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}.v2137-admin small{width:100%}

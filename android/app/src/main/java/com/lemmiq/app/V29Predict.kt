@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 package com.lemmiq.app
 
 import androidx.compose.foundation.background
@@ -77,6 +78,7 @@ fun V29PredictScreen(vm:LemmiqViewModel,onAskQ:(String)->Unit){
         }
         if(vm.predictBusy)LinearProgressIndicator(Modifier.fillMaxWidth(),color=P29Purple)
         LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp,4.dp,12.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            if(vm.predictCategory=="SPORTS")item { V2137CricketFixtures() }
             if(h?.real_q_enabled==false)item{
                 Surface(color=Color(0xFFFFF3D9),shape=RoundedCornerShape(14.dp)){
                     Text("Q Predict staking is currently paused by the server. Your main LEMMIQ Q wallet will be used when staking is enabled.",Modifier.padding(11.dp),fontSize=10.sp,color=P29Muted)

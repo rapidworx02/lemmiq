@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 from .trust import check_text, media_capabilities, unavailable_result
 import os, hashlib, hmac, secrets, logging, re, json, time
 from pathlib import Path
@@ -1147,6 +1148,10 @@ register_v2134_professional(app, current_user, get_db, push)
 # LEMMIQ V2.13.5 — independent creator media, Q unlocks, audit
 from .v2135_direct_media import register_v2135_direct_media
 register_v2135_direct_media(app, current_user, get_db, push)
+
+# V2137_NOTIFICATIONS_CRICKET
+from .v2137_cricket import register_v2137_cricket
+register_v2137_cricket(app, current_user, get_db, push_tokens)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 /* LEMMIQ V2.9 — Q Predict + passive analytics */
 (()=>{
   const v29={home:null,category:"TRENDING",selected:null};
@@ -8,21 +9,21 @@
 
   function marketCard(m){
     const result=m.result?`<span class="v29-result ${esc(m.result)}">${esc(m.result)}</span>`:"";
-    const mine=(m.my_positions||[]).map(p=>`${p.outcome} ${fmt(p.stake_pc)} PC`).join(" · ");
+    const mine=(m.my_positions||[]).map(p=>`${p.outcome} ${fmt(p.stake_q)} Q`).join(" · ");
     return `<article class="v29-market-card" data-v29-market="${m.id}">
       <div class="v29-market-meta"><span>${esc((m.category||"TRENDING").replace("TECH_AI","TECH & AI"))}</span>${result}<button class="v29-watch" data-v29-watch="${m.id}" title="Watch">${m.watched?"★":"☆"}</button></div>
       <h3>${esc(m.question)}</h3>
       <div class="v29-probability"><div><strong>${fmt(m.yes_percent)}%</strong><span>YES</span></div><div><strong>${fmt(m.no_percent)}%</strong><span>NO</span></div></div>
       <div class="v29-prob-bar"><span style="width:${Math.max(1,Math.min(99,Number(m.yes_percent||50)))}%"></span></div>
-      <div class="v29-market-foot"><span>${fmt(m.pool_pc)} PC pool · ${m.participants||0} predictors</span><span>${m.status==="LIVE"?"Closes "+when(m.close_at):esc(m.status)}</span></div>
+      <div class="v29-market-foot"><span>${fmt(m.pool_q)} Q pool · ${m.participants||0} predictors</span><span>${m.status==="LIVE"?"Closes "+when(m.close_at):esc(m.status)}</span></div>
       ${mine?`<div class="v29-my-position">Your position · ${esc(mine)}</div>`:""}
     </article>`;
   }
 
   function render(){
     const h=v29.home;if(!h)return;
-    $("v29PcBalance").textContent=`${fmt(h.wallet?.balance_pc)} PC`;
-    $("v29PredictNotice").innerHTML=`<strong>Test mode</strong> · ${esc(h.notice||"")} · Simulated platform fee ${fmt(h.fee_percent)}% of winning profit.`;
+    $("v29PcBalance").textContent=`${fmt(h.wallet?.balance_q)} Q`;
+    $("v29PredictNotice").innerHTML=`<strong>${h.real_q_enabled?"Q Wallet Staking":"Read-only / staking paused"}</strong> · ${esc(h.notice||"")} · Fee ${fmt(h.fee_percent)}% of winning profit.`;
     $("v29PredictCategories").innerHTML=(h.categories||[]).map(c=>`<button class="${v29.category===c?"active":""}" data-v29-category="${c}">${esc(c.replace("TECH_AI","Tech & AI").replace("TRENDING","Trending"))}</button>`).join("");
     const list=h.live||[];
     $("v29PredictMarkets").innerHTML=list.length?list.map(marketCard).join(""):`<div class="empty-state glass"><h3>No live markets yet</h3><p>Q Predict Agent drafts markets for Admin approval. Check back after the first drafts are published.</p></div>`;
@@ -39,14 +40,14 @@
   async function openMarket(id){
     try{
       const m=await pApi(`/predict/markets/${id}`);v29.selected=m;
-      const pos=(m.my_positions||[]).map(p=>`<div class="v29-position"><b>${esc(p.outcome)}</b><span>${fmt(p.stake_pc)} PC staked</span><span>${esc(p.status)}</span></div>`).join("");
+      const pos=(m.my_positions||[]).map(p=>`<div class="v29-position"><b>${esc(p.outcome)}</b><span>${fmt(p.stake_q)} Q staked</span><span>${esc(p.status)}</span></div>`).join("");
       const comments=(m.discussion||[]).map(c=>`<div class="v29-comment"><b>${esc(c.user?.display_name||c.user?.username||"User")}</b><p>${esc(c.text)}</p><small>${when(c.created_at)}</small></div>`).join("");
       $("modalContent").innerHTML=`<div class="v29-market-detail">
         <div class="v29-detail-top"><span class="eyebrow">Q PREDICT · ${esc(m.category)}</span><button id="v29WatchDetail" class="ghost">${m.watched?"★ Watching":"☆ Watch"}</button></div>
         <h2>${esc(m.question)}</h2>
         <div class="v29-probability large"><div><strong>${fmt(m.yes_percent)}%</strong><span>YES</span></div><div><strong>${fmt(m.no_percent)}%</strong><span>NO</span></div></div>
-        <div class="v29-market-foot"><span>${fmt(m.pool_pc)} PC pool · ${m.participants||0} predictors</span><span>Closes ${when(m.close_at)}</span></div>
-        ${m.status==="LIVE"?`<div class="v29-stake-actions"><button id="v29PredictYes" class="v29-yes">Predict YES</button><button id="v29PredictNo" class="v29-no">Predict NO</button></div>`:""}
+        <div class="v29-market-foot"><span>${fmt(m.pool_q)} Q pool · ${m.participants||0} predictors</span><span>Closes ${when(m.close_at)}</span></div>
+        ${m.status==="LIVE"&&v29.home?.real_q_enabled?`<div class="v29-stake-actions"><button id="v29PredictYes" class="v29-yes">Predict YES</button><button id="v29PredictNo" class="v29-no">Predict NO</button></div>`:""}
         <div class="v29-assistant-card"><div><b>Q market analysis</b><small>Open Q to research both sides before you predict.</small></div><button id="v29AskQMarket" class="primary">Ask Q</button></div>
         ${pos?`<h3>Your position</h3>${pos}`:""}
         <details class="v29-resolution"><summary>Resolution rules</summary><p>${esc(m.resolution_rule)}</p><small>Source: ${esc(m.resolution_source_name)} · ${esc(m.source_type)}</small>${m.resolution?`<p><b>Resolved ${esc(m.resolution.outcome)}</b> · ${esc(m.resolution.source_value)}</p>`:""}</details>
@@ -54,7 +55,7 @@
         <div class="v29-comments">${comments||'<p class="micro">No discussion yet.</p>'}</div>
       </div>`;
       $("modal").showModal();
-      const stake=outcome=>{const amount=prompt(`Predict ${outcome} — amount in test Predict Credits`,`100`);if(amount===null)return;const n=Number(amount);if(!(n>0))return toast("Enter a valid Predict Credit amount",true);pApi(`/predict/markets/${id}/stake`,{method:"POST",body:JSON.stringify({outcome,amount_pc:n})}).then(async()=>{closeModal();toast(`Prediction placed: ${outcome} · ${fmt(n)} PC`);await loadQPredict(v29.category)}).catch(e=>toast(e.message,true))};
+      const stake=outcome=>{const amount=prompt(`Predict ${outcome} — amount in Q`,`100`);if(amount===null)return;const n=Number(amount);if(!(n>0))return toast("Enter a valid Q amount",true);pApi(`/predict/markets/${id}/stake`,{method:"POST",body:JSON.stringify({outcome,amount_q:n})}).then(async()=>{closeModal();toast(`Prediction placed: ${outcome} · ${fmt(n)} Q`);await loadQPredict(v29.category)}).catch(e=>toast(e.message,true))};
       if($("v29PredictYes"))$("v29PredictYes").onclick=()=>stake("YES");
       if($("v29PredictNo"))$("v29PredictNo").onclick=()=>stake("NO");
       $("v29WatchDetail").onclick=async()=>{await pApi(`/predict/markets/${id}/watch`,{method:"POST",body:"{}"});closeModal();await loadQPredict(v29.category)};
@@ -83,7 +84,7 @@
         ["auto_drafting","Auto drafting",pcfg.auto_drafting],
         ["auto_publish","Auto publish",pcfg.auto_publish],
         ["auto_settlement","Auto settlement",pcfg.auto_settlement]
-      ].map(([k,l,v])=>`<label class="v29-auto-toggle"><input type="checkbox" data-v29-config="${k}" ${v?"checked":""}><span>${l}</span></label>`).join("")+`<span class="v29-mode-banner">REAL Q: OFF</span>`;
+      ].map(([k,l,v])=>`<label class="v29-auto-toggle"><input type="checkbox" data-v29-config="${k}" ${v?"checked":""}><span>${l}</span></label>`).join("")+`<span class="v29-mode-banner">REAL Q: ${pcfg.real_q_enabled?"ON":"OFF"}</span>`;
       qsa("[data-v29-config]").forEach(el=>el.onchange=async()=>{try{const body={};body[el.dataset.v29Config]=el.checked;await pApi("/predict/admin/config",{method:"PUT",body:JSON.stringify(body)});toast("Q Predict automation updated")}catch(e){el.checked=!el.checked;toast(e.message,true)}});
       $("v29OperationsStats").innerHTML=stat("New users",ops.new_users)+stat("New packages",ops.new_packages)+stat("Approved USDT",`US$${fmt(ops.approved_usdt)}`)+stat("Q ledger events",ops.q_ledger_events)+stat("Q Market orders",ops.q_market_orders)+stat("Referrals",ops.new_referrals);
       $("v29MonetisationStats").innerHTML=`<div class="v29-analysis-kpis"><b>${mon.requests||0}</b><span>AI actions tracked</span><b>US$${fmt(mon.estimated_ai_cost_usd)}</b><span>Estimated provider cost</span><b>${fmt(mon.simulated_q_fees)} Q</b><span>Would-be Q fees</span></div><div class="v29-feature-lines">${(mon.features||[]).map(x=>`<div><span>${esc(x.feature)}</span><b>${x.requests} uses · ${fmt(x.simulated_q)} Q</b></div>`).join("")}</div>`;

@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 """LEMMIQ V2.10.5 — Q Predict on the main LEMMIQ Q wallet.
 
 New prediction markets use the authoritative V2.8 Q wallet and Q ledger.
@@ -86,7 +87,7 @@ class PredictConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     test_mode: Mapped[bool] = mapped_column(Boolean, default=False)
-    real_q_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    real_q_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Legacy PC fields remain so old test history can be read safely.
     starting_credits_micros: Mapped[int] = mapped_column(BigInteger, default=DEFAULT_STARTING_PC * PC_MICROS)
     fee_bps: Mapped[int] = mapped_column(Integer, default=DEFAULT_FEE_BPS)
@@ -468,6 +469,9 @@ def _create_market(db: Session, body: PredictMarketIn, *, creator_id: int | None
 
 def _stake_q(db: Session, u: User, m: PredictMarket, outcome: str, amount_micros: int):
     cfg = _config(db)
+    # Legal/operational safety interlock; the admin toggle alone never opens real-value sports wagering.
+    if os.getenv("LEMMIQ_REAL_Q_AUTHORIZED", "false").lower() != "true":
+        raise HTTPException(403, "Real Q staking requires jurisdiction-specific authorization")
     if not cfg.enabled or not cfg.real_q_enabled:
         raise HTTPException(409, "Q Predict Q staking is disabled")
     if (getattr(m, "wallet_unit", "PC") or "PC").upper() != "Q":
@@ -702,7 +706,7 @@ def _has_open_candidate(db: Session, template_code: str, signature: dict[str, An
 
 def _auto_candidates(db: Session) -> list[PredictMarket]:
     cfg = _config(db)
-    if not (cfg.enabled and cfg.real_q_enabled and cfg.discovery_enabled and cfg.auto_drafting): return []
+    if not (cfg.enabled and cfg.discovery_enabled and cfg.auto_drafting): return []
     today_count = int(db.scalar(select(func.count()).select_from(PredictMarket).where(PredictMarket.created_at >= datetime.combine(utcnow().date(), datetime.min.time(), tzinfo=timezone.utc))) or 0)
     slots = max(0, cfg.max_new_markets_per_day - today_count)
     if slots <= 0: return []
@@ -846,6 +850,12 @@ async def _scheduler():
                 now = utcnow()
                 if cfg.discovery_enabled and cfg.auto_drafting and (last_agent is None or now-last_agent >= timedelta(hours=6)):
                     _auto_candidates(db); last_agent=now
+                    if os.getenv('LEMMIQ_CRICKET_AUTO_DRAFT', 'false').lower()=='true':
+                        try:
+                            from .v2137_cricket import draft_fixture_markets
+                            draft_fixture_markets(db)
+                        except Exception:
+                            log.exception('Cricket draft sync failed (other Q markets unaffected)')
                 _supply_demand_snapshot(db, persist=True)
                 db.commit()
         except Exception:
@@ -897,7 +907,7 @@ def register_v29(app, current_user, get_db):
         balance_q = _q(qw.balance_micros)
         db.commit()
         return {
-            "mode": "Q_WALLET", "real_q_enabled": bool(cfg.enabled and cfg.real_q_enabled),
+            "mode": "Q_WALLET", "real_q_enabled": bool(cfg.enabled and cfg.real_q_enabled and os.getenv("LEMMIQ_REAL_Q_AUTHORIZED", "false").lower() == "true"),
             "wallet": {
                 "balance_q": balance_q,
                 "lifetime_won_q": _q(lifetime_won), "lifetime_staked_q": _q(lifetime_staked),
@@ -1062,7 +1072,10 @@ def register_v29(app, current_user, get_db):
     @router.put("/predict/admin/config")
     def admin_save_config(body:PredictConfigIn, u:User=Depends(current_user), db:Session=Depends(get_db)):
         _require_admin(db,u,"FULL"); c=_config(db)
-        if body.real_q_enabled is not None: c.real_q_enabled = bool(body.real_q_enabled)
+        if body.real_q_enabled is not None:
+            if body.real_q_enabled and os.getenv("LEMMIQ_REAL_Q_AUTHORIZED", "false").lower() != "true":
+                raise HTTPException(403, "Real Q requires legal authorization before activation")
+            c.real_q_enabled = bool(body.real_q_enabled)
         if body.fee_percent is not None: c.fee_bps = int(round(body.fee_percent*100))
         if body.minimum_stake_q is not None: c.minimum_stake_micros = _q_micros(body.minimum_stake_q)
         if body.maximum_stake_q is not None: c.maximum_stake_micros = _q_micros(body.maximum_stake_q)

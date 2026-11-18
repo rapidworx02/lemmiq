@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 package com.lemmiq.app
 
 import android.Manifest
@@ -20,6 +21,7 @@ object PushControl {
     const val CH_MESSAGES="lemmiq_messages"
     const val CH_CALLS="lemmiq_calls"
     const val CH_Q_ECONOMY="lemmiq_q_economy"
+    const val CH_UPDATES="lemmiq_updates_v2137"
     const val CH_Q_PREDICT="lemmiq_q_predict"
     const val CH_Q_ASSISTANT="lemmiq_q_assistant"
     const val CH_SYSTEM="lemmiq_system"
@@ -32,6 +34,7 @@ object PushControl {
         listOf(
             NotificationChannel(CH_MESSAGES,"Messages",NotificationManager.IMPORTANCE_HIGH).apply{description="Direct and group messages";setShowBadge(true);enableVibration(true)},
             NotificationChannel(CH_CALLS,"Calls",NotificationManager.IMPORTANCE_HIGH).apply{description="Incoming and missed LEMMIQ calls";setShowBadge(true);enableVibration(true)},
+            NotificationChannel(CH_UPDATES,"Updates",NotificationManager.IMPORTANCE_DEFAULT).apply{description="New LEMMIQ status updates";setShowBadge(true)},
             NotificationChannel(CH_Q_ECONOMY,"Q Economy",NotificationManager.IMPORTANCE_DEFAULT).apply{description="Daily Q, transfers, referrals, packages and Q Market";setShowBadge(true)},
             NotificationChannel(CH_Q_PREDICT,"Q Predict",NotificationManager.IMPORTANCE_DEFAULT).apply{description="Market closes, results, payouts and watched markets";setShowBadge(true)},
             NotificationChannel(CH_Q_ASSISTANT,"Q Assistant",NotificationManager.IMPORTANCE_DEFAULT).apply{description="Q-to-Q, completed analyses and useful Q alerts";setShowBadge(true)},
@@ -60,8 +63,17 @@ class LemmiqPushService:FirebaseMessagingService(){
 
         val d=message.data
         val type=d["type"].orEmpty().lowercase()
+        val category=when(type){
+            "chat"->"chat"
+            "group"->"group"
+            "call"->"call"
+            "status","update","updates"->"updates"
+            else->if(type.startsWith("q_") || type=="q_predict")"q" else "other"
+        }
+        val preferences=getSharedPreferences("lemmiq_v2137_notifications",Context.MODE_PRIVATE)
+        if(!preferences.getBoolean(category,true))return
         val title=(d["title"]?:d["sender_name"]?:"LEMMIQ").take(90)
-        val body=(d["body"]?:d["message"]?:"You have a new LEMMIQ update").take(280)
+        val body=if(preferences.getBoolean("preview",true))(d["body"]?:d["message"]?:"You have a new LEMMIQ update").take(280) else "New LEMMIQ notification"
         val deepLink=d["deep_link"].orEmpty()
         val eventId=d["event_id"]?:message.messageId?:"$type:${d["chat_id"]}:${System.currentTimeMillis()}"
 
@@ -86,7 +98,7 @@ class LemmiqPushService:FirebaseMessagingService(){
             if(id==null)return
             val notifId=if(isGroup)100000+id else id
             val display=if(isGroup)(d["group_name"]?:"LEMMIQ group") else (d["sender_name"]?:"LEMMIQ")
-            val messageText=if(isGroup)"${d["sender_name"]?:"Member"}: ${d["body"]?:"New message"}" else (d["body"]?:"New message")
+            val messageText=if(!preferences.getBoolean("preview",true))"New message" else if(isGroup)"${d["sender_name"]?:"Member"}: ${d["body"]?:"New message"}" else (d["body"]?:"New message")
             val unread=d["unread_count"]?.toIntOrNull()?.coerceAtLeast(1)?:1
             val intent=Intent(this,MainActivity::class.java).apply{flags=Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP;if(isGroup)putExtra("group_id",id)else putExtra("chat_id",id)}
             val pending=PendingIntent.getActivity(this,notifId,intent,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -96,6 +108,7 @@ class LemmiqPushService:FirebaseMessagingService(){
         }
 
         val channel=when(type){
+            "status","update","updates"->PushControl.CH_UPDATES
             "q_daily_ready","q_credit","q_transfer","q_referral","q_package","q_market"->PushControl.CH_Q_ECONOMY
             "q_predict","q_predict_close","q_predict_result","q_predict_void","q_predict_watch"->PushControl.CH_Q_PREDICT
             "q_assistant","q_to_q","q_analysis"->PushControl.CH_Q_ASSISTANT

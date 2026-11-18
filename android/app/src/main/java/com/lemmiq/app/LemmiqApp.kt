@@ -1,3 +1,4 @@
+/* V2137_NOTIFICATIONS_CRICKET */
 /* V21361_NAV_TRANSFER_SCHEDULE */
 /* V21360_CREATOR_UX */
 package com.lemmiq.app
@@ -506,6 +507,7 @@ private fun V2102SettingsScreen(vm:LemmiqViewModel){
         Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(20.dp)){
             Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                 Text("Notifications",fontWeight=FontWeight.Bold,fontSize=17.sp)
+                V2137NotificationManagement()
                 Text("LEMMIQ push registration refreshes automatically. Android notification permission can be managed in system settings.",fontSize=11.sp,color=Muted)
                 OutlinedButton(onClick={
                     val intent=Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply{
