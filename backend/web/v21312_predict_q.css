@@ -1,0 +1,15 @@
+/* LEMMIQ v2.13.12: Q Predict order-bound QR and eligibility status */
+.pq12-access {margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:14px;background:rgba(50,180,130,.09);color:var(--text);line-height:1.45}
+.pq12-access strong{display:block;font-size:15px;margin-bottom:5px}
+.pq12-access p{margin:0;font-size:13px}
+.pq12-qr-panel {display:flex;flex-direction:column;gap:8px;align-items:flex-start;border-radius:14px;padding:14px;border:1px solid var(--line);background:rgba(120,90,220,.08);margin:10px 0}
+.pq12-qr-image {background:white;padding:8px;border-radius:10px;width:194px;height:194px;object-fit:contain;cursor:zoom-in}
+.pq12-qr-panel small{overflow-wrap:anywhere}
+.pq12-modal{position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,.85);display:flex;align-items:center;justify-content:center;padding:18px}
+.pq12-modal-inner{background:var(--surface,#171a32);border:1px solid var(--line);border-radius:18px;padding:22px;max-height:calc(100vh - 36px);max-width:95vw;overflow:auto;color:var(--text);text-align:center}
+.pq12-modal-inner img{display:block;width:min(78vw,350px);height:auto;background:white;padding:8px;border-radius:12px;margin:12px auto}
+.pq12-modal-inner code{display:block;overflow-wrap:anywhere;max-width:380px;font-size:12px}
+.pq12-admin-qr{margin-top:9px;padding:8px;border:1px dashed var(--line);border-radius:10px}
+.pq12-admin-qr img{max-width:130px;background:#fff;padding:5px;border-radius:8px}
+.pq12-admin-qr button{margin-right:7px;margin-top:6px}
+@media(max-width:650px){.pq12-qr-image{height:175px;width:175px}.pq12-modal-inner{padding:15px}}

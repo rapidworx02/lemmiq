@@ -82,9 +82,11 @@ fun V21311PredictExtras(onWalletChanged:()->Unit={}){
     if(open){
         AlertDialog(onDismissRequest={open=false},title={Text("Sell Q / Withdraw USDT")},
             text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
-                if(status?.optBoolean("sell_allowed",false)!=true){
+                if(status?.optBoolean("eligible",false)!=true){
                     Text(v11VerifyMsg,style=MaterialTheme.typography.bodySmall)
                     OutlinedButton(onClick={v11Support(ctx)}){Text("Chat with @lemmiq Support")}
+                }else if(status?.optBoolean("sell_allowed",false)!=true){
+                    Text("✓ Verified User Access. USDT withdrawals are currently disabled for this account or service.",style=MaterialTheme.typography.bodySmall)
                 }else{
                     Text("Sell rate = Q reference −5%",style=MaterialTheme.typography.bodySmall)
                     OutlinedTextField(amount,{amount=it;quote=null},label={Text("Q amount")},singleLine=true)

@@ -8,6 +8,8 @@ import android.content.ClipboardManager
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -133,7 +135,7 @@ fun V21310PredictScreen(){
                         Button(onClick={buyOpen=true}){Text("Buy Q · USDT")}
                         OutlinedButton(onClick={showHistory=true}){Text("Activity")}
                     }
-                    Text(if(permitted)"Verified user purchase checkout enabled" else "Purchase quotes available; live payments require authorization",fontSize=11.sp)
+                    V21312PredictStatusCard()
                 }
             }
         }
@@ -189,7 +191,7 @@ fun V21310PredictScreen(){
     }
     if(buyOpen){
         AlertDialog(onDismissRequest={buyOpen=false},title={Text("Buy Q using USDT")},
-            text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
+            text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){
                 Text("Separate Q Predict Q only · Reference rate +5%",fontSize=12.sp)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                     FilterChip(network=="TRC20",onClick={network="TRC20";quote=null},label={Text("USDT TRON TRC20")})
@@ -214,6 +216,7 @@ fun V21310PredictScreen(){
                 order?.let{o->
                     Text("Pay exactly ${pqNumber(o.optDouble("expected_usdt"))} USDT on ${o.optString("network")}",fontWeight=FontWeight.Bold)
                     Text(o.optString("receiving_address"),fontSize=12.sp)
+                     V21312OrderQR(o)
                     OutlinedButton(onClick={
                         val cb=ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         cb.setPrimaryClip(ClipData.newPlainText("LEMMIQ treasury",o.optString("receiving_address")))
@@ -231,7 +234,7 @@ fun V21310PredictScreen(){
                         }catch(e:Exception){error=e.message?:"Proof error"}
                     }}){Text("Submit payment for verification")}
                 }
-                if(!permitted)V21311VerificationNotice()
+                V21312PredictBuyStatus(paymentsEnabled=permitted)
             }},confirmButton={TextButton({buyOpen=false}){Text("Close")}})
     }
     if(showHistory){
