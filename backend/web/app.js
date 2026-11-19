@@ -97,7 +97,14 @@ async function api(path, opts={}){
   let body=null;
   const ct=r.headers.get("content-type")||"";
   if(ct.includes("application/json")) body=await r.json(); else body=await r.text();
-  if(!r.ok) throw new Error(body?.detail || body?.message || body || `HTTP ${r.status}`);
+  if(!r.ok) {
+    // FastAPI's 422 errors may contain a list of validation objects, not a string.
+    const raw = body?.detail ?? body?.message ?? body ?? `HTTP ${r.status}`;
+    const message = Array.isArray(raw)
+      ? raw.map(x => typeof x === 'string' ? x : (x?.msg || x?.message || JSON.stringify(x))).join('; ')
+      : (raw && typeof raw === 'object' ? (raw.msg || raw.message || JSON.stringify(raw)) : String(raw));
+    throw new Error(message || `HTTP ${r.status}`);
+  }
   return body;
 }
 function saveSession(data){

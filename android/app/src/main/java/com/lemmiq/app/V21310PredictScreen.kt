@@ -226,13 +226,22 @@ fun V21310PredictScreen(){
                     OutlinedButton(onClick={scope.launch{
                         try{order=pqCall(ctx,"/v21310/predict/buy/orders/${o.optInt("id")}/sender",JSONObject().put("address",sender),"POST")}catch(e:Exception){error=e.message?:"Sender error"}
                     }}){Text("Save sender address")}
-                    OutlinedTextField(hash,{hash=it},label={Text("On-chain transaction hash")},singleLine=true)
+                    val validHash = if (o.optString("network") == "BEP20")
+                        hash.matches(Regex("^0x[0-9a-fA-F]{64}$"))
+                    else hash.matches(Regex("^[0-9a-fA-F]{64}$"))
+                    OutlinedTextField(hash,{hash=it.trim()},label={Text("On-chain transaction hash")},singleLine=true,
+                        isError=hash.isNotBlank() && !validHash)
+                    Text(if (o.optString("network") == "BEP20")
+                        "BEP20: enter 0x followed by 64 hexadecimal characters."
+                        else "TRC20: enter 64 hexadecimal characters. Submit is disabled until valid.",
+                        color=if (hash.isNotBlank() && !validHash) MaterialTheme.colorScheme.error
+                              else MaterialTheme.colorScheme.onSurfaceVariant, fontSize=11.sp)
                     Button(onClick={scope.launch{
                         try{
                             order=pqCall(ctx,"/v21310/predict/buy/orders/${o.optInt("id")}/submit",JSONObject().put("tx_hash",hash),"POST")
                             buyOpen=false;refresh()
                         }catch(e:Exception){error=e.message?:"Proof error"}
-                    }}){Text("Submit payment for verification")}
+                    }},enabled=validHash && !busy){Text("Submit payment for verification")}
                 }
                 V21312PredictBuyStatus(paymentsEnabled=permitted)
             }},confirmButton={TextButton({buyOpen=false}){Text("Close")}})
