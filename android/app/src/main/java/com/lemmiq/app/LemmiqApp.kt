@@ -1,3 +1,4 @@
+// V21310_PREDICT_Q
 // V2138_COMBINED
 /* V2137_NOTIFICATIONS_CRICKET */
 /* V21361_NAV_TRANSFER_SCHEDULE */
@@ -348,11 +349,11 @@ private fun Home(vm:LemmiqViewModel){
                             OutlinedButton(onClick={qFullScreen=true},contentPadding=PaddingValues(horizontal=10.dp)) { Text("Ask Q",fontSize=11.sp) }
                         }
                         Box(Modifier.weight(1f)) {
-                            if(qPredictOpen)V2138PredictScreen()
+                            if(qPredictOpen)V21310PredictScreen()
                             else V28QEconomyScreen(vm)
                         }
                     }
-                    3->V2138PredictScreen()
+                    3->V21310PredictScreen()
                     4->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true

@@ -1,3 +1,4 @@
+# V21310_PREDICT_Q
 # V2138_COMBINED
 # V2137_NOTIFICATIONS_CRICKET
 from .trust import check_text, media_capabilities, unavailable_result
@@ -1157,6 +1158,10 @@ register_v2137_cricket(app, current_user, get_db, push_tokens)
 # V2138_COMBINED: separate, non-redeemable Demo USDT prediction wallet
 from .v2138_predict import register_v2138_predict
 register_v2138_predict(app, current_user, get_db)
+
+# V21310_PREDICT_Q — isolated prediction wallet and controlled USDT purchase orders
+from .v21310_predict_q import register_v21310_predict_q
+register_v21310_predict_q(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

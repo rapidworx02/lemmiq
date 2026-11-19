@@ -1,3 +1,4 @@
+/* V21310_PREDICT_Q */
 /* V2138_COMBINED */
 /* V2137_NOTIFICATIONS_CRICKET */
 /* V21362_REFERRAL_LINKS */
@@ -57,8 +58,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=80
-        versionName="2.13.8"
+        versionCode=81
+        versionName="2.13.10"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }
