@@ -266,6 +266,8 @@ def me(u: User = Depends(current_user)):
 @app.post("/register")
 def register(body: Register, background: BackgroundTasks, db: Session = Depends(get_db)):
     username = body.username.strip().lower()
+    from .v21311_release import enforce_username
+    enforce_username(username)
     if not username.replace("_", "").isalnum():
         raise HTTPException(400, "Username can only use letters, numbers and underscore")
     if db.scalar(select(User).where(func.lower(User.username) == username)):
@@ -1162,6 +1164,12 @@ register_v2138_predict(app, current_user, get_db)
 # V21310_PREDICT_Q — isolated prediction wallet and controlled USDT purchase orders
 from .v21310_predict_q import register_v21310_predict_q
 register_v21310_predict_q(app, current_user, get_db)
+
+# V21311_RELEASE: official announcements, brand protections, controlled Q redemptions
+from .v21311_release import register_v21311_release
+from .v21311_redeem import register_v21311_redeem
+register_v21311_release(app, current_user, get_db)
+register_v21311_redeem(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

@@ -1,3 +1,4 @@
+/* V21311_RELEASE */
 /* V21310_PREDICT_Q */
 /* V2138_COMBINED */
 /* V2137_NOTIFICATIONS_CRICKET */
@@ -6,7 +7,7 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21310-predict-q-buy";
+const CACHE = "lemmiq-v21311-verified-wallet-broadcast";
 const SHELL = [
   "/web/v2136_creator_ux.js?v=2.13.6.0",
   "/web/v2136_creator_ux.css?v=2.13.6.0",
@@ -19,6 +20,8 @@ const SHELL = [
   "/web/v21310_predict_q.js?v=2.13.10",
   "/web/v21310_predict_q.css?v=2.13.10",
   "/web/v21310_nav_fix.js?v=2.13.10",
+  "/web/v21311_upgrade.js?v=2.13.11",
+  "/web/v21311_upgrade.css?v=2.13.11",
   "/web/v21351_avatar_status.css?v=2.13.5.2",
   "/web/app.js?v=2.13.6.1",
   "/web/v2135_creator_media.js?v=2.13.5",

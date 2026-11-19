@@ -1,3 +1,4 @@
+/* V21311_RELEASE */
 /* V21310_PREDICT_Q */
 /* V2138_COMBINED */
 /* V2137_NOTIFICATIONS_CRICKET */
@@ -58,8 +59,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=81
-        versionName="2.13.10"
+        versionCode=82
+        versionName="2.13.11"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }

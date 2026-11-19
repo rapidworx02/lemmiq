@@ -1,3 +1,4 @@
+/* V21311_RELEASE */
 /* LEMMIQ 2.13.10 — dedicated Q Predict Q wallet, USDT buy, demo preserved. */
 package com.lemmiq.app
 
@@ -114,7 +115,7 @@ fun V21310PredictScreen(){
                         color=Color.White,fontWeight=FontWeight.Black,fontSize=27.sp)
                     Text(if(demoMode)"Virtual credits, no cash value" else "Locked: ${pqNumber(source?.optDouble("locked_q",0.0)?:0.0)} Q · Main Q Economy wallet is separate",
                         color=Color(0xFFEAE4FF),fontSize=11.sp)
-                    if(!demoMode)Text("Buy Q at reference +5% · Sell reference −5% (future)",color=Color(0xFFDFD8FF),fontSize=11.sp)
+                    if(!demoMode)Text("Buy Q +5% · Sell Q −5%",color=Color(0xFFDFD8FF),fontSize=11.sp)
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
                         OutlinedButton(onClick={demoMode=true}){Text("Demo",color=Color.White)}
                         OutlinedButton(onClick={demoMode=false}){Text("Q Wallet",color=Color.White)}
@@ -132,10 +133,11 @@ fun V21310PredictScreen(){
                         Button(onClick={buyOpen=true}){Text("Buy Q · USDT")}
                         OutlinedButton(onClick={showHistory=true}){Text("Activity")}
                     }
-                    Text(if(permitted)"Internal purchase checkout is enabled for this account" else "Purchase quotes available; live payments require authorization",fontSize=11.sp)
+                    Text(if(permitted)"Verified user purchase checkout enabled" else "Purchase quotes available; live payments require authorization",fontSize=11.sp)
                 }
             }
         }
+        if(!demoMode)item{V21311PredictExtras(onWalletChanged={refresh()})}
         item{Text("Live prediction markets",fontSize=20.sp,fontWeight=FontWeight.Black)}
         item{
             Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
@@ -164,10 +166,11 @@ fun V21310PredictScreen(){
             }
         }
         item{OutlinedButton(onClick={refresh()}){Text("Refresh wallet and markets")}}
+        if(admin!=null)item{V21311AdminBroadcastCard()}
         if(admin!=null)item{
             Card{Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                 Text("Master Admin · Treasury status",fontWeight=FontWeight.Bold)
-                Text("Real payments: ${if(admin?.optBoolean("payments_enabled")==true)"Internal testers ON" else "OFF"}. Real staking: ${if(admin?.optBoolean("wagering_enabled")==true)"Internal testers ON" else "OFF"}",fontSize=11.sp)
+                Text("Real payments: ${if(admin?.optBoolean("payments_enabled")==true)"Verified users ON" else "OFF"}. Real staking: ${if(admin?.optBoolean("wagering_enabled")==true)"Verified users ON" else "OFF"}",fontSize=11.sp)
                 Text("Configure and review dedicated TRC20/BEP20 receiving wallets in PWA → Q Admin.",fontSize=11.sp)
             }}
         }
@@ -189,8 +192,8 @@ fun V21310PredictScreen(){
             text={Column(verticalArrangement=Arrangement.spacedBy(10.dp)){
                 Text("Separate Q Predict Q only · Reference rate +5%",fontSize=12.sp)
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                    FilterChip(network=="TRC20",onClick={network="TRC20";quote=null},label={Text("USDT TRC20")})
-                    FilterChip(network=="BEP20",onClick={network="BEP20";quote=null},label={Text("USDT BEP20")})
+                    FilterChip(network=="TRC20",onClick={network="TRC20";quote=null},label={Text("USDT TRON TRC20")})
+                    FilterChip(network=="BEP20",onClick={network="BEP20";quote=null},label={Text("USDT BNB BEP20")})
                 }
                 OutlinedTextField(amountQ,{amountQ=it},label={Text("Q quantity")},singleLine=true)
                 Button(onClick={scope.launch{
@@ -228,7 +231,7 @@ fun V21310PredictScreen(){
                         }catch(e:Exception){error=e.message?:"Proof error"}
                     }}){Text("Submit payment for verification")}
                 }
-                if(!permitted)Text("Purchase checkout remains locked for this account; this is a quote preview.",fontSize=11.sp)
+                if(!permitted)V21311VerificationNotice()
             }},confirmButton={TextButton({buyOpen=false}){Text("Close")}})
     }
     if(showHistory){

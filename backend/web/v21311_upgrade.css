@@ -1,0 +1,14 @@
+/* LEMMIQ v2.13.11: verified-users status, selling and announcements */
+#v21311Admin{margin-top:16px}
+.pq-verification{border:1px solid rgba(233,83,121,.35);border-radius:15px;background:rgba(215,89,132,.075);padding:16px;line-height:1.5;margin:12px 0;color:var(--text)}
+.pq-verification h3{margin:0 0 10px;color:var(--text)}
+.pq-verification p{font-size:13px;line-height:1.65}
+.pq-verification button{width:100%;margin-top:8px}
+.pq-v21311-sell input,.pq-v21311-sell select,.pq-broadcast-form textarea,.pq-broadcast-form input,.pq-broadcast-form select{width:100%;box-sizing:border-box;max-width:100%;padding:12px;margin-top:7px;border-radius:10px;border:1px solid var(--line);background:var(--surface,white);color:var(--text)}
+.pq-broadcast-form label{display:block;margin:11px 0}
+.pq-broadcast-form textarea{resize:vertical}
+.pq-v21311-admin hr{border:0;border-top:1px solid var(--line);margin:22px 0}
+.pq-key-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:7px;margin-top:12px}
+.pq-key-counts span{border:1px solid var(--line);padding:7px;border-radius:7px;font-size:11px}
+.pq-payout-history{margin-top:15px}
+#v11BroadcastShortcut{padding:7px 10px;margin-left:9px;font-size:12px;white-space:nowrap}

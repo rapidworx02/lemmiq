@@ -1,3 +1,4 @@
+# V21311_RELEASE
 # V2138_COMBINED
 # V21356_STUDIO_DELETE
 """LEMMIQ V2.13.4: separate creator identity + dedicated professional inbox.
@@ -290,6 +291,8 @@ def register_v2134_professional(app,current_user,get_db,push):
             raise HTTPException(422,'Professional username must start with a letter, 3–32 characters; letters, digits, _ or .')
         if handle in {'lemmiq','official','support','masteradmin','admin','system','q','creator'}:
             raise HTTPException(422,'Reserved professional username')
+        from .v21311_release import enforce_username
+        enforce_username(handle, db, u)
         # Separate namespaces, but avoid lookalikes in basic @ searches.
         if db.scalar(select(User.id).where(func.lower(User.username)==handle)):
             raise HTTPException(409,'This username is already in use')

@@ -1,3 +1,4 @@
+# V21311_RELEASE: verified user notices and independent redemption companion
 """LEMMIQ V2.13.10 - isolated Q Predict wallet and USDT purchase orders.
 
 This is a controlled-development module, NOT a globally enabled wagering launch.
@@ -50,7 +51,7 @@ def _num(v, max_value=100000):
 
 def _team_ids():return {int(x) for x in os.getenv('LEMMIQ_PREDICT_Q_TEAM_IDS','').split(',') if x.strip().isdigit()}
 def _team_gate(u,feature):
-    if u.id not in _team_ids():raise HTTPException(403,'Q Predict real-value functions are restricted to approved internal testing accounts')
+    if u.id not in _team_ids():raise HTTPException(403,'Q Predict real-value functions are restricted to approved, verified users')
     if os.getenv('LEMMIQ_PREDICT_Q_'+feature+'_ENABLED','false').lower()!='true':
         raise HTTPException(423,feature.lower()+' has not been enabled for the controlled test')
 def _admin(db,u):
@@ -361,7 +362,7 @@ def register_v21310_predict_q(app,current_user,get_db):
             'buy_usdt_per_q':value(price)*1.05,'sell_usdt_per_q':value(price)*0.95,
             'payments_enabled':os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()=='true' and u.id in _team_ids(),
             'wagering_enabled':os.getenv('LEMMIQ_PREDICT_Q_WAGERING_ENABLED','false').lower()=='true' and u.id in _team_ids(),
-            'notice':'Purchases/stakes are available only to allowlisted internal testers; broader service requires applicable authorization.',
+            'notice':'Purchases and stakes are available only to approved, verified users, subject to applicable authorization.',
             'wallet_activity':[{'kind':x.kind,'amount_q':value(x.amount_micros),'direction':'IN' if x.destination==f'USER:{u.id}' else 'OUT','at':x.created_at.isoformat()} for x in entries],
             'orders':[_order_json(o) for o in orders],
             'positions':[{'id':p.id,'market_id':p.market_id,'outcome':p.outcome,'stake_q':value(p.stake_micros),'payout_q':value(p.payout_micros),'status':p.status} for p in positions],
@@ -460,7 +461,7 @@ def register_v21310_predict_q(app,current_user,get_db):
         treasuries=db.scalars(select(Treasury)).all()
         orders=db.scalars(select(Order).order_by(Order.id.desc()).limit(120)).all()
         candidates=db.scalars(select(Pool).where(Pool.settled_at.is_(None)).order_by(Pool.market_id.desc()).limit(100)).all()
-        return {'mode':'CONTROLLED_TEAM_ONLY','payments_enabled':os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()=='true',
+        return {'mode':'AUTHORIZED_USERS_ONLY','payments_enabled':os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()=='true',
             'wagering_enabled':os.getenv('LEMMIQ_PREDICT_Q_WAGERING_ENABLED','false').lower()=='true',
             'team_ids':sorted(_team_ids()),'treasury':[{'network':t.network,'address':t.address,'active':t.active} for t in treasuries],
             'orders':[_order_json(x) for x in orders],
