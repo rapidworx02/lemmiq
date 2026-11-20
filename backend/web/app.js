@@ -203,14 +203,39 @@ function refreshCurrent(){
   refreshView(active);
 }
 
-function connectSocket(){
+async function connectSocket(){
+  /* LEMMIQ_V21316_SOCKET */
   if(!state.token)return;
+  const serial=(Number(window.__lemmiqWsSerial)||0)+1;
+  window.__lemmiqWsSerial=serial;
+  const tokenAtStart=state.token;
+  if(window.__lemmiqWsReconnect)clearTimeout(window.__lemmiqWsReconnect);
+  if(window.__wsPing)clearInterval(window.__wsPing);
   if(state.socket)try{state.socket.close()}catch{}
+  const scheduleRetry=()=>{
+    if(serial!==window.__lemmiqWsSerial||state.token!==tokenAtStart)return;
+    window.__lemmiqWsAttempts=Math.min(7,(window.__lemmiqWsAttempts||0)+1);
+    const delayMs=Math.min(30000,1500*2**(window.__lemmiqWsAttempts-1))+Math.round(Math.random()*500);
+    window.__lemmiqWsReconnect=setTimeout(()=>{if(state.token===tokenAtStart)connectSocket()},delayMs);
+  };
+  let ticket;
+  try{({ticket}=await api("/v21316/ws-ticket",{method:"POST"}));}
+  catch(e){$("socketDot").classList.remove("on");$("socketText").textContent="offline";scheduleRetry();return;}
+  if(!ticket||serial!==window.__lemmiqWsSerial||state.token!==tokenAtStart)return;
   const proto=location.protocol==="https:"?"wss":"ws";
-  const ws=new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(state.token)}`);
+  const ws=new WebSocket(`${proto}://${location.host}/ws`,["lemmiq.v1",`ticket.${ticket}`]);
   state.socket=ws;
-  ws.onopen=()=>{$("socketDot").classList.add("on");$("socketText").textContent="connected";ws.send("hello")};
-  ws.onclose=()=>{$("socketDot").classList.remove("on");$("socketText").textContent="offline";setTimeout(()=>{if(state.token)connectSocket()},4500)};
+  ws.onopen=()=>{
+    if(state.socket!==ws)return;
+    window.__lemmiqWsAttempts=0;
+    $("socketDot").classList.add("on");$("socketText").textContent="connected";ws.send("hello");
+  };
+  ws.onclose=()=>{
+    if(state.socket!==ws)return;
+    $("socketDot").classList.remove("on");$("socketText").textContent="offline";
+    if(window.__wsPing)clearInterval(window.__wsPing);
+    scheduleRetry();
+  };
   ws.onerror=()=>{};
   ws.onmessage=async ev=>{
     try{
@@ -258,7 +283,6 @@ function connectSocket(){
       }
     }catch{}
   };
-  window.__wsPing&&clearInterval(window.__wsPing);
   window.__wsPing=setInterval(()=>{if(ws.readyState===1)ws.send("ping")},20000);
 }
 
@@ -377,8 +401,9 @@ function isImageAttachment(a){
 }
 function mediaPreviewHtml(messageId,a,isGroup=false){
   const name=escapeHtml(a?.name||"Photo");
-  const endpoint=isGroup?`/v24/group-media/${messageId}`:`/media/${messageId}`;
-  return `<button class="lemmiq-media-preview" data-media-endpoint="${escapeHtml(endpoint)}" data-media-name="${name}">
+  const endpoint=isGroup?`/v24/group-media/${messageId}`:`/v21316/media/thumb/${messageId}`;
+  const fullEndpoint=isGroup?endpoint:`/media/${messageId}`;
+  return `<button class="lemmiq-media-preview" data-media-endpoint="${escapeHtml(endpoint)}" data-full-media-endpoint="${escapeHtml(fullEndpoint)}" data-media-name="${name}">
     <span class="lemmiq-media-loading">Loading photo…</span>
   </button>`;
 }
@@ -398,7 +423,20 @@ async function hydrateVisiblePreview(btn){
     }
     if(!btn.isConnected)return;
     btn.innerHTML=`<img src="${src}" alt="${escapeHtml(btn.dataset.mediaName||"Photo")}" loading="lazy" decoding="async">`;
-    btn.onclick=()=>openMediaLightbox(src,btn.dataset.mediaName||"Photo");
+    btn.onclick=async()=>{
+      const full=btn.dataset.fullMediaEndpoint||endpoint;
+      try{
+        let large=state.mediaBlobUrls.get(full);
+        if(!large){
+          const r=await fetch(full,{headers:authHeaders()});
+          if(!r.ok)throw new Error(`HTTP ${r.status}`);
+          const blob=await r.blob();
+          if(!String(blob.type||'').startsWith('image/'))throw new Error('Not an image');
+          large=URL.createObjectURL(blob);state.mediaBlobUrls.set(full,large);
+        }
+        openMediaLightbox(large,btn.dataset.mediaName||'Photo');
+      }catch(e){toast('Unable to open full photo: '+e.message,true);}
+    };
   }catch{
     if(!btn.isConnected)return;
     btn.classList.add("failed");

@@ -792,8 +792,26 @@ class Api(private val store:SessionStore){
         return gson.fromJson(t,object:TypeToken<List<PredictLeaderDto>>(){}.type)
     }
 
-    fun socket(listener:WebSocketListener):WebSocket{
-        val u="$base/ws?token=${store.token.orEmpty()}".replace("http://","ws://").replace("https://","wss://")
-        return client.newWebSocket(Request.Builder().url(u).build(),listener)
+    // V21316: request a one-time 30-second ticket over authenticated HTTPS.
+    suspend fun wsTicketV21316():String {
+        val reply=req(b("$base/v21316/ws-ticket").post("{}".toRequestBody(json)).build())
+        return gson.fromJson(reply,com.google.gson.JsonObject::class.java)
+            .get("ticket").asString
+    }
+    fun socket(listener:WebSocketListener,ticket:String):WebSocket{
+        val u="$base/ws".replace("http://","ws://").replace("https://","wss://")
+        return client.newWebSocket(Request.Builder().url(u)
+            .header("Sec-WebSocket-Protocol",V21316Reliability.websocketProtocols(ticket))
+            .build(),listener)
+    }
+    suspend fun mediaThumbnailBytesV21316(id:Int):ByteArray=withContext(Dispatchers.IO){
+        mediaClient.newCall(b("$base/v21316/media/thumb/$id").get().build()).execute().use{r->
+            if(!r.isSuccessful)throw IOException("Thumbnail HTTP ${r.code}")
+            val body=r.body?:throw IOException("Empty thumbnail")
+            if(body.contentLength()>512_000)throw IOException("Thumbnail too large")
+            val bytes=body.bytes()
+            if(bytes.size>512_000)throw IOException("Thumbnail too large")
+            bytes
+        }
     }
 }

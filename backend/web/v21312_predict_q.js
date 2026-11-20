@@ -100,13 +100,29 @@
     }
   }
 
+  /* LEMMIQ_V21316_ADMIN_QR */
   async function loadAdminQR(network, holder) {
     try {
-      const result = await api(`/v21312/predict/qr/admin/${network}`);
+      const result = await api(`/v21316/predict/qr/admin/${network}/summary`);
       if (!holder.isConnected) return;
-      holder.querySelector('.pq12-admin-preview').innerHTML = `<img alt="Address-based checkout QR" src="data:image/png;base64,${result.checkout_qr_png_b64}"><p class="micro">Checkout QR generated from ${safe(result.receiving_address)}.</p>${result.custom_reference_png_b64 ? `<details><summary>Uploaded admin QR reference</summary><img alt="Custom admin reference image" src="data:image/png;base64,${result.custom_reference_png_b64}"></details>` : ''}`;
+      const preview=holder.querySelector('.pq12-admin-preview');
+      if(!preview)return;
+      preview.innerHTML=`<img alt="Address-based checkout QR" src="data:image/png;base64,${result.checkout_qr_png_b64}"><p class="micro">Checkout QR generated from ${safe(result.receiving_address)}.</p>${result.has_custom_reference?'<button type="button" class="ghost" data-pq16-reference>View saved admin reference</button><div class="pq16-reference-preview"></div>':''}`;
+      const button=preview.querySelector('[data-pq16-reference]');
+      if(button)button.onclick=async()=>{
+        button.disabled=true;
+        try{
+          const r=await fetch(`/v21316/predict/qr/admin/${network}/reference`,{headers:{Authorization:`Bearer ${window.lemmiqState?.token||''}`},cache:'no-store'});
+          if(!r.ok)throw new Error(`HTTP ${r.status}`);
+          const blob=await r.blob();
+          const url=URL.createObjectURL(blob);
+          const container=preview.querySelector('.pq16-reference-preview');
+          if(container){container.replaceChildren();const img=document.createElement('img');img.alt='Admin-only reference image';img.src=url;img.onload=()=>setTimeout(()=>URL.revokeObjectURL(url),60000);container.append(img);}
+          button.textContent='Reference loaded';
+        }catch(e){button.disabled=false;toast('QR reference unavailable: '+e.message,true);}
+      };
     } catch (e) {
-      if (holder.isConnected) holder.querySelector('.pq12-admin-preview').textContent = 'Save the receiving address first to display the QR.';
+      if(holder.isConnected)holder.querySelector('.pq12-admin-preview').textContent='Save the receiving address first to display the QR.';
     }
   }
 

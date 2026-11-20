@@ -369,6 +369,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }
     }
     suspend fun mediaBytes(id:Int)=api.mediaBytes(id)
+    suspend fun mediaThumbnailBytes(id:Int)=api.mediaThumbnailBytesV21316(id)
 
     fun reloadExternalSettings(){
         externalEnabled=ExternalConsent.enabled(appCtx)
@@ -1248,10 +1249,26 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
 
     private suspend fun action(block:suspend()->Unit){busy=true;error=null;try{block()}catch(e:Exception){error=e.message}finally{busy=false}}
+    // V21316: WebSocket tickets, bounded reconnect with exponential backoff.
+    private var wsAttempt=0
+    private var wsSerial=0
+    private var wsReconnectJob:kotlinx.coroutines.Job?=null
     private fun connect(){
+        val serial=++wsSerial
+        wsReconnectJob?.cancel()
         ws?.cancel();socketStatus="connecting"
-        ws=api.socket(object:WebSocketListener(){
-            override fun onOpen(webSocket:WebSocket,response:Response){socketStatus="online"}
+        viewModelScope.launch {
+            val ticket=try{api.wsTicketV21316()}catch(e:Exception){
+                socketStatus="offline";scheduleSocketReconnect(serial);return@launch
+            }
+            if(!authenticated||serial!=wsSerial)return@launch
+            ws=api.socket(object:WebSocketListener(){
+            override fun onOpen(webSocket:WebSocket,response:Response){
+                if(serial==wsSerial)viewModelScope.launch{socketStatus="online";wsAttempt=0}
+            }
+            override fun onClosed(webSocket:WebSocket,code:Int,reason:String){
+                if(serial==wsSerial)viewModelScope.launch{socketStatus="offline";scheduleSocketReconnect(serial)}
+            }
             override fun onMessage(webSocket:WebSocket,text:String){
                 val map=runCatching{gson.fromJson(text,Map::class.java)}.getOrNull()?:return
                 if(map["type"]?.toString()=="message"){
@@ -1295,9 +1312,19 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 }
             }
             override fun onFailure(webSocket:WebSocket,t:Throwable,response:Response?){
-                socketStatus="offline"
-                viewModelScope.launch{delay(2500);if(authenticated)connect()}
+                if(serial==wsSerial)viewModelScope.launch{socketStatus="offline";scheduleSocketReconnect(serial)}
             }
-        })
+        },ticket)
+        }
+    }
+    private fun scheduleSocketReconnect(serial:Int){
+        if(!authenticated||serial!=wsSerial)return
+        wsReconnectJob?.cancel()
+        wsAttempt=(wsAttempt+1).coerceAtMost(6)
+        val delayMs=V21316Reliability.reconnectDelayMs(wsAttempt)
+        wsReconnectJob=viewModelScope.launch{
+            delay(delayMs)
+            if(authenticated&&serial==wsSerial)connect()
+        }
     }
 }

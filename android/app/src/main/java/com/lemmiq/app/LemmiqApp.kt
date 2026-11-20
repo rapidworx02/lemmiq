@@ -934,6 +934,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     var mediaError by remember(m.id){mutableStateOf<String?>(null)}
     val mediaId=a?.media_id
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
+    var fullBitmapV21316 by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
     var photoOpen by remember(m.id){mutableStateOf(false)}
     // LEMMIQ_ANDROID_CREATORS_V2131: render PPV markers as locked cards, not text.
     val creatorOfferV2131=Regex("""^\[\[QCREATORS_PPV:(\d+)]]$""").matchEntire(m.text.trim())
@@ -943,7 +944,8 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     LaunchedEffect(mediaId,isPhoto){
         if(mediaId!=null && isPhoto){
             try{
-                val bytes=withContext(Dispatchers.IO){vm.mediaBytes(mediaId)}
+                // 448px private WebP preview instead of full attachment download.
+                val bytes=withContext(Dispatchers.IO){vm.mediaThumbnailBytes(mediaId)}
                 val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
                 BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
                 var sample=1
@@ -955,6 +957,20 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
         }
     }
 
+    // Fetch full-resolution photo only when opened, not for every chat bubble.
+    LaunchedEffect(photoOpen,mediaId){
+        if(photoOpen && mediaId!=null && fullBitmapV21316==null){
+            runCatching{
+                val bytes=vm.mediaBytes(mediaId)
+                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+                BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
+                var sample=1
+                while(bounds.outWidth/sample>1600 || bounds.outHeight/sample>1600)sample*=2
+                BitmapFactory.decodeByteArray(bytes,0,bytes.size,
+                    BitmapFactory.Options().apply{inSampleSize=sample})
+            }.onSuccess{if(it!=null)fullBitmapV21316=it}
+        }
+    }
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
         Surface(
             color=if(mine)Purple else Color.White,
@@ -1110,7 +1126,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     }
 
     if(photoOpen){
-        bitmap?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
+        (fullBitmapV21316?:bitmap)?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
     }
 }
 

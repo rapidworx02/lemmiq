@@ -27,7 +27,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.15")
+app = FastAPI(title="LEMMIQ Server", version="2.13.16")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -503,12 +503,20 @@ def post_moment(body: MomentIn, u: User = Depends(current_user), db: Session = D
     return {"id":m.id,"user":user_json(u),"text":m.text,"created_at":m.created_at.isoformat(),"expires_at":m.expires_at.isoformat()}
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket, token: str):
-    try:
-        uid = decode_token(token)
-    except HTTPException:
-        await ws.close(code=4401); return
-    await ws.accept(); connections.setdefault(uid,set()).add(ws)
+async def websocket_endpoint(ws: WebSocket, token: str | None = None):
+    # V21316: browser/native tickets travel in Sec-WebSocket-Protocol, never URLs.
+    from .v21316_reliability import redeem_ws_ticket
+    offered=[x.strip() for x in ws.headers.get('sec-websocket-protocol','').split(',')]
+    tickets=[x[7:] for x in offered if x.startswith('ticket.')]
+    uid=redeem_ws_ticket(tickets[0]) if tickets else None
+    if uid is None and not tickets and token and os.getenv('LEMMIQ_WS_ALLOW_LEGACY_TOKEN_QUERY','true').lower()=='true':
+        # Temporary transition: disable after old clients upgrade.
+        try:uid=decode_token(token)
+        except HTTPException:pass
+    if uid is None:
+        await ws.close(code=4401);return
+    await ws.accept(subprotocol='lemmiq.v1' if 'lemmiq.v1' in offered else None)
+    connections.setdefault(uid,set()).add(ws)
     try:
         await ws.send_json({"type":"connected","user_id":uid})
         while True:
@@ -1188,6 +1196,10 @@ register_v21314_cricket_markets(app, current_user, get_db)
 # LEMMIQ_V21315_FAST_CHAT_READS
 from .v21315_performance import register_v21315_performance
 register_v21315_performance(app, current_user, get_db)
+
+# LEMMIQ_V21316_RELIABILITY
+from .v21316_reliability import register_v21316_reliability
+register_v21316_reliability(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
