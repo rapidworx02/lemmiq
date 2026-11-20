@@ -1179,6 +1179,10 @@ register_v21312_predict_q_qr(app, current_user, get_db)
 from .v21313_predict_orders import register_v21313_predict_orders
 register_v21313_predict_orders(app, current_user, get_db)
 
+# LEMMIQ_V21314_CRICKET_MARKETS
+from .v21314_cricket_markets import register_v21314_cricket_markets
+register_v21314_cricket_markets(app, current_user, get_db)
+
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"
 

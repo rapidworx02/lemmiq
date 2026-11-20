@@ -312,6 +312,7 @@ def _classification(m):
     if m.category!='SPORTS':return ''
     try:cfg=json.loads(m.source_config_json or '{}')
     except Exception:cfg={}
+    if str(m.template_code or '').startswith('CRICKET_V21314_') and cfg.get('format')=='TEST':return 'INTERNATIONAL'
     series=str(cfg.get('series') or '').lower()
     leagues=('premier league','ipl','big bash','bbl','psl','hundred','cpl','sa20','t20 blast','major league','global t20')
     if any(x in series for x in leagues):return 'LEAGUES'
@@ -352,7 +353,8 @@ def register_v21310_predict_q(app,current_user,get_db):
         w=_wallet(db,u.id)
         price=_reference(db)
         markets=db.scalars(select(PredictMarket).where(PredictMarket.status=='LIVE').order_by(PredictMarket.close_at).limit(150)).all()
-        markets=[m for m in markets if (m.close_at.replace(tzinfo=timezone.utc) if not m.close_at.tzinfo else m.close_at)>now()]
+        markets=[m for m in markets if (m.close_at.replace(tzinfo=timezone.utc) if not m.close_at.tzinfo else m.close_at)>now()
+                 and not str(m.template_code or '').startswith('CRICKET_V21314_')]  # Demo-only cricket-statistics markets
         positions=db.scalars(select(Position).where(Position.user_id==u.id).order_by(Position.id.desc()).limit(100)).all()
         locked=sum(p.stake_micros for p in positions if p.status=='OPEN')
         entries=db.scalars(select(Entry).where((Entry.source==f'USER:{u.id}')|(Entry.destination==f'USER:{u.id}')).order_by(Entry.id.desc()).limit(60)).all()
@@ -436,6 +438,8 @@ def register_v21310_predict_q(app,current_user,get_db):
         m=db.scalar(select(PredictMarket).where(PredictMarket.id==body.market_id).with_for_update())
         if not m or m.status!='LIVE' or (m.close_at.replace(tzinfo=timezone.utc) if m.close_at.tzinfo is None else m.close_at)<=now():
             raise HTTPException(409,'Market closed')
+        if str(m.template_code or '').startswith('CRICKET_V21314_'):
+            raise HTTPException(423,'Cricket performance markets are Demo-only until authorised and independently verified')
         if db.get(Resolution,m.id):raise HTTPException(409,'Result already recorded')
         w=_wallet(db,u.id)
         if amount>w.available:raise HTTPException(409,'Insufficient Q Predict Q')

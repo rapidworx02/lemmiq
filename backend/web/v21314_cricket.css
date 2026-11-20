@@ -1,0 +1,14 @@
+/* LEMMIQ V2.13.14 – review-only cricket market templates */
+#v21314CricketAdmin{margin-top:16px}
+.pq14-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(205px,1fr));gap:10px;margin:11px 0}
+.pq14-grid label{display:grid;gap:5px;font-size:12px;color:var(--text)}
+.pq14-grid input,.pq14-grid select{max-width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:10px;background:var(--surface,white);color:var(--text);padding:10px}
+.pq14-card{border:1px solid var(--line);border-radius:12px;padding:11px;margin:9px 0;background:rgba(115,95,225,.07);overflow-wrap:anywhere}
+.pq14-card h4,.pq14-card p{margin:5px 0}
+.pq14-muted{font-size:12px;color:var(--muted);line-height:1.5}
+.pq14-status{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin:10px 0}
+.pq14-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.pq14-actions button{font-size:12px}
+@media(max-width:650px){.pq14-grid{grid-template-columns:1fr}.pq14-actions button{flex:1}}
+
+.pq14-grid label[hidden]{display:none!important}

@@ -168,6 +168,7 @@ fun V21310PredictScreen(){
             }
         }
         item{OutlinedButton(onClick={refresh()}){Text("Refresh wallet and markets")}}
+        if(admin!=null)item{V21314CricketAdminCard()}
         if(admin!=null)item{V21311AdminBroadcastCard()}
         if(admin!=null)item{
             Card{Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
