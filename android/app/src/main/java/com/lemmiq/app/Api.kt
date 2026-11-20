@@ -72,7 +72,7 @@ class Api(private val store:SessionStore){
 
     suspend fun me():UserDto = gson.fromJson(req(b("$base/me").get().build()),UserDto::class.java)
     suspend fun chats():List<ChatDto>{
-        val t=req(b("$base/chats").get().build())
+        val t=req(b("$base/v21315/chats").get().build())
         return gson.fromJson(t,object:TypeToken<List<ChatDto>>(){}.type)
     }
     suspend fun search(q:String):List<UserDto>{
@@ -83,8 +83,10 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("user_id" to uid)).toRequestBody(json)
         return gson.fromJson(req(b("$base/chats/direct").post(rb).build()),ChatDto::class.java)
     }
-    suspend fun messages(cid:Int):List<MessageDto>{
-        val t=req(b("$base/chats/$cid/messages").get().build())
+    suspend fun messages(cid:Int,limit:Int=60,before:Int?=null):List<MessageDto>{
+        val page=limit.coerceIn(1,100)
+        val url="$base/v21315/chats/$cid/messages?limit=$page"+(before?.let{"&before=$it"}?:"")
+        val t=req(b(url).get().build())
         return gson.fromJson(t,object:TypeToken<List<MessageDto>>(){}.type)
     }
     suspend fun send(cid:Int,text:String):MessageDto{

@@ -49,6 +49,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var chats by mutableStateOf<List<ChatDto>>(emptyList())
     var users by mutableStateOf<List<UserDto>>(emptyList())
     var messages by mutableStateOf<List<MessageDto>>(emptyList())
+    var canLoadOlderDirectMessages by mutableStateOf(false)
+    var loadingOlderDirectMessages by mutableStateOf(false)
     var moments by mutableStateOf<List<MomentDto>>(emptyList())
     var active by mutableStateOf<ChatDto?>(null)
     var suggestion by mutableStateOf<String?>(null)
@@ -202,15 +204,29 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         runCatching{api.search(q)}.onSuccess{users=it.filter{x->x.id!=store.userId}}.onFailure{error=it.message}
     }
     fun start(uid:Int)=viewModelScope.launch{action{
-        val c=api.direct(uid);active=c;messages=api.messages(c.id);api.read(c.id);refreshChats()
+        val c=api.direct(uid);active=c;messages=api.messages(c.id);canLoadOlderDirectMessages=messages.size>=60;api.read(c.id);refreshChats()
     }}
     fun open(c:ChatDto)=viewModelScope.launch{
         activeGroup=null;groupMessages=emptyList();active=c;replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList()
-        runCatching{messages=api.messages(c.id);activeCalls=api.chatCalls(c.id);api.read(c.id);PushControl.cancelChat(appCtx,c.id)}
+        runCatching{messages=api.messages(c.id);canLoadOlderDirectMessages=messages.size>=60;activeCalls=api.chatCalls(c.id);api.read(c.id);PushControl.cancelChat(appCtx,c.id)}
         runCatching{api.businessChat(c.id)}.onSuccess{bundle->activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
         refreshChats()
     }
-    fun close(){active=null;activeGroup=null;messages=emptyList();groupMessages=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
+    fun close(){active=null;activeGroup=null;canLoadOlderDirectMessages=false;messages=emptyList();groupMessages=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
+    fun loadOlderDirectMessages()=viewModelScope.launch{
+        val chat=active?:return@launch
+        val earliest=messages.firstOrNull()?.id?:return@launch
+        if(!canLoadOlderDirectMessages||loadingOlderDirectMessages)return@launch
+        loadingOlderDirectMessages=true
+        try{
+            val older=api.messages(chat.id,60,earliest)
+            if(active?.id!=chat.id)return@launch
+            val known=messages.map{it.id}.toHashSet()
+            messages=older.filter{it.id !in known}+messages
+            canLoadOlderDirectMessages=older.size>=60
+        }catch(e:Exception){error=e.message?:"Could not load older messages"}
+        finally{loadingOlderDirectMessages=false}
+    }
     fun send(text:String)=viewModelScope.launch{
         val c=active?:return@launch;if(text.isBlank())return@launch
         runCatching{

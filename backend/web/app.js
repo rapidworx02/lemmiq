@@ -273,7 +273,7 @@ async function loadChats(force=false){
   }
   if(state.chatListInflight)return state.chatListInflight;
   state.chatListInflight=(async()=>{
-    const [chats,groups,qThread]=await Promise.all([api("/chats"),api("/v24/groups"),loadQThread()]);
+    const [chats,groups,qThread]=await Promise.all([api("/v21315/chats"),api("/v24/groups"),loadQThread()]);
     state.chats=chats;state.groups=groups;state.qThread=qThread||state.qThread;
     state.chatListLoadedAt=Date.now();
     renderChats();
@@ -282,7 +282,7 @@ async function loadChats(force=false){
 }
 function scheduleChatListRefresh(){
   clearTimeout(window.__lemmiqChatListRefresh);
-  window.__lemmiqChatListRefresh=setTimeout(()=>loadChats(true).catch(()=>{}),220);
+  window.__lemmiqChatListRefresh=setTimeout(()=>loadChats(true).catch(()=>{}),800);
 }
 function renderChats(){
   const query=($("chatFilter")?.value||"").toLowerCase().trim();
@@ -355,7 +355,7 @@ async function openChat(cid,mark=true){
   state.activeGroup=null;state.activeChat=chat;state.replyTo=null;
   $("globalQOrb")?.classList.add("q2106-hide-orb");
   const [messages,calls]=await Promise.all([
-    api(`/chats/${cid}/messages?limit=${state.messagePageSize}`),
+    api(`/v21315/chats/${cid}/messages?limit=${state.messagePageSize}`),
     api(`/v24/chats/${cid}/calls`).catch(()=>[])
   ]);
   state.messages=messages;state.chatHasMore=messages.length>=state.messagePageSize;state.chatCalls=calls;
@@ -382,29 +382,54 @@ function mediaPreviewHtml(messageId,a,isGroup=false){
     <span class="lemmiq-media-loading">Loading photo…</span>
   </button>`;
 }
-async function hydrateMediaPreviews(hostId){
-  const host=$(hostId);if(!host)return;
-  const buttons=[...host.querySelectorAll(".lemmiq-media-preview:not([data-loaded])")];
-  for(const btn of buttons){
-    btn.dataset.loaded="1";
-    const endpoint=btn.dataset.mediaEndpoint;
-    try{
-      let src=state.mediaBlobUrls.get(endpoint);
-      if(!src){
-        const r=await fetch(endpoint,{headers:authHeaders()});
-        if(!r.ok)throw new Error(`HTTP ${r.status}`);
-        const blob=await r.blob();
-        if(!String(blob.type||"").startsWith("image/"))throw new Error("Not an image");
-        src=URL.createObjectURL(blob);state.mediaBlobUrls.set(endpoint,src);
-      }
-      btn.innerHTML=`<img src="${src}" alt="${escapeHtml(btn.dataset.mediaName||"Photo")}" loading="lazy">`;
-      btn.onclick=()=>openMediaLightbox(src,btn.dataset.mediaName||"Photo");
-    }catch{
-      btn.classList.add("failed");
-      btn.innerHTML=`<span>📎 ${escapeHtml(btn.dataset.mediaName||"Attachment")}</span>`;
-      btn.onclick=()=>{};
+/* LEMMIQ_V21315_LAZY_MEDIA */
+const previewJobs=[];
+let previewActive=0;
+async function hydrateVisiblePreview(btn){
+  const endpoint=btn.dataset.mediaEndpoint;
+  try{
+    let src=state.mediaBlobUrls.get(endpoint);
+    if(!src){
+      const r=await fetch(endpoint,{headers:authHeaders()});
+      if(!r.ok)throw new Error(`HTTP ${r.status}`);
+      const blob=await r.blob();
+      if(!String(blob.type||"").startsWith("image/"))throw new Error("Not an image");
+      src=URL.createObjectURL(blob);state.mediaBlobUrls.set(endpoint,src);
     }
+    if(!btn.isConnected)return;
+    btn.innerHTML=`<img src="${src}" alt="${escapeHtml(btn.dataset.mediaName||"Photo")}" loading="lazy" decoding="async">`;
+    btn.onclick=()=>openMediaLightbox(src,btn.dataset.mediaName||"Photo");
+  }catch{
+    if(!btn.isConnected)return;
+    btn.classList.add("failed");
+    btn.innerHTML=`<span>📎 ${escapeHtml(btn.dataset.mediaName||"Attachment")}</span>`;
+    btn.onclick=()=>{};
   }
+}
+function pumpPreviewJobs(){
+  while(previewActive<3&&previewJobs.length){
+    const btn=previewJobs.shift();
+    if(!btn.isConnected)continue;
+    previewActive++;
+    hydrateVisiblePreview(btn).finally(()=>{previewActive--;pumpPreviewJobs()});
+  }
+}
+function enqueuePreview(btn){
+  if(btn.dataset.loaded)return;
+  btn.dataset.loaded="1";
+  previewJobs.push(btn);
+  pumpPreviewJobs();
+}
+const mediaPreviewObserver=typeof IntersectionObserver!=="undefined"?new IntersectionObserver(entries=>{
+  for(const entry of entries)if(entry.isIntersecting){
+    mediaPreviewObserver.unobserve(entry.target);enqueuePreview(entry.target);
+  }
+},{rootMargin:"250px"}):null;
+function hydrateMediaPreviews(hostId){
+  const host=$(hostId);if(!host)return;
+  host.querySelectorAll(".lemmiq-media-preview:not([data-loaded])").forEach(btn=>{
+    if(mediaPreviewObserver)mediaPreviewObserver.observe(btn);else enqueuePreview(btn);
+  });
 }
 function openMediaLightbox(src,name="Photo"){
   let box=$("lemmiqMediaLightbox");
@@ -421,7 +446,7 @@ function openMediaLightbox(src,name="Photo"){
 async function loadOlderMessages(){
   if(!state.activeChat||!state.chatHasMore||!state.messages.length)return;
   const host=$("messageList"),beforeHeight=host?.scrollHeight||0,before=state.messages[0].id;
-  const rows=await api(`/chats/${state.activeChat.id}/messages?limit=${state.messagePageSize}&before_id=${before}`);
+  const rows=await api(`/v21315/chats/${state.activeChat.id}/messages?limit=${state.messagePageSize}&before=${before}`);
   state.chatHasMore=rows.length>=state.messagePageSize;
   const known=new Set(state.messages.map(x=>x.id));
   state.messages=[...rows.filter(x=>!known.has(x.id)),...state.messages];
@@ -468,18 +493,40 @@ function renderMessages(scrollToBottom=true){
   if(window.v2131HydrateChatOffers)window.v2131HydrateChatOffers();
   if(scrollToBottom)setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
 }
+/* LEMMIQ_V21315_OPTIMISTIC_SEND */
 async function sendMessage(){
-  const text=$("messageInput").value.trim();if(!state.activeChat||!text)return;
+  const text=$("messageInput").value.trim();
+  const chat=state.activeChat;
+  if(!chat||!text)return;
+  const chatId=chat.id;
+  const draftReply=state.replyTo?.id||null;
+  const temporaryId=-Date.now();
+  const pending={id:temporaryId,chat_id:chatId,sender_id:state.user.id,text,
+    created_at:new Date().toISOString(),read_at:null,ai_generated:false,
+    attachment:null,reactions:[],reply_to:null};
   $("messageInput").value="";
+  state.messages.push(pending);
+  renderMessages(true);
   try{
-    const sent=state.replyTo
-      ? await api(`/v24/chats/${state.activeChat.id}/reply`,{method:"POST",body:JSON.stringify({text,reply_to_message_id:state.replyTo.id})})
-      : await api(`/chats/${state.activeChat.id}/messages`,{method:"POST",body:JSON.stringify({text})});
-    if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);
-    clearReplyPreview();await saveDraft("");renderMessages(true);scheduleChatListRefresh();
-  }catch(e){toast(e.message,true)}
+    const sent=draftReply
+      ? await api(`/v24/chats/${chatId}/reply`,{method:"POST",body:JSON.stringify({text,reply_to_message_id:draftReply})})
+      : await api(`/chats/${chatId}/messages`,{method:"POST",body:JSON.stringify({text})});
+    if(state.activeChat?.id===chatId){
+      state.messages=state.messages.filter(m=>m.id!==temporaryId);
+      if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);
+      clearReplyPreview();renderMessages(true);
+      saveDraft("").catch(()=>{});
+    }
+    scheduleChatListRefresh();
+  }catch(e){
+    if(state.activeChat?.id===chatId){
+      state.messages=state.messages.filter(m=>m.id!==temporaryId);
+      if(!$("messageInput").value.trim())$("messageInput").value=text;
+      renderMessages(true);
+    }
+    toast("Message not sent: "+e.message,true);
+  }
 }
-
 async function suggestReply(){
   if(!state.activeChat)return;
   try{

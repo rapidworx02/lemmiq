@@ -618,7 +618,10 @@ private fun Chat(vm:LemmiqViewModel){
             vm.activeCalls.forEach{add("call" to it)}
         }.sortedBy{(_,x)->when(x){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}}
     }
-    LaunchedEffect(c.id,timeline.size){
+    val newestTimelineId=timeline.lastOrNull()?.second?.let{x->
+        when(x){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->""}
+    }?:""
+    LaunchedEffect(c.id,newestTimelineId){
         if(timeline.isNotEmpty())runCatching{messageListState.scrollToItem(timeline.lastIndex)}
     }
     Scaffold(
@@ -786,6 +789,7 @@ private fun Chat(vm:LemmiqViewModel){
                 contentPadding=PaddingValues(14.dp),
                 verticalArrangement=Arrangement.spacedBy(7.dp)
             ){
+                item(key="v21315_history_loader"){V21315LoadOlderMessages(vm)}
                 itemsIndexed(timeline,key={_,item->
                     when(val x=item.second){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->item.hashCode().toString()}
                 }){index,item->

@@ -2,7 +2,7 @@
 # V2138_COMBINED
 # V2137_NOTIFICATIONS_CRICKET
 from .trust import check_text, media_capabilities, unavailable_result
-import os, hashlib, hmac, secrets, logging, re, json, time
+import os, hashlib, hmac, secrets, logging, re, json, time, asyncio
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Set
@@ -27,7 +27,9 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.4")
+app = FastAPI(title="LEMMIQ Server", version="2.13.15")
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
 
 @app.middleware("http")
@@ -416,7 +418,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                 return data
             _billing = _q_feature_begin(db, oid, "AUTO_MESSAGE", f"personal-auto chat:{cid}")
             try:
-                reply = ai_reply(s.category, s.tone, "\n".join(lines), body.text)
+                reply = await asyncio.to_thread(ai_reply, s.category, s.tone, "\n".join(lines), body.text)
             except Exception:
                 _q_feature_finish(db, _billing, False); db.commit()
                 raise
@@ -1182,6 +1184,10 @@ register_v21313_predict_orders(app, current_user, get_db)
 # LEMMIQ_V21314_CRICKET_MARKETS
 from .v21314_cricket_markets import register_v21314_cricket_markets
 register_v21314_cricket_markets(app, current_user, get_db)
+
+# LEMMIQ_V21315_FAST_CHAT_READS
+from .v21315_performance import register_v21315_performance
+register_v21315_performance(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

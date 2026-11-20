@@ -1,4 +1,4 @@
-import os, re, json, uuid
+import os, re, json, uuid, asyncio
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from fastapi.responses import StreamingResponse
@@ -362,14 +362,14 @@ def register_routes(current_user):
         if not c or u.id not in (c.user1_id,c.user2_id):raise HTTPException(404,"Chat not found")
         mime=(file.content_type or "audio/webm").split(";")[0].lower();payload=await file.read(12*1024*1024+1)
         if not payload or len(payload)>12*1024*1024:raise HTTPException(413,"Voice note must be 12 MB or less")
-        key=media_store.store(payload);transcript=do_transcribe(payload,file.filename or "voice.webm",mime)
+        key=media_store.store(payload);transcript=await asyncio.to_thread(do_transcribe,payload,file.filename or "voice.webm",mime)
         m=Message(chat_id=cid,sender_id=u.id,text="🎙 Voice message");c.updated_at=datetime.now(timezone.utc);db.add(m);db.flush();db.add(MessageAttachment(message_id=m.id,kind="VOICE",object_key=key,original_name="voice-note",mime_type=mime,size_bytes=len(payload)));db.add(VoiceNote(message_id=m.id,duration_ms=max(0,min(duration_ms,3600000)),transcript=transcript,transcribed_at=datetime.now(timezone.utc) if transcript else None));db.commit();db.refresh(m);data=_msg_json(m,db);oid=c.user2_id if c.user1_id==u.id else c.user1_id;await _push(oid,{"type":"message","data":data});await _push(u.id,{"type":"message","data":data});background.add_task(push_service.notify,_push_tokens(db,oid),u.display_name,cid,"🎙 Voice message",1);return data
 
     @router.post("/v24/groups/{gid}/voice")
     async def group_voice(gid:int,background:BackgroundTasks,file:UploadFile=File(...),duration_ms:int=Form(0),u=Depends(current_user),db:Session=Depends(dep_db)):
         g,_=gmember(db,gid,u.id);mime=(file.content_type or "audio/webm").split(";")[0].lower();payload=await file.read(12*1024*1024+1)
         if not payload or len(payload)>12*1024*1024:raise HTTPException(413,"Voice note must be 12 MB or less")
-        key=media_store.store(payload);transcript=do_transcribe(payload,file.filename or "voice.webm",mime)
+        key=media_store.store(payload);transcript=await asyncio.to_thread(do_transcribe,payload,file.filename or "voice.webm",mime)
         m=GroupMessage(group_id=gid,sender_id=u.id,text="🎙 Voice message");g.updated_at=datetime.now(timezone.utc);db.add(m);db.flush();db.add(GroupMessageAttachment(message_id=m.id,kind="VOICE",object_key=key,original_name="voice-note",mime_type=mime,size_bytes=len(payload)));db.add(GroupVoiceNote(message_id=m.id,duration_ms=max(0,min(duration_ms,3600000)),transcript=transcript,transcribed_at=datetime.now(timezone.utc) if transcript else None));db.commit();db.refresh(m);data=gmjson(db,m);await gpush(db,gid,{"type":"group_message","group_id":gid,"data":data})
         for x in db.scalars(select(GroupMember).where(GroupMember.group_id==gid,GroupMember.user_id!=u.id)).all():
             background.add_task(push_service.notify_data,_push_tokens(db,x.user_id),{"type":"group","group_id":gid,"group_name":g.name,"sender_name":u.display_name,"body":"🎙 Voice message"})

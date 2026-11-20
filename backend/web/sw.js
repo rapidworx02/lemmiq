@@ -7,7 +7,7 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21311-verified-wallet-broadcast";
+const CACHE = "lemmiq-v21315-fast-messaging";
 const SHELL = [
   "/web/v2136_creator_ux.js?v=2.13.6.0",
   "/web/v2136_creator_ux.css?v=2.13.6.0",
