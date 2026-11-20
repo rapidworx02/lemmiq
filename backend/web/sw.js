@@ -7,12 +7,15 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21316-reliability";
+const CACHE = "lemmiq-v21317-lean-shell";
 const SHELL = [
   "/web/",
-  "/web/app.js?v=2.13.16",
+  "/web/app.js?v=2.13.17",
+  "/web/v21317_ui.js?v=2.13.17",
+  "/web/v21317_calls.js?v=2.13.17",
+  "/web/v21317_ui.css?v=2.13.17",
   "/web/styles.css?v=2.10.7",
-  "/web/icon-192.png"
+  "/web/manifest.webmanifest",
 ];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});

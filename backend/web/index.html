@@ -54,6 +54,7 @@
   <link rel="stylesheet" href="/web/v2135_creator_media.css?v=2.13.5">
   <link rel="stylesheet" href="/web/v21351_avatar_status.css?v=2.13.5.2">
   <link rel="stylesheet" href="/web/v2136_creator_ux.css?v=2.13.6.0">
+  <link rel="stylesheet" href="/web/v21317_ui.css?v=2.13.17">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -128,6 +129,8 @@
       <section id="view-chats" class="view active">
         <div class="chat-layout">
           <div class="conversation-list glass">
+            <!-- V21317_CHAT_STATUS_TABS -->
+            <div class="home317-tabs" aria-label="Chat destinations"><button type="button" class="active" data-home317-target="chats">Personal</button><button type="button" data-home317-target="q-creators">Creators</button><button type="button" data-home317-target="updates">Updates</button></div>
             <div class="list-tools">
               <input id="chatFilter" placeholder="Search chats or ask Q">
               <button id="chatAskQBtn" class="ghost q-search-btn" title="Ask Q using this text">Q</button>
@@ -142,6 +145,7 @@
             <div id="emptyChat" class="empty-state"><img src="/web/brand-icon.png" alt=""><h3>Choose a conversation</h3><p>Message someone, open Q Thread, ask Q, or make a voice/video call.</p></div>
             <div id="activeQThread" class="hidden chat-inner q-thread-inner">
               <div class="chat-head"><div class="chat-person"><div class="avatar big q-thread-avatar">Q</div><div><strong>Q · LEMMIQ Assistant</strong><small>Requests, results and Q-to-Q updates</small></div></div><div class="chat-head-actions"><button id="qThreadRefreshBtn" class="ghost">↻</button></div></div>
+              <div id="q317Actions"><button id="q317Catchup" type="button">Catch me up</button><button id="q317Unread" type="button">Unread chats</button><button id="q317Prefs" type="button">Preferences</button><span id="q317Summary" class="summary">Helpful in-app updates. No promotional push alerts.</span></div>
               <div id="qThreadList" class="messages q-thread-list"></div>
               <div class="q-thread-foot micro">Q Thread only shows meaningful assistant activity. Human messages remain in their own chats.</div>
             </div>
@@ -167,6 +171,7 @@
       </section>
 
       <section id="view-updates" class="view">
+        <div class="home317-tabs" aria-label="Chat destinations"><button type="button" data-home317-target="chats">Personal</button><button type="button" data-home317-target="q-creators">Creators</button><button type="button" class="active" data-home317-target="updates">Updates</button></div>
         <article class="updates-card glass">
           <div class="section-head">
             <div><h2>Updates</h2><p class="micro">Status · disappears after 24 hours</p></div>
@@ -364,15 +369,19 @@
       </section>
 
       <section id="view-calls" class="view">
-        <article class="hero-card purple glass">
-          <span class="eyebrow">LEMMIQ CALLS</span>
-          <h3>Voice call history</h3>
-          <p>Missed, no-answer and completed calls appear here. Tap Call back to start another LEMMIQ voice call.</p>
-        </article>
-        <article class="card glass">
-          <div class="section-head"><div><h3>Recent calls</h3><p class="micro">1-to-1 LiveKit/WebRTC beta</p></div><button id="refreshCallsBtn" class="ghost">↻ Refresh</button></div>
+        <!-- V21317_COMPACT_CALLS -->
+        <div class="calls317-shell glass">
+          <div class="calls317-head"><h3>Calls</h3><button id="refreshCallsBtn" class="ghost" title="Refresh call history">↻ Refresh</button></div>
+          <div class="calls317-controls">
+            <button id="calls317All" class="active" type="button">All</button>
+            <button id="calls317Missed" type="button">Missed</button>
+            <input id="calls317Search" type="search" placeholder="Search recent calls" autocomplete="off">
+            <button id="calls317New" class="calls317-new" type="button">＋ New call</button>
+          </div>
+          <h3>Recent</h3>
           <div id="callsList" class="history-list"></div>
-        </article>
+          <p class="calls317-small-note">LEMMIQ-to-LEMMIQ calls only. For a stuck call, use in-app support.</p>
+        </div>
       </section>
 
       <section id="view-more" class="view">
@@ -586,7 +595,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=2.13.16" defer></script>
+  <script src="/web/app.js?v=2.13.17" defer></script>
   <script src="/web/v28.js?v=2.12.4.1" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
@@ -624,5 +633,7 @@
   <script src="/web/v21312_predict_q.js?v=2.13.16" defer></script>
   <script src="/web/v21313_predict_orders.js?v=2.13.13" defer></script>
   <script src="/web/v21314_cricket.js?v=2.13.14" defer></script>
+  <script src="/web/v21317_calls.js?v=2.13.17" defer></script>
+  <script src="/web/v21317_ui.js?v=2.13.17" defer></script>
 </body>
 </html>

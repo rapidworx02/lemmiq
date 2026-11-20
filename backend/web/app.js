@@ -158,8 +158,8 @@ function setView(name){
   if(name!=="chats")$("globalQOrb")?.classList.remove("q2106-hide-orb");
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
-  const secondary=["trust","business","activity","money","me","q-admin","updates"];
-  const navName=name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name));
+  const secondary=["trust","business","activity","money","me","q-admin"];
+  const navName=name==="updates"?"chats":(name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],
@@ -356,8 +356,8 @@ function renderQThread(){
   const rows=state.qThread?.items||[];
   host.innerHTML=rows.length?rows.map(item=>{
     const options=(item.options||[]).slice(0,4);
-    const status=item.can_respond?"Needs your response":item.mine&&item.status==="PENDING"?`Waiting for ${escapeHtml(item.other_user?.display_name||"contact")}`:item.status==="RESPONDED"?(item.mine?"Response received":"You responded"):item.status==="CLOSED"?"Closed":item.status;
-    return `<div class="q-thread-card ${item.can_respond?"needs-response":""}"><div class="q-thread-card-head"><strong>Q ↔ Q</strong><span>${escapeHtml(status)}</span></div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p>${item.can_respond?`<div class="q-thread-options">${options.map(o=>`<button class="ghost" data-qthread-choice="${item.request_id}" data-choice="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div><div class="q-thread-reply"><input data-qthread-input="${item.request_id}" placeholder="Reply to Q…"><button class="primary" data-qthread-send="${item.request_id}">Send</button></div>`:""}${item.can_cancel?`<button class="mini" data-qthread-cancel="${escapeHtml(item.request_key||"")}">Cancel request</button>`:""}<small>${escapeHtml(String(item.created_at||"").replace("T"," ").slice(0,19))}</small></div>`;
+    const status=item.kind==="ASSISTANT"?"Catch-up":item.can_respond?"Needs your response":item.mine&&item.status==="PENDING"?`Waiting for ${escapeHtml(item.other_user?.display_name||"contact")}`:item.status==="RESPONDED"?(item.mine?"Response received":"You responded"):item.status==="CLOSED"?"Closed":item.status;
+    return `<div class="q-thread-card ${item.can_respond?"needs-response":""}"><div class="q-thread-card-head"><strong>${item.kind==="ASSISTANT"?"Q · Assistant":"Q ↔ Q"}</strong><span>${escapeHtml(status)}</span></div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p>${item.can_respond?`<div class="q-thread-options">${options.map(o=>`<button class="ghost" data-qthread-choice="${item.request_id}" data-choice="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div><div class="q-thread-reply"><input data-qthread-input="${item.request_id}" placeholder="Reply to Q…"><button class="primary" data-qthread-send="${item.request_id}">Send</button></div>`:""}${item.can_cancel?`<button class="mini" data-qthread-cancel="${escapeHtml(item.request_key||"")}">Cancel request</button>`:""}<small>${escapeHtml(String(item.created_at||"").replace("T"," ").slice(0,19))}</small></div>`;
   }).join(""):`<div class="empty-state"><h3>Q</h3><p>No Q updates yet.</p></div>`;
   host.querySelectorAll("[data-qthread-choice]").forEach(b=>b.onclick=()=>respondQThread(Number(b.dataset.qthreadChoice),b.dataset.choice||""));
   host.querySelectorAll("[data-qthread-send]").forEach(b=>b.onclick=()=>{const id=Number(b.dataset.qthreadSend),inp=host.querySelector(`[data-qthread-input="${id}"]`);const val=(inp?.value||"").trim();if(val)respondQThread(id,val)});
@@ -1760,7 +1760,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.4.2").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.17").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};

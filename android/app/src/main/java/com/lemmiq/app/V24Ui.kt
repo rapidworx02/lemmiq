@@ -80,7 +80,7 @@ fun V24GroupAvatar(g:GroupDto,size:Int=50){
 }
 
 @Composable
-fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThread:()->Unit){
+fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThread:()->Unit,onUpdates317:()->Unit){
     LaunchedEffect(Unit){vm.refreshChats()}
     var search by remember{mutableStateOf("")}
     var mode by remember{mutableStateOf("ALL")}
@@ -104,7 +104,8 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
             Text("lemmiq",fontSize=28.sp,fontWeight=FontWeight.Black)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                 FilterChip(selected=true,onClick={},label={Text("Personal Chats")})
-                FilterChip(selected=false,onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("creator_inbox")},label={Text("✦ Creator Chats")})
+                FilterChip(selected=false,onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("creator_inbox")},label={Text("✦ Creators")})
+                FilterChip(selected=false,onClick=onUpdates317,label={Text("Updates")})
             }
             Text(if(vm.socketStatus=="online")"● connected" else "○ ${vm.socketStatus}",color=V24Muted,fontSize=11.sp)
             Row(Modifier.fillMaxWidth().padding(top=10.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(7.dp)){
@@ -187,9 +188,9 @@ fun V2106QThread(vm:LemmiqViewModel,onBack:()->Unit){
             }
         }}
     ){pad->
-        if(vm.qThread.items.isEmpty()){
-            Box(Modifier.fillMaxSize().padding(pad),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text("Q",fontSize=42.sp,color=V24Purple,fontWeight=FontWeight.Black);Text("No Q updates yet.",color=V24Muted)}}
-        }else LazyColumn(Modifier.fillMaxSize().padding(pad),contentPadding=PaddingValues(14.dp,12.dp,14.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+        LazyColumn(Modifier.fillMaxSize().padding(pad),contentPadding=PaddingValues(14.dp,12.dp,14.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+            item(key="q_assistant_actions_317"){V21317QAssistantControls(vm)}
+            if(vm.qThread.items.isEmpty()) item{Text("No Q updates yet. I'll help you catch up when there's something useful.",color=V24Muted,fontSize=12.sp)}
             items(vm.qThread.items,key={it.id}){item->V2106QThreadCard(vm,item)}
         }
     }
@@ -200,6 +201,7 @@ private fun V2106QThreadCard(vm:LemmiqViewModel,item:QThreadItemDto){
     var reply by remember(item.id){mutableStateOf("")}
     val waiting=item.status.equals("PENDING",true)
     val statusLabel=when{
+        item.kind=="ASSISTANT"->"Catch-up"
         item.can_respond->"Needs your response"
         item.mine&&waiting->"Waiting for ${item.other_user?.display_name?:"contact"}"
         item.status.equals("RESPONDED",true)->if(item.mine)"Response received" else "You responded"
@@ -209,7 +211,7 @@ private fun V2106QThreadCard(vm:LemmiqViewModel,item:QThreadItemDto){
     Card(shape=RoundedCornerShape(20.dp),colors=CardDefaults.cardColors(containerColor=if(item.can_respond)V24Soft else Color.White)){
         Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
-                Text("Q ↔ Q",fontWeight=FontWeight.Black,color=V24Purple,fontSize=11.sp);Spacer(Modifier.weight(1f));Text(statusLabel,fontSize=9.sp,color=if(item.can_respond)Color(0xFFB7791F) else V24Muted)
+                Text(if(item.kind=="ASSISTANT")"Q · Assistant" else "Q ↔ Q",fontWeight=FontWeight.Black,color=V24Purple,fontSize=11.sp);Spacer(Modifier.weight(1f));Text(statusLabel,fontSize=9.sp,color=if(item.can_respond)Color(0xFFB7791F) else V24Muted)
             }
             Text(item.title,fontWeight=FontWeight.Bold,fontSize=16.sp)
             Text(item.body,fontSize=12.sp,color=V24Ink)
@@ -421,7 +423,7 @@ private fun V24GroupSettings(vm:LemmiqViewModel,dismiss:()->Unit){
 }
 
 @Composable
-fun V24Updates(vm:LemmiqViewModel){
+fun V24Updates(vm:LemmiqViewModel,embedded317:Boolean=false,onPersonal317:()->Unit={},onCreator317:()->Unit={}){
     var creator by remember{mutableStateOf(false)}
     var text by remember{mutableStateOf("")}
     var opened by remember{mutableStateOf<StatusDto?>(null)}
@@ -442,9 +444,15 @@ fun V24Updates(vm:LemmiqViewModel){
     ){
         item{
             Column(Modifier.padding(horizontal=18.dp,vertical=14.dp)){
-                Text("Updates",fontSize=30.sp,fontWeight=FontWeight.Black)
+                if(embedded317){
+                    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                        FilterChip(false,onPersonal317,label={Text("Personal",fontSize=11.sp)})
+                        FilterChip(false,onCreator317,label={Text("Creators",fontSize=11.sp)})
+                        FilterChip(true,{},label={Text("Updates",fontSize=11.sp)})
+                    }
+                }else Text("Updates",fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("Status · disappears after 24 hours",fontSize=11.sp,color=V24Muted)
-                Text("Status",fontSize=21.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=18.dp,bottom=10.dp))
+                Text("Status",fontSize=21.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=if(embedded317)8.dp else 18.dp,bottom=10.dp))
                 LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)){
                     item{V27AddStatusCard(vm){creator=true}}
                     if(mine.isNotEmpty())item{V27StatusCard(mine.first(),vm,true){vm.viewStatus(mine.first().id){opened=it}}}
@@ -484,7 +492,7 @@ fun V24Updates(vm:LemmiqViewModel){
                 }
             }
         }
-        if(mine.isNotEmpty()){
+        if(mine.isNotEmpty() && !embedded317){
             item{Text("My status",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=6.dp))}
             items(mine,key={"mine_"+it.id}){s->
                 Row(

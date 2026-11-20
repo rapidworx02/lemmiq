@@ -77,6 +77,10 @@ def register_v2106(app,current_user,get_db):
                 "can_respond":(not mine and r.status=="PENDING"),
                 "can_cancel":(mine and r.status=="PENDING"),
             })
+        # V21317_Q_DIGEST: merge private, low-frequency in-app assistant notes.
+        from .v21317_assistant import assistant_items
+        out.extend(assistant_items(db,u.id))
+        out.sort(key=lambda x:x.get("created_at", ""), reverse=True)
         return {"unread_count":sum(1 for x in out if x["unread"]),"items":out}
 
     @router.post("/v2106/q/thread/read")
@@ -87,6 +91,8 @@ def register_v2106(app,current_user,get_db):
             row=QThreadState(user_id=u.id,last_seen_at=now,updated_at=now);db.add(row)
         else:
             row.last_seen_at=now;row.updated_at=now
+        from .v21317_assistant import mark_assistant_read
+        mark_assistant_read(db,u.id)
         db.commit()
         return {"ok":True,"read_at":now.isoformat()}
 

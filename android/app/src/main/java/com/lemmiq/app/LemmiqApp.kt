@@ -223,6 +223,7 @@ private fun Home(vm:LemmiqViewModel){
     var qFullScreen by remember{mutableStateOf(false)}
     var qPredictOpen by remember{mutableStateOf(false)}
     var qThreadOpen by remember{mutableStateOf(false)}
+    var chatsUpdatesOpen317 by remember{mutableStateOf(false)}
     LaunchedEffect(Unit){
         // Keep launch fast: only load the messenger shell. Heavy tabs refresh when opened.
         vm.refreshChats();vm.refreshGroups();vm.refreshQThread()
@@ -237,11 +238,12 @@ private fun Home(vm:LemmiqViewModel){
             showMore && morePage=="me" -> {vm.refreshMe();vm.refreshPrivacy()}
         }
     }
-    BackHandler(enabled=qThreadOpen||qFullScreen||morePage!=null||showMore||tab!=0){
+    BackHandler(enabled=qThreadOpen||qFullScreen||morePage!=null||showMore||tab!=0||chatsUpdatesOpen317){
         when{
             qThreadOpen -> qThreadOpen=false
             qFullScreen -> qFullScreen=false
             morePage!=null -> morePage=null
+            chatsUpdatesOpen317 -> chatsUpdatesOpen317=false
             showMore -> showMore=false
             tab!=0 -> tab=0
         }
@@ -280,6 +282,7 @@ private fun Home(vm:LemmiqViewModel){
                         onClick={
                             qFullScreen=false
                             qThreadOpen=false
+                            if(i==0)chatsUpdatesOpen317=false
                             morePage=null
                             if(i==5){
                                 showMore=true
@@ -304,9 +307,9 @@ private fun Home(vm:LemmiqViewModel){
         },
         floatingActionButton={
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
-                if(tab==0&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
+                if(tab==0&&!chatsUpdatesOpen317&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
                 // V21342_HIDE_Q_OVER_CREATOR: no floating assistant over any More/Professional chat composer.
-                if(!qFullScreen && !showMore && tab!=1 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
+                if(!qFullScreen && !showMore && tab!=1 && tab!=4 && !chatsUpdatesOpen317 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,
@@ -337,10 +340,14 @@ private fun Home(vm:LemmiqViewModel){
                     else->V241MoreMenu{morePage=it}
                 }
                 else->when(tab){
-                    0->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
+                    0->if(chatsUpdatesOpen317) V24Updates(vm,embedded317=true,
+                        onPersonal317={chatsUpdatesOpen317=false},
+                        onCreator317={chatsUpdatesOpen317=false;tab=1})
+                    else V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
-                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)})
+                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)},
+                    onUpdates317={chatsUpdatesOpen317=true})
                     1->V2134ProfessionalHub(vm,2)
                     2->Column(Modifier.fillMaxSize()) {
                         Row(Modifier.fillMaxWidth().padding(6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -358,7 +365,7 @@ private fun Home(vm:LemmiqViewModel){
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
                         qThreadOpen=false;qFullScreen=true
                         if(prompt.isNotBlank())vm.askAgent(prompt)
-                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)})
+                    },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)},onUpdates317={chatsUpdatesOpen317=true})
                 }
             }
         }
@@ -391,60 +398,9 @@ private fun Header(title:String,sub:String?=null){
 
 @Composable
 private fun V241CallsScreen(vm:LemmiqViewModel){
-    val ctx=LocalContext.current
-    LaunchedEffect(Unit){vm.refreshCalls()}
-    LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=24.dp)){
-        item{Header("Calls","Voice and video call history")}
-        item{V2132CallRecoveryPanel(vm)}
-        if(vm.callHistory.isEmpty()){
-            item{Empty("📞","No calls yet","Your LEMMIQ voice and video call history will appear here.")}
-        }else{
-            items(vm.callHistory,key={it.id}){c->
-                val other=c.other_user?:UserDto(0,"","LEMMIQ user")
-                val status=c.status.uppercase()
-                val isVideo=c.call_type.equals("VIDEO",true)
-                val callLabel=if(isVideo)"video call" else "voice call"
-                val label=when(status){
-                    "MISSED"->"Missed $callLabel"
-                    "RINGING"->"No answer · $callLabel"
-                    "DECLINED"->"Declined $callLabel"
-                    else->callLabel.replaceFirstChar{it.uppercase()}
-                }
-                val statusColor=when(status){
-                    "MISSED"->Color(0xFFD63C57)
-                    "RINGING"->Color(0xFF9B6B10)
-                    else->Mint
-                }
-                Card(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=5.dp),shape=RoundedCornerShape(18.dp)){
-                    Row(Modifier.fillMaxWidth().padding(12.dp),verticalAlignment=Alignment.CenterVertically){
-                        V24Avatar(other,46)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)){
-                            Text(other.display_name,fontWeight=FontWeight.Bold)
-                            Text(label,color=statusColor,fontSize=11.sp)
-                            Text(
-                                "${if(c.duration_seconds>0)"${c.duration_seconds/60}m ${c.duration_seconds%60}s · " else ""}${v24FriendlyDay(c.started_at)} · ${v24Time(c.started_at)}",
-                                color=Muted,fontSize=10.sp
-                            )
-                        }
-                        if(status in listOf("RINGING","CONNECTING","CONNECTED")){
-                            TextButton(onClick={vm.endStuckCall(c.id)}){Text("End stuck",fontSize=10.sp,color=Color(0xFFD63C57))}
-                        }else{
-                            FilledTonalButton(onClick={
-                                val launchCall:(CallJoinDto)->Unit={join->
-                                    ctx.startActivity(Intent(ctx,LemmiqCallActivity::class.java).apply{
-                                        putExtra("call_id",join.call.id);putExtra("ws_url",join.ws_url);putExtra("token",join.token)
-                                        putExtra("person",other.display_name);putExtra("avatar_url",other.avatar_url);putExtra("incoming",false);putExtra("call_type",join.call.call_type)
-                                    })
-                                }
-                                if(isVideo)vm.startVideoCall(c.chat_id,launchCall) else vm.startVoiceCall(c.chat_id,launchCall)
-                            }){Text(if(isVideo)"🎥" else "📞")}
-                        }
-                    }
-                }
-            }
-        }
-    }
+    V21317CallsScreen(vm,onOpenChat={ chatId ->
+        LemmiqLaunchRouterV2103.route.value = LemmiqLaunchRouteV2103("chat",chatId)
+    })
 }
 
 @Composable

@@ -27,7 +27,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.16")
+app = FastAPI(title="LEMMIQ Server", version="2.13.17")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -1074,7 +1074,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "2.12.2",
+        "version": "2.13.17",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1200,6 +1200,10 @@ register_v21315_performance(app, current_user, get_db)
 # LEMMIQ_V21316_RELIABILITY
 from .v21316_reliability import register_v21316_reliability
 register_v21316_reliability(app, current_user, get_db)
+
+# V21317_Q_ASSISTANT_IN_APP_DIGESTS
+from .v21317_assistant import register_v21317_assistant
+register_v21317_assistant(app, current_user, get_db)
 
 # ---------------- LEMMIQ V2 WEB / PWA ----------------
 WEB_DIR = Path(__file__).resolve().parents[1] / "web"

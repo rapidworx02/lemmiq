@@ -1,0 +1,33 @@
+/* LEMMIQ 2.13.17 — lightweight native-feeling Chats/Updates/Calls UI */
+.home317-tabs{display:flex;gap:6px;padding:12px 12px 6px;align-items:center;overflow-x:auto}
+.home317-tabs button{border:1px solid #dcd6e7;background:#fff;color:#37313f;border-radius:12px;padding:10px 12px;font-size:13px;font-weight:600;white-space:nowrap;cursor:pointer;flex:1}
+.home317-tabs button.active{background:#ede3fc;border-color:#ede3fc;color:#5331a8}
+#view-updates .home317-tabs{margin:0 0 14px;padding:6px 0 10px}
+#view-updates .updates-card .section-head h2,#view-updates .updates-card h3.status-heading{display:none}
+#view-updates .updates-card{padding-top:12px}
+#view-updates .status-create-actions{margin:12px 0}
+#view-updates .status-list-section{margin-top:18px}
+#view-calls .calls317-shell{max-width:900px;margin:0 auto;padding:16px 18px 34px;background:var(--bg,#faf8fe);min-height:70vh;border-radius:22px}
+#view-calls .calls317-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+#view-calls .calls317-head h3{margin:0;font-size:24px}
+#view-calls .calls317-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:15px}
+#view-calls .calls317-controls button{border:1px solid #ded8e8;border-radius:999px;padding:10px 14px;background:#fff;color:#42395d;cursor:pointer}
+#view-calls .calls317-controls button.active{background:#eee4fb;border-color:#eee4fb;color:#6c4bde}
+#view-calls #calls317Search{flex:1 1 180px;border:1px solid #ded8e8;border-radius:999px;padding:10px 14px;min-width:0}
+#view-calls .calls317-row{display:flex;gap:12px;align-items:center;padding:12px 5px;border-bottom:1px solid #ece8f2}
+#view-calls .calls317-person{display:flex;gap:12px;align-items:center;flex:1;min-width:0;border:0;background:transparent;text-align:left;color:inherit;cursor:pointer}
+#view-calls .calls317-person .body{display:flex;flex-direction:column;gap:4px;min-width:0;overflow:hidden}
+#view-calls .calls317-person strong,#view-calls .calls317-person small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#view-calls .calls317-person small{color:#797181;font-size:11px}
+#view-calls .calls317-person .missed{color:#b93c5b}
+#view-calls .calls317-redial{flex:0 0 auto;background:#efe6ff;color:#633ae0;border:0;border-radius:999px;padding:12px 14px;cursor:pointer}
+#view-calls .calls317-new{background:#6e4ff3!important;color:#fff!important;border-color:#6e4ff3!important}
+#view-calls .calls317-tools{margin-left:auto}
+#view-calls .calls317-small-note{font-size:12px;color:#7d7388;margin:8px 0 14px}
+#view-calls .calls317-person .avatar{flex-shrink:0}
+#q317Actions{margin:10px 12px 8px;padding:12px;border-radius:15px;background:#f2edff;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#q317Actions .summary{flex:1 0 100%;font-size:12px;color:#574a70}
+#q317Actions button{padding:8px 11px;border:1px solid #d9cced;background:white;border-radius:10px;color:#583bb6;cursor:pointer}
+#q317Actions button:first-child{background:#6f50df;color:white;border-color:#6f50df}
+body:has(#view-calls.active) #globalQOrb,body:has(#view-updates.active) #globalQOrb{display:none!important}
+@media(max-width:720px){#view-calls .calls317-shell{padding:12px 9px;border-radius:0}#view-calls .calls317-controls{gap:5px}#view-calls .calls317-controls button{padding:9px 10px;font-size:12px}.home317-tabs button{font-size:11px;padding:9px 8px}}
