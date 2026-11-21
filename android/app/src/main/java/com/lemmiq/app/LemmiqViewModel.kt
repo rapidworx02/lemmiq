@@ -271,11 +271,14 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun discardSuggestion(){suggestion=null}
     fun suggest()=viewModelScope.launch{
         val c=active?:return@launch
-        action{suggestion=api.suggest(c.id).reply}
+        if(c.ai_mode!="ASSIST"||busy)return@launch
+        val token303=store.token;val generation303=conversationGeneration300
+        action{val reply=api.suggest(c.id).reply;if(store.token==token303&&generation303==conversationGeneration300&&active?.id==c.id&&active?.ai_mode=="ASSIST")suggestion=reply}
     }
     fun saveSettings(cat:String,mode:String,tone:String)=viewModelScope.launch{
         val c=active?:return@launch
-        action{active=api.settings(c.id,cat,mode,tone);refreshChats()}
+        val token303=store.token
+        action{val updated=api.settings(c.id,cat,mode,tone);if(store.token==token303&&active?.id==c.id){active=updated;if(updated.ai_mode!="ASSIST")suggestion=null;refreshChats()}}
     }
 
     fun registerPush(){
@@ -998,8 +1001,9 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         runCatching{api.sendGroup(g.id,text.trim())}.onSuccess{m->if(activeGroup?.id==g.id&&authenticated&&groupMessages.none{it.id==m.id})groupMessages=groupMessages+m;refreshGroups()}.onFailure{error=it.message}
     }
     fun suggestGroup()=viewModelScope.launch{
-        val g=activeGroup?:return@launch;groupBusy=true
-        try{groupSuggestion=api.groupSuggest(g.id).reply}catch(e:Exception){error=e.message}finally{groupBusy=false}
+        val g=activeGroup?:return@launch;if(g.ai_mode!="ASSIST"||groupBusy)return@launch;groupBusy=true
+        val token303=store.token;val generation303=conversationGeneration300
+        try{val reply=api.groupSuggest(g.id).reply;if(store.token==token303&&generation303==conversationGeneration300&&activeGroup?.id==g.id&&activeGroup?.ai_mode=="ASSIST")groupSuggestion=reply}catch(e:Exception){error=e.message}finally{groupBusy=false}
     }
     fun summarizeGroup()=viewModelScope.launch{
         val g=activeGroup?:return@launch;groupBusy=true
@@ -1011,7 +1015,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
     fun saveGroupSettings(mode:String,tone:String)=viewModelScope.launch{
         val g=activeGroup?:return@launch
-        try{activeGroup=api.saveGroupSettings(g.id,mode,tone);refreshGroups()}catch(e:Exception){error=e.message}
+        val token303=store.token
+        try{val updated=api.saveGroupSettings(g.id,mode,tone);if(store.token==token303&&activeGroup?.id==g.id){activeGroup=updated;if(updated.ai_mode!="ASSIST")groupSuggestion=null;refreshGroups()}}catch(e:Exception){error=e.message}
     }
     fun uploadGroupPhoto(uri:Uri)=viewModelScope.launch{
         val g=activeGroup?:return@launch
@@ -1365,3 +1370,4 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 }
 // V21318_MEDIA_INSTALLED
 // V300_INSTALLED
+// V303_INSTALLED

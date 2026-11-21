@@ -59,8 +59,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=92
-        versionName="3.0.2"
+        versionCode=93
+        versionName="3.0.3"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }
@@ -129,3 +129,4 @@ dependencies {
 // V300_INSTALLED
 // V301_INSTALLED
 // V302_INSTALLED
+// V303_INSTALLED

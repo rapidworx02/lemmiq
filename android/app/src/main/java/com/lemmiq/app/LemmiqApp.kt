@@ -649,6 +649,13 @@ private fun Chat(vm:LemmiqViewModel){
                         }
                     }
                 }
+                if(c.ai_mode=="ASSIST"){
+                    Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
+                        FilledTonalButton({vm.suggest()},enabled=!vm.busy){Text(if(vm.busy)"Please wait…" else "✨ Suggest reply",fontSize=12.sp)}
+                    }
+                }else if(c.ai_mode=="AUTO"){
+                    Text("⚡ Auto enabled",color=MaterialTheme.colorScheme.primary,fontSize=11.sp,modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp))
+                }
                 vm.suggestion?.let{s->
                     Surface(color=Soft,shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
@@ -729,15 +736,7 @@ private fun Chat(vm:LemmiqViewModel){
                     Text(vm.activeBusinessSetting.mode,fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
                 }
             }
-            if(c.ai_mode=="AUTO"){
-                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
-                    FilledTonalButton({vm.suggest()},enabled=!vm.busy){Text("✨ Suggest reply")}
-                    Spacer(Modifier.width(6.dp))
-                    TextButton({vm.summarizeActiveChat()}){Text("🧠 Summary")}
-                    Spacer(Modifier.weight(1f))
-                    if(c.ai_mode=="AUTO")Text("⚡ Auto enabled",color=Color(0xFF11844F),fontSize=11.sp,fontWeight=FontWeight.Bold)
-                }
-            }
+
             if(timeline.isEmpty())Empty("👋","Start the conversation","Messages appear here in real time.")
             else LazyColumn(
                 modifier=Modifier.fillMaxSize(),
@@ -779,7 +778,8 @@ private fun Chat(vm:LemmiqViewModel){
             text={Column{
                 TextButton({showMore=false;showSearch=true}){Text("Search messages")}
                 TextButton({showMore=false;settings=true}){Text("Chat AI settings")}
-                if(c.ai_mode!="OFF"){TextButton({showMore=false;vm.suggest()}){Text("Suggest reply")};TextButton({showMore=false;vm.summarizeActiveChat()}){Text("Summarise conversation")}}
+                if(c.ai_mode=="ASSIST")TextButton({showMore=false;vm.suggest()},enabled=!vm.busy){Text("Suggest reply")}
+                if(c.ai_mode!="OFF")TextButton({showMore=false;vm.summarizeActiveChat()}){Text("Summarise conversation")}
                 if(vm.businessProfile.enabled)TextButton({showMore=false;businessSettings=true}){Text("Business tools")}
                 TextButton({vm.togglePin();showMore=false}){Text(if(c.pinned)"Unpin chat" else "📌 Pin chat")}
                 TextButton({vm.toggleFavourite();showMore=false}){Text(if(c.favourite)"Remove favourite" else "⭐ Favourite")}
@@ -2174,3 +2174,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
 // V300_INSTALLED
 // V301_INSTALLED
 // V302_INSTALLED
+// V303_INSTALLED

@@ -29,7 +29,7 @@
  body.v300-conversation .avatar.big{width:38px!important;height:38px!important;flex:0 0 38px!important}body.v300-conversation .chat-head-actions{flex:0 0 auto;gap:2px!important;display:flex!important;flex-wrap:nowrap!important}
  body.v300-conversation .chat-head-actions button,.v300-back{width:38px!important;min-width:38px!important;height:42px!important;padding:0!important;border:0!important;background:transparent!important;font-size:19px!important}
  body.v300-conversation .v300-back,body.v300-conversation .v300-qmenu,body.v300-conversation .v300-chatmenu{display:inline-flex!important;align-items:center;justify-content:center}
- body.v300-conversation #chatSearchBtn,body.v300-conversation #chatAiBtn,body.v300-conversation #summaryBtn,body.v300-conversation #businessChatBtn,body.v300-conversation #chatMoreBtn,body.v300-conversation #groupSuggestTop,body.v300-conversation #groupCatchupBtn,body.v300-conversation #groupQBtn,body.v300-conversation #groupSettingsBtn,body.v300-conversation #assistBar,body.v300-conversation #groupAssistBar{display:none!important}
+ body.v300-conversation #chatSearchBtn,body.v300-conversation #chatAiBtn,body.v300-conversation #summaryBtn,body.v300-conversation #businessChatBtn,body.v300-conversation #chatMoreBtn,body.v300-conversation #groupSuggestTop,body.v300-conversation #groupCatchupBtn,body.v300-conversation #groupQBtn,body.v300-conversation #groupSettingsBtn{display:none!important}
  body.v300-conversation .messages{flex:1 1 auto!important;min-height:0!important;height:auto!important;overflow-y:auto!important;padding:9px!important;overscroll-behavior:contain}
  body.v300-conversation .composer{flex:0 0 auto!important;position:relative!important;bottom:auto!important;gap:4px!important;padding:6px 7px calc(6px + env(safe-area-inset-bottom,0px))!important;border-radius:0!important;display:flex!important;align-items:center!important}
  body.v300-conversation .composer textarea{flex:1;min-width:0;min-height:42px!important;max-height:110px!important;padding:9px!important}body.v300-conversation .composer button,body.v300-conversation .attach-btn{min-width:40px!important;min-height:42px!important;padding:5px!important}
@@ -39,8 +39,21 @@
  #view-more .more-card{max-width:none!important}
 }
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
-#v300Trading[hidden],.v300-trading-mode #v21310PredictRoot,.v300-trading-mode #v21310PredictRoot[hidden]{display:none!important}
+#v300Trading[hidden]{display:none!important}
 /* Never override access-gated or inactive UI. */
 #view-more .more-card.hidden,#view-more .more-card[hidden],#appView.hidden{display:none!important}
-#view-q-predict.v300-trading-mode>:not(.v300-predict-switch):not(#v300Trading){display:none!important}
+/* V303 removes legacy outer trading-mode visibility rule. */
 .v300-ask-row{display:flex;gap:7px;padding:8px;align-items:center}.v300-ask-row input{flex:1;min-width:0;padding:10px}.v300-q-response{padding:12px;white-space:pre-wrap;max-height:180px;overflow:auto}.v300-file-card{display:flex!important;gap:9px;align-items:center;text-align:left;min-height:54px;max-width:100%;white-space:normal;overflow-wrap:anywhere}.v300-file-card small{display:block;opacity:.8}.v300-file-card strong{display:block;font-size:13px}
+
+/* V303: existing server-selected ASSIST visibility stays authoritative. */
+#activeChat #assistBar.hidden,#activeGroup #groupAssistBar.hidden,#activeChat #suggestionCard.hidden,#activeGroup #groupSuggestionCard.hidden{display:none!important}
+body.v300-conversation #assistBar:not(.hidden),body.v300-conversation #groupAssistBar:not(.hidden){display:flex!important;flex:0 0 auto;align-items:center;justify-content:flex-start;background:transparent;border:0;box-shadow:none;margin:0!important;padding:3px 10px!important;min-height:0}
+body.v300-conversation #assistBar:not(.hidden)>span,body.v300-conversation #groupAssistBar:not(.hidden)>span{display:none!important}
+body.v300-conversation #assistBarBtn,body.v300-conversation #groupSuggestBtn{font-size:12px;padding:6px 12px;min-height:36px;border-radius:20px}
+body.v300-conversation .suggestion:not(.hidden){flex:0 0 auto;max-height:26dvh;overflow:auto;padding:8px 12px;margin:4px 8px;font-size:13px}
+body.v300-conversation .suggestion-actions button{min-height:36px;padding:5px 10px}
+/* Keep a keyboard/touch accessible message action, but reserve space so it cannot obscure text. */
+#messageList .msg:not(.v318-photo-msg){position:relative;padding-inline-end:34px!important}
+#messageList .msg:not(.v318-photo-msg)>.message-menu{position:absolute;inset-inline-end:5px;top:5px;width:23px;min-width:23px;padding:1px;opacity:.85}
+#modal button[aria-label="Close"],#modal .modal-close,#modal #modalClose{color:var(--text,#25243a)!important}
+/* V303_INSTALLED */

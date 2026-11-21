@@ -7,17 +7,17 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v302";
+const CACHE = "lemmiq-v303";
 const SHELL = [
   "/web/",
-  "/web/app.js?v=3.0.2",
-  "/web/v21310_predict_q.css?v=3.0.2",
-  "/web/v21310_predict_q.js?v=3.0.2",
+  "/web/app.js?v=3.0.3",
+  "/web/v21310_predict_q.css?v=3.0.3",
+  "/web/v21310_predict_q.js?v=3.0.3",
   "/web/v301.css?v=3.0.1",
   "/web/v301_admin.js?v=3.0.1",
   "/web/v21311_upgrade.js?v=3.0.1",
-  "/web/v300.css?v=3.0.0",
-  "/web/v300.js?v=3.0.2",
+  "/web/v300.css?v=3.0.3",
+  "/web/v300.js?v=3.0.3",
   "/web/v21318_media.css?v=2.13.18",
   "/web/v21318_media.js?v=2.13.18",
   "/web/v21317_ui.js?v=3.0.0",
@@ -27,7 +27,7 @@ const SHELL = [
   "/web/manifest.webmanifest",
 ];
 
-self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});
+self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL.map(url=>new Request(url,{cache:"reload"})))).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith("lemmiq-")&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
 
 self.addEventListener("fetch",event=>{
@@ -67,3 +67,4 @@ self.addEventListener("notificationclick",event=>{
 // V300_INSTALLED
 // V301_INSTALLED
 // V302_INSTALLED
+// V303_INSTALLED

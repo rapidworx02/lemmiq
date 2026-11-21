@@ -286,6 +286,9 @@ fun V24GroupChat(vm:LemmiqViewModel){
             }
         }},
         bottomBar={Column(Modifier.background(Color.White).navigationBarsPadding().imePadding()){
+            if(g.ai_mode=="ASSIST")Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp)){
+                FilledTonalButton({vm.suggestGroup()},enabled=!vm.groupBusy){Text(if(vm.groupBusy)"Please wait…" else "✨ Suggest reply",fontSize=12.sp)}
+            }
             vm.groupSuggestion?.let{s->Card(Modifier.fillMaxWidth().padding(8.dp),colors=CardDefaults.cardColors(containerColor=V24Soft)){Column(Modifier.padding(10.dp)){
                 Text("Q suggested reply",fontWeight=FontWeight.Bold,color=V24Purple);Text(s)
                 Row{TextButton({vm.groupSuggestion=null}){Text("Discard")};Spacer(Modifier.weight(1f));TextButton({draft=s;vm.groupSuggestion=null}){Text("Edit")};Button({vm.sendGroup(s);vm.groupSuggestion=null}){Text("Send")}}
@@ -305,7 +308,7 @@ fun V24GroupChat(vm:LemmiqViewModel){
     ){p->
         Column(Modifier.fillMaxSize().padding(p)){
             Row(Modifier.fillMaxWidth().padding(10.dp),verticalAlignment=Alignment.CenterVertically){
-                if(g.ai_mode=="ASSIST"){FilledTonalButton({vm.suggestGroup()}){Text("✨ Suggest reply")};Spacer(Modifier.width(6.dp))}
+                /* V303: ASSIST action is next to the composer. */
                 FilledTonalButton({vm.summarizeGroup()}){Text("🧠 Catch me up")}
             }
             if(vm.groupBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -791,3 +794,4 @@ fun v24FriendlyDay(iso:String):String=runCatching{
 }.getOrElse{""}
 // V21318_MEDIA_INSTALLED
 // V300_INSTALLED
+// V303_INSTALLED

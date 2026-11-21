@@ -410,6 +410,7 @@ async function openChat(cid,mark=true){
   $("chatName").textContent=chat.other_user.display_name;
   $("chatMeta").textContent=`@${chat.other_user.username} · ${chat.category} · AI ${chat.ai_mode}`;
   $("chatAvatar").innerHTML=chat.other_user.avatar_url?`<img src="${escapeHtml(chat.other_user.avatar_url)}" alt="">`:escapeHtml(initials(chat.other_user.display_name));
+  discardSuggestion();
   $("assistBar").classList.toggle("hidden",chat.ai_mode!=="ASSIST");
   $("messageInput").value=chat.draft_text||"";
   clearReplyPreview();
@@ -530,7 +531,7 @@ function renderMessages(scrollToBottom=true){
     const quote=m.reply_to?`<div class="reply-quote">${escapeHtml(m.reply_to.text||"")}</div>`:"";
     const reactions=(m.reactions||[]).map(r=>`<button class="reaction-pill" onclick="reactMessage(${m.id},'${escapeHtml(r.emoji)}')">${escapeHtml(r.emoji)} ${r.count}</button>`).join("");
     html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}" data-mid="${m.id}">
-      <button class="mini msg-action-trigger message-menu" onclick="openMessageMenu(${m.id})">⋯</button>
+      <button class="mini msg-action-trigger message-menu" aria-label="Message actions" onclick="openMessageMenu(${m.id})">⋯</button>
       ${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${m.ai_generated&&!photo?`<div class="micro">✨ AI generated</div>`:""}${quote}${photo?attach:""}
       ${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${(window.v2131RenderChatOffer?.(m.text,mine))||formatChatText300(m.text)}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>`:""}
       ${photo?"":attach}${reactions?`<div class="reaction-strip">${reactions}</div>`:""}
@@ -578,21 +579,26 @@ async function sendMessage(){
     toast("Message not sent: "+e.message,true);
   }
 }
+let directSuggest303=false;
 async function suggestReply(){
-  if(!state.activeChat)return;
+  if(!state.activeChat||state.activeChat.ai_mode!=="ASSIST"||directSuggest303)return;
+  const cid=state.activeChat.id,epoch=conversationEpoch300,token=state.token,btn=$("assistBarBtn");
+  directSuggest303=true;btn.disabled=true;btn.textContent="Q is thinking…";
   try{
-    const r=await api(`/chats/${state.activeChat.id}/suggest`,{method:"POST"});
-    showSuggestion(r.reply);
-  }catch(e){toast(e.message,true)}
+    const r=await api(`/chats/${cid}/suggest`,{method:"POST"});
+    if(epoch===conversationEpoch300&&token===state.token&&state.activeChat?.id===cid&&state.activeChat.ai_mode==="ASSIST")showSuggestion(r.reply);
+  }catch(e){if(token===state.token&&state.activeChat?.id===cid)toast(e.message,true)}
+  finally{directSuggest303=false;btn.disabled=false;btn.textContent="✨ Suggest reply"}
 }
 function showSuggestion(reply){
+  const cid=state.activeChat?.id,token=state.token,epoch=conversationEpoch300;if(!cid)return;
   const el=$("suggestionCard");
   el.classList.remove("hidden");
   el.innerHTML=`<strong>Q suggested reply</strong><p class="suggestion-text"></p><div class="suggestion-actions"><button class="ghost" data-action="discard">Discard</button><button class="ghost" data-action="edit">Edit</button><button class="primary" data-action="send">Send</button></div>`;
   el.querySelector(".suggestion-text").textContent=reply;
   el.querySelector('[data-action="discard"]').addEventListener("click",()=>discardSuggestion());
   el.querySelector('[data-action="edit"]').addEventListener("click",()=>{$("messageInput").value=reply;discardSuggestion();$("messageInput").focus();saveDraft(reply)});
-  el.querySelector('[data-action="send"]').addEventListener("click",async()=>{discardSuggestion();try{await api(`/chats/${state.activeChat.id}/messages`,{method:"POST",body:JSON.stringify({text:reply})});await openChat(state.activeChat.id,false)}catch(e){toast(e.message,true)}})
+  el.querySelector('[data-action="send"]').addEventListener("click",async e=>{const btn=e.currentTarget;if(btn.disabled||token!==state.token||epoch!==conversationEpoch300||state.activeChat?.id!==cid)return;btn.disabled=true;try{await api(`/chats/${cid}/messages`,{method:"POST",body:JSON.stringify({text:reply})});if(token===state.token&&epoch===conversationEpoch300&&state.activeChat?.id===cid){discardSuggestion();await openChat(cid,false)}}catch(e){toast(e.message,true)}finally{btn.disabled=false}})
 }
 function discardSuggestion(){$("suggestionCard").classList.add("hidden");$("suggestionCard").innerHTML=""}
 
@@ -767,8 +773,11 @@ async function personalChatSettings(){
           tone:$("personalTone").value
         })
       });
-      state.activeChat=updated;
       state.chats=state.chats.map(x=>x.id===updated.id?updated:x);
+      if(state.activeChat?.id!==c.id)return;
+      state.activeChat=updated;
+      $("assistBar").classList.toggle("hidden",updated.ai_mode!=="ASSIST");
+      if(updated.ai_mode!=="ASSIST")discardSuggestion();
       $("chatMeta").textContent=`@${updated.other_user.username} · ${updated.category} · AI ${updated.ai_mode}`;
       renderChats();closeModal();toast("Chat Intelligence saved");
     }catch(e){toast(e.message,true)}
@@ -1045,6 +1054,7 @@ async function openGroup(gid,pushHistory=true){
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
+  $("groupSuggestionCard").classList.add("hidden");$("groupSuggestionCard").replaceChildren();
   $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");renderGroupMessages();renderChats();
   document.querySelector(".chat-layout").classList.add("open-chat");
   if(pushHistory&&location.hash!==`#group-${gid}`)history.pushState({view:"chats",groupId:gid},"",`#group-${gid}`);
@@ -1085,10 +1095,18 @@ async function sendGroupMessage(){
     scheduleChatListRefresh();
   }catch(e){if(token===state.token&&state.activeGroup?.id===gid&&!$("groupMessageInput").value)$("groupMessageInput").value=text;toast(e.message,true)}
 }
+let groupSuggest303=false;
 async function groupSuggestReply(){
-  if(!state.activeGroup)return;const r=await api(`/v24/groups/${state.activeGroup.id}/suggest`,{method:"POST"});const el=$("groupSuggestionCard");
+  if(!state.activeGroup||state.activeGroup.ai_mode!=="ASSIST"||groupSuggest303)return;
+  const gid=state.activeGroup.id,epoch=conversationEpoch300,token=state.token,btn=$("groupSuggestBtn");
+  groupSuggest303=true;btn.disabled=true;btn.textContent="Q is thinking…";
+  try{
+  const r=await api(`/v24/groups/${gid}/suggest`,{method:"POST"});
+  if(epoch!==conversationEpoch300||token!==state.token||state.activeGroup?.id!==gid||state.activeGroup.ai_mode!=="ASSIST")return;
+  const el=$("groupSuggestionCard");
   el.classList.remove("hidden");el.innerHTML=`<strong>Q group suggestion</strong><p></p><div class="suggestion-actions"><button class="ghost" data-a="d">Discard</button><button class="ghost" data-a="e">Edit</button><button class="primary" data-a="s">Send</button></div>`;el.querySelector("p").textContent=r.reply;
-  el.querySelector('[data-a="d"]').onclick=()=>el.classList.add("hidden");el.querySelector('[data-a="e"]').onclick=()=>{$("groupMessageInput").value=r.reply;el.classList.add("hidden")};el.querySelector('[data-a="s"]').onclick=async()=>{await api(`/v24/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text:r.reply})});el.classList.add("hidden");await openGroup(state.activeGroup.id)};
+  el.querySelector('[data-a="d"]').onclick=()=>el.classList.add("hidden");el.querySelector('[data-a="e"]').onclick=()=>{$("groupMessageInput").value=r.reply;el.classList.add("hidden")};el.querySelector('[data-a="s"]').onclick=async()=>{if(token!==state.token||state.activeGroup?.id!==gid)return;try{await api(`/v24/groups/${gid}/messages`,{method:"POST",body:JSON.stringify({text:r.reply})});el.classList.add("hidden");if(token===state.token&&state.activeGroup?.id===gid)await openGroup(gid)}catch(e){toast(e.message,true)}};
+  }catch(e){if(token===state.token&&state.activeGroup?.id===gid)toast(e.message,true)}finally{groupSuggest303=false;btn.disabled=false;btn.textContent="✨ Suggest reply"}
 }
 async function groupCatchup(){try{const r=await api(`/v24/groups/${state.activeGroup.id}/summary`,{method:"POST"});openModal(`<h3>🧠 Catch me up</h3><p>${escapeHtml(r.summary||"")}</p>${(r.decisions||[]).map(x=>`<p>✓ ${escapeHtml(x)}</p>`).join("")}${(r.actions||[]).map(x=>`<p>→ ${escapeHtml(x)}</p>`).join("")}`)}catch(e){toast(e.message,true)}}
 async function groupAsk(){openModal(`<h3>Q · ${escapeHtml(state.activeGroup.name)}</h3><textarea id="gqText" placeholder="What did everyone decide?"></textarea><button id="gqGo" class="primary full">Ask Q</button><div id="gqAns"></div>`);$("gqGo").onclick=async()=>{try{const r=await api(`/v24/groups/${state.activeGroup.id}/ask`,{method:"POST",body:JSON.stringify({question:$("gqText").value})});$("gqAns").innerHTML=`<div class="answer-box">${escapeHtml(r.answer)}</div>`}catch(e){$("gqAns").textContent=e.message}}}
@@ -1783,7 +1801,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.2").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.3").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
@@ -1814,3 +1832,4 @@ window.checkMessage=checkMessage;
 // V300_INSTALLED
 // V301_INSTALLED
 // V302_INSTALLED
+// V303_INSTALLED

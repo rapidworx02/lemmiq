@@ -1,5 +1,5 @@
 /* LEMMIQ 2.13.10: replace old flat Demo UI, retain previous non-predict upgrades. */
-#view-q-predict.v21310-active > :not(#v21310PredictRoot):not(.v300-predict-switch):not(#v300Trading){display:none!important}
+#view-q-predict.v21310-active > :not(#v21310PredictRoot){display:none!important}
 #v21310PredictRoot{margin:0 auto;max-width:1050px;padding:12px 8px 130px;color:var(--text)}
 .pq-head,.pq-actions,.pq-tabs,.pq-counters,.pq-data,.pq-line{display:flex;align-items:center;gap:12px;justify-content:space-between}
 .pq-head{margin-bottom:12px}.pq-head h2{margin:0}.pq-head small{color:var(--muted)}
@@ -42,3 +42,11 @@ body:has(#view-q-predict.active) #globalQOrb{display:none!important}
 #view-q-predict .v300-pool dd{overflow-wrap:anywhere}
 @media(max-width:650px){#view-q-predict .pq-markets{grid-template-columns:minmax(0,1fr)}#view-q-predict .pq-market{padding:12px}#view-q-predict .pq-filter{grid-template-columns:minmax(0,1fr)}}
 /* V302_INSTALLED */
+
+/* V303: the stable shell owns the mode controls and neither mode hides the shell. */
+#v21310PredictRoot>.v300-predict-switch{display:flex!important;gap:6px;margin:6px 0 10px}
+#v21310PredictRoot>.v300-predict-switch button[aria-pressed=true]{background:#6c4dff;color:#fff}
+#v21310PredictRoot>#v303PredictContent[hidden],#v21310PredictRoot>#v300Trading[hidden]{display:none!important}
+#v21310PredictRoot>#v300Trading:not([hidden]){display:block!important;padding:0}
+#v21310PredictRoot>.v303-build{display:block;text-align:right;color:var(--muted);font-size:10px;margin-top:14px}
+/* V303_INSTALLED */

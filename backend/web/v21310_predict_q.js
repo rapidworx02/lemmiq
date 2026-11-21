@@ -7,7 +7,37 @@ const api=(route,opts)=>window.api('/v21310/predict'+route,opts);const demo=(rou
 const state={mode:'DEMO',home:null,demo:null,filter:'ALL',sub:'ALL',network:'TRC20',qAmount:'1000',quote:null,order:null,admin:null,busy:false};
 const msg=(s,e=false)=>typeof window.toast==='function'?window.toast(s,e):alert(s);
 const jpost=data=>({method:'POST',body:JSON.stringify(data)});
-function root(){return $('v21310PredictRoot')}
+function root(){return $('v303PredictContent')}
+// V303: stable HTML shell, one owner, read-only preview.
+let mode303='predict',seq303=0,token303=null;
+const pools303=[['Q Shield AI',100,1000,30],['Q Pulse AI',500,5000,20],['Q Surge AI',1000,10000,10]];
+const session303=()=>window.lemmiqState?.token;
+function balance303(n){return n!=null&&Number.isFinite(Number(n))?money(n)+' Q':'Unavailable'}
+function preview303(data=null,loading=false){
+ const host=$('v300Trading');if(!host)return;
+ const rate=Number(data?.reference_usdt_per_q),valid=Number.isFinite(rate)&&rate>0;
+ const equiv=n=>valid?money(n/rate)+' Q':'Q equivalent unavailable';
+ host.innerHTML=`<section class="v302-preview-wallet"><small>Q Predict Wallet · available Q</small><strong>${loading?'Loading…':balance303(data?.available_q)}</strong><small>${valid?'Reference: '+money(rate)+' USDT/Q':'Reference price unavailable'}</small><small>Shared wallet for future allocations · No separate Q purchase</small></section><h2>AI Trading Pools</h2><p>Powered by RapidTradeX · Coming Soon</p><p class="v300-preview-note">Q Economy and Demo balances stay separate. Proposed sequential pools, monthly profit settlement and 12 monthly investment-unit unlocks.</p>${pools303.map(([name,min,cap,fee])=>`<article class="v300-pool"><h3>${name}</h3><dl><div><dt>Minimum allocation</dt><dd>${money(min)} USDT</dd><small>${equiv(min)}</small></div><div><dt>Pool capacity</dt><dd>${money(cap)} USDT</dd><small>${equiv(cap)}</small></div><div><dt>Member profit share</dt><dd>${100-fee}%</dd></div><div><dt>Admin performance fee</dt><dd>${fee}%</dd></div></dl><div class="v300-soon">Coming Soon · No allocations</div></article>`).join('')}<p class="v300-preview-note">Concept only. No trading, deposits, allocations or profit credits available. Capital losses are possible; returns and redemptions are not guaranteed. Subject to appropriate authorisation.</p>`;
+}
+function setMode303(next,refresh=true){
+ mode303=next==='trading'?'trading':'predict';const trading=mode303==='trading';const epoch=++seq303,token=session303();token303=token;
+ const panel=root(),preview=$('v300Trading');if(!panel||!preview)return;
+ panel.hidden=trading;preview.hidden=!trading;
+ for(const b of document.querySelectorAll('#v21310PredictRoot [data-v303-mode]'))b.setAttribute('aria-pressed',String(b.dataset.v303Mode===mode303));
+ if(!refresh)return;
+ if(!trading)return load();
+ preview303(null,true);if(!token){preview303();return;}
+ return api('/ui-config').then(data=>{if(epoch===seq303&&token===session303()&&mode303==='trading')preview303(data)}).catch(()=>{if(epoch===seq303&&token===session303()&&mode303==='trading')preview303()});
+}
+function refresh303(){if(token303!==session303())return setMode303('predict');return setMode303(mode303)}
+function init303(){
+ const shell=$('v21310PredictRoot');if(!shell||shell.dataset.bound303)return;shell.dataset.bound303='1';
+ shell.querySelectorAll('[data-v303-mode]').forEach(b=>b.onclick=()=>setMode303(b.dataset.v303Mode));
+ window.loadQPredict=refresh303;
+ if($('view-q-predict')?.classList.contains('active'))refresh303();
+ const app=$('appView');if(app)new MutationObserver(()=>{if(app.classList.contains('hidden')){++seq303;token303=null;state.mode='DEMO';state.home=null;state.demo=null;state.order=null;state.quote=null;root()?.replaceChildren();preview303();setMode303('predict',false)}}).observe(app,{attributes:true,attributeFilter:['class']});
+}
+
 function status(){return `<div class="pq-note">LEMMIQ Q Economy and Q Predict Q wallets are fully separate. ${esc(state.home?.notice||'')}</div>`}
 function wallet(){const h=state.home||{};return `<section class="pq-hero"><div class="eyebrow">Q PREDICT · DEDICATED WALLET</div><h2>Predict with Q</h2><p>Buy Q Predict Q using USDT, then use eligible Q on prediction markets.</p><div class="pq-counters"><div><small>Available</small><strong>${money(h.available_q)} Q</strong></div><div><small>Locked in markets</small><strong>${money(h.locked_q)} Q</strong></div></div><div class="pq-rates">Reference: ${money(h.reference_usdt_per_q)} USDT/Q · Buy +5%: ${money(h.buy_usdt_per_q)} · Sell −5%: ${money(h.sell_usdt_per_q)}</div></section>
  <div class="pq-actions"><button class="primary" id="pqBuy">Buy Q with USDT</button><button class="ghost" id="pqSell">Sell Q · Withdraw USDT</button><button class="ghost" id="pqActivity">Wallet activity</button></div>${status()}`}
@@ -30,7 +60,7 @@ function bindOrder(){$('pqCopyAddress')?.addEventListener('click',async()=>{try{
 function bindMain(){for(let e of root()?.querySelectorAll('[data-pq-mode]')||[])e.onclick=()=>{state.mode=e.dataset.pqMode;state.filter='ALL';state.sub='ALL';render();load()};$('pqRefresh')?.addEventListener('click',load);$('pqCategory')?.addEventListener('change',e=>{state.filter=e.target.value;state.sub='ALL';render()});$('pqSub')?.addEventListener('change',e=>{state.sub=e.target.value;render()});bindMarkets(state.mode==='DEMO');$('pqBuy')?.addEventListener('click',()=>{let el=$('pqDetail');el.innerHTML=formBuy();$('pqNetwork').value=state.network;$('pqQuote').onclick=buyQuote;$('pqClose').onclick=()=>el.replaceChildren();el.scrollIntoView({behavior:'smooth',block:'start'})});$('pqActivity')?.addEventListener('click',()=>{let el=$('pqDetail');el.innerHTML=activityPanel();$('pqClose').onclick=()=>el.replaceChildren()})}
 function render(){if(!root())return;let isDemo=state.mode==='DEMO';let h=isDemo?state.demo:state.home;root().innerHTML=`<div class="pq-head"><div><h2>Q Predict</h2><small>Separate wallet · No Q Economy transfers</small></div><button class="ghost" id="pqRefresh">↻ Refresh</button></div><div class="pq-tabs"><button data-pq-mode="DEMO" class="${isDemo?'on':''}">Demo</button><button data-pq-mode="REAL_Q" class="${!isDemo?'on':''}">Q Wallet</button></div>${isDemo?demoHeader():wallet()}<div id="pqDetail"></div>${marketsPanel(h?.markets||[],isDemo)}<div class="pq-note">${isDemo?'Practise freely with simulated Demo USDT.':'Q purchases and Q wagering remain server-gated. Buy/sell fees and market rules must be disclosed before any authorized live launch.'}</div>`;bindMain()}
 let loading300=new Map();
-async function load(){if(!$('view-q-predict')?.classList.contains('active')||$('view-q-predict')?.classList.contains('v300-trading-mode'))return;const mode=state.mode;if(loading300.has(mode))return loading300.get(mode);const work=(async()=>{try{const h=await (mode==='DEMO'?demo('/home'):api('/home'));if(mode==='DEMO')state.demo=h;else state.home=h;if(state.mode===mode)render()}catch(e){if(root()&&state.mode===mode)root().innerHTML=`<div class="pq-note">Unable to load Q Predict: ${esc(e.message)}</div>`}})();loading300.set(mode,work);try{await work}finally{loading300.delete(mode)}}
+async function load(){if(!$('view-q-predict')?.classList.contains('active')||mode303==='trading')return;const mode=state.mode,token=session303(),key=JSON.stringify([token,mode]);if(loading300.has(key))return loading300.get(key);const work=(async()=>{try{const h=await (mode==='DEMO'?demo('/home'):api('/home'));if(token!==session303())return;if(mode==='DEMO')state.demo=h;else state.home=h;if(state.mode===mode&&mode303==='predict')render()}catch(e){if(root()&&state.mode===mode&&mode303==='predict'&&token===session303())root().innerHTML=`<div class="pq-note">Unable to load Q Predict: ${esc(e.message)}</div>`}})();loading300.set(key,work);try{await work}finally{loading300.delete(key)}}
 window.v300PredictReference=async()=>{const h=await api('/ui-config');return h.reference_usdt_per_q};
 window.v300LoadPredict=load;
 window.v302PredictConfig=()=>api('/ui-config');
@@ -40,8 +70,9 @@ function renderAdmin(){let a=state.admin,host=$('pqAdmin');if(!a||!host)return;h
  host.querySelectorAll('[data-pq-approve]').forEach(b=>b.onclick=async()=>{if(!confirm('Independently verify this on-chain transfer and credit Q Predict wallet?'))return;try{await api(`/admin/buy/${b.dataset.pqApprove}/approve`,jpost({}));msg('Verified and Q credited');adminLoad()}catch(e){msg(e.message,true)}});
  host.querySelectorAll('[data-pq-reject]').forEach(b=>b.onclick=async()=>{let reason=prompt('Reason for rejecting purchase (minimum 8 characters)');if(!reason)return;try{await api(`/admin/buy/${b.dataset.pqReject}/reject`,jpost({reason}));msg('Order rejected');adminLoad()}catch(e){msg(e.message,true)}})
 }
-function mount(){const host=$('view-q-predict');if(host&&!root()){const n=document.createElement('div');n.id='v21310PredictRoot';host.classList.remove('v2138-active');host.classList.add('v21310-active');host.prepend(n);if(host.classList.contains('active'))load()}const existing=$('v29PredictAutomation');if(existing&&!$('pqAdmin')){let n=document.createElement('section');n.id='pqAdmin';n.className='pq-admin';existing.after(n);if($('view-q-admin')?.classList.contains('active'))adminLoad()}}
-document.addEventListener('DOMContentLoaded',()=>{mount();document.body.addEventListener('click',e=>{if(e.target.closest('[data-view="q-predict"]'))setTimeout(load,140);if(e.target.closest('[data-more-view="q-admin"]'))setTimeout(adminLoad,140)});let observer=new MutationObserver(()=>{if(!root()||($('v29PredictAutomation')&&!$('pqAdmin')))mount()});observer.observe(document.body,{childList:true,subtree:true})});
+function mount(){const host=$('view-q-predict');if(host&&root()){host.classList.remove('v2138-active');host.classList.add('v21310-active');init303()}const existing=$('v29PredictAutomation');if(existing&&!$('pqAdmin')){let n=document.createElement('section');n.id='pqAdmin';n.className='pq-admin';existing.after(n);if($('view-q-admin')?.classList.contains('active'))adminLoad()}}
+document.addEventListener('DOMContentLoaded',()=>{mount();document.body.addEventListener('click',e=>{if(e.target.closest('[data-view="q-predict"]'))setTimeout(()=>{if($('view-q-predict')?.classList.contains('active')&&!root()?.childElementCount&&mode303==='predict')refresh303()},140);if(e.target.closest('[data-more-view="q-admin"]'))setTimeout(adminLoad,140)});let observer=new MutationObserver(()=>{if(!root()||($('v29PredictAutomation')&&!$('pqAdmin')))mount()});observer.observe(document.body,{childList:true,subtree:true})});
 })();
 // V300_INSTALLED
 // V302_INSTALLED
+// V303_INSTALLED
