@@ -187,7 +187,7 @@ fun V21310PredictScreen(){
         }
         item{OutlinedButton(onClick={refresh()}){Text("Refresh wallet and markets")}}
         if(admin!=null)item{V21314CricketAdminCard()}
-        if(admin!=null)item{V21311AdminBroadcastCard()}
+        // V301: official broadcasts have moved to More → Communication Centre.
         if(admin!=null)item{
             Card{Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
                 Text("Master Admin · Treasury status",fontWeight=FontWeight.Bold)
@@ -281,3 +281,4 @@ fun V21310PredictScreen(){
     }
 }
 // V300_INSTALLED
+// V301_INSTALLED

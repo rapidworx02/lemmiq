@@ -1,0 +1,12 @@
+/* Sole mobile viewport owner; old V2.12.1 inline height removed. */
+@media(max-width:850px){
+ body.v300-conversation #appView:not(.hidden){position:fixed!important;inset:0 0 auto 0!important;width:100%!important;height:var(--v300-vh,100dvh)!important;max-height:none!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
+ body.v300-conversation #appView .workspace,body.v300-conversation #view-chats.active,body.v300-conversation #view-chats .chat-layout.open-chat,body.v300-conversation #view-chats .chat-layout.open-chat .chat-pane{display:flex!important;flex-direction:column!important;flex:1 1 0!important;min-height:0!important;height:auto!important;max-height:none!important;min-width:0!important;width:100%!important;margin:0!important;padding:0!important;overflow:hidden!important}
+ body.v300-conversation #activeChat:not(.hidden),body.v300-conversation #activeGroup:not(.hidden),body.v300-conversation #activeQThread:not(.hidden){display:flex!important;flex:1 1 0!important;flex-direction:column!important;height:auto!important;min-height:0!important;overflow:hidden!important}
+ body.v300-conversation #activeChat .messages,body.v300-conversation #activeGroup .messages,body.v300-conversation #activeQThread .messages{flex:1 1 0!important;min-height:0!important;height:auto!important;overflow-y:auto!important}
+ body.v300-conversation .chat-head,body.v300-conversation .composer,body.v300-conversation .v300-ask-row{flex:0 0 auto!important}
+ body.v300-conversation .chat-pane>.hidden{display:none!important}
+}
+.v301-support-links{display:grid;gap:8px;margin:12px 0}.v301-support-links a{color:inherit;text-align:center;padding:10px;border:1px solid var(--line,#777);border-radius:12px;text-decoration:none}.v301-support-panel{margin:12px 0;padding:14px}.v301-support-panel select,.v301-support-panel textarea,.v301-support-panel input{width:100%}.v301-support-panel button{margin:4px}.v301-ticket-line{padding:10px;border-bottom:1px solid var(--line,#777);white-space:pre-wrap;overflow-wrap:anywhere}.v301-ticket-line small{display:block;opacity:.8}.v301-admin-hidden[hidden]{display:none!important}
+
+#v301Communication[hidden],#v301SupportAdmin[hidden]{display:none!important}

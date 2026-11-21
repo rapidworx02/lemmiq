@@ -205,6 +205,7 @@ private fun Auth(vm:LemmiqViewModel){
                     shape=RoundedCornerShape(18.dp)
                 ){Text(if(vm.busy)"Please wait…" else if(signup)"Create account" else "Log in")}
                 TextButton(onClick={signup=!signup}){Text(if(signup)"Already have an account? Log in" else "New to LEMMIQ? Create account")}
+                V301GuestSupportLinks()
                 Text("Private beta — not end-to-end encrypted yet.",color=Muted,fontSize=10.sp)
             }
         }
@@ -337,6 +338,7 @@ private fun Home(vm:LemmiqViewModel){
                     "settings"->V241MoreSubPage("Settings",{morePage=null}){V2102SettingsScreen(vm)}
                     "privacy"->V241MoreSubPage("Privacy & Security",{morePage=null}){V2102PrivacyScreen(vm)}
                     "notifications"->V241MoreSubPage("Notifications",{morePage=null}){LemmiqNotificationCenterV2103()}
+                    "communication"->V241MoreSubPage("Communication Centre",{morePage=null}){V301CommunicationScreen()}
                     else->V241MoreMenu{morePage=it}
                 }
                 else->when(tab){
@@ -417,6 +419,7 @@ private fun V241MoreMenu(onOpen:(String)->Unit){
     )
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(top=8.dp,bottom=24.dp)){
         item{Text("More",fontSize=28.sp,fontWeight=FontWeight.Black,color=Ink,modifier=Modifier.padding(horizontal=20.dp,vertical=10.dp))}
+        item{V301AdminMoreEntry(onOpen={onOpen("communication")})}
         items(menuItems){entry->
             val info=entry.first
             Card(
@@ -2169,3 +2172,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
 }
 // V21318_MEDIA_INSTALLED
 // V300_INSTALLED
+// V301_INSTALLED

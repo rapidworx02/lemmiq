@@ -57,6 +57,7 @@
   <link rel="stylesheet" href="/web/v21317_ui.css?v=2.13.17">
   <link rel="stylesheet" href="/web/v21318_media.css?v=2.13.18">
   <link rel="stylesheet" href="/web/v300.css?v=3.0.0">
+  <link rel="stylesheet" href="/web/v301.css?v=3.0.1">
 </head>
 <body>
   <div class="orb orb-a"></div>
@@ -89,6 +90,7 @@
         <label>Referral code <span class="micro">(optional)</span><input id="regReferral" autocomplete="off" maxlength="40" placeholder="e.g. Q123-ABCDEF"></label>
         <button class="primary full" type="submit">Create account</button>
       </form>
+      <div class="v301-support-links"><a href="/web/support.html">Forgot password?</a><a href="/web/support.html">Chat with LEMMIQ Support · No login required</a></div>
       <div class="auth-download">
         <button id="androidDownloadPublicBtn" class="ghost full" type="button">📱 Download LEMMIQ for Android</button>
       </div>
@@ -490,6 +492,8 @@
       </section>
 
       <section id="view-q-admin" class="view">
+        <article id="v301Communication" class="card glass v301-support-panel" hidden><h2>Communication Centre</h2><p class="micro">Official announcements and existing broadcast campaigns.</p><div id="v301BroadcastHost"></div></article>
+        <article id="v301SupportAdmin" class="card glass v301-support-panel" hidden><h2>Support Centre</h2><p>Guest support tickets · Master Admin only. Existing signed-in support remains in the @lemmiq chat.</p><button class="ghost" type="button" id="v301SupportLoad">Load / refresh guest tickets</button><div id="v301TicketList"></div><div id="v301TicketDetail"></div><p id="v301AdminFeedback" role="status"></p></article>
         <article class="q28-hero glass">
           <div><span class="eyebrow">MASTER ADMIN</span><h2>Q Economy Admin</h2><p>Treasury, package payments, Q Market and economy controls.</p></div>
           <div class="q28-balance"><small>Role</small><strong id="q28AdminRole">—</strong><span>All actions are auditable</span></div>
@@ -597,7 +601,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=3.0.0" defer></script>
+  <script src="/web/app.js?v=3.0.1" defer></script>
   <script src="/web/v28.js?v=3.0.0" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
@@ -611,7 +615,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js" defer></script>
   <script src="/web/v21011.js?v=2.10.11" defer></script>
   <script src="/web/v212_image_gen.js?v=2.12.0" defer></script>
-  <script src="/web/v212_chat_layout_fix.js?v=2.12.1" defer></script>
+  <!-- V301: legacy height observer removed; compact viewport owns conversation geometry. -->
   <script src="/web/v2122_image_edit.js?v=2.13.18" defer></script>
   <script src="/web/v2123_support.js?v=2.12.3" defer></script>
   <script src="/web/v2124_admin_layout.js?v=2.13.0" defer></script>
@@ -631,15 +635,17 @@
   <script src="/web/v21310_predict_q.js?v=3.0.0" defer></script>
   <script src="/web/v21310_nav_fix.js?v=2.13.10" defer></script>
   <!-- V21311_RELEASE -->
-  <script src="/web/v21311_upgrade.js?v=2.13.11" defer></script>
+  <script src="/web/v21311_upgrade.js?v=3.0.1" defer></script>
   <script src="/web/v21312_predict_q.js?v=2.13.16" defer></script>
   <script src="/web/v21313_predict_orders.js?v=2.13.13" defer></script>
   <script src="/web/v21314_cricket.js?v=2.13.14" defer></script>
   <script src="/web/v21317_calls.js?v=2.13.17" defer></script>
   <script src="/web/v21317_ui.js?v=3.0.0" defer></script>
   <script src="/web/v21318_media.js?v=2.13.18" defer></script>
-  <script src="/web/v300.js?v=3.0.0" defer></script>
+  <script src="/web/v300.js?v=3.0.1" defer></script>
+  <script src="/web/v301_admin.js?v=3.0.1" defer></script>
 </body>
 </html>
 <!-- V21318_MEDIA_INSTALLED -->
 <!-- V300_INSTALLED -->
+<!-- V301_INSTALLED -->
