@@ -1,0 +1,12 @@
+#messageList,#groupMessageList{scroll-behavior:auto!important;overflow-anchor:none}
+.v306-market{border:1px solid #8b7cc555;border-radius:14px;padding:12px;margin:10px 0;overflow-wrap:anywhere}
+.v306-market-meta,.v306-actions,.v306-filter{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.v306-market p{margin:9px 0}.v306-market small{opacity:.76}.v306-filter>*{min-width:0;flex:1 1 120px}
+#v306Admin input[type=checkbox],#v306Calling input[type=checkbox]{width:auto;min-width:0}
+#callOverlay.v306-min-call{position:fixed!important;inset:auto 10px calc(88px + env(safe-area-inset-bottom)) auto!important;width:min(310px,calc(100vw - 20px))!important;height:auto!important;min-height:0!important;background:transparent!important;backdrop-filter:none!important;padding:0!important;display:block!important;z-index:10000!important}
+#callOverlay.v306-min-call #callCard{width:100%!important;max-width:none!important;min-height:0!important;padding:10px!important;box-sizing:border-box}
+#callOverlay.v306-min-call #callVideoStage{height:100px!important;min-height:0!important;max-height:100px!important}
+#callOverlay.v306-min-call #callAvatar,#callOverlay.v306-min-call #callEyebrow,#callOverlay.v306-min-call #callFoot,#callOverlay.v306-min-call #localVideo{display:none!important}
+#callOverlay.v306-min-call #callPerson{font-size:15px!important;margin:4px 0!important}#callOverlay.v306-min-call #callState{font-size:12px!important;margin:3px 0!important}#callOverlay.v306-min-call .call-actions{gap:4px!important;flex-wrap:wrap!important}#callOverlay.v306-min-call .call-actions button{width:36px!important;height:36px!important;min-width:0!important;padding:3px!important}
+.v306-jump{position:fixed;right:18px;bottom:calc(145px + env(safe-area-inset-bottom));z-index:25;border-radius:24px!important;background:var(--card,#fff)!important;color:#542bd8!important;box-shadow:0 3px 18px #0002}
+.v306-jump[hidden]{display:none!important}

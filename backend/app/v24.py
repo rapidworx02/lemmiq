@@ -653,6 +653,8 @@ def register_routes(current_user):
 
     @router.post("/v24/calls/start")
     async def call_start(body:CallStartIn,background:BackgroundTasks,u=Depends(current_user),db:Session=Depends(dep_db)):
+        from .v306_admin import calling_allowed
+        calling_allowed(db,u)
         if not livekit_ready():raise HTTPException(503,"LiveKit is not configured. Add LIVEKIT_URL, LIVEKIT_API_KEY and LIVEKIT_API_SECRET on Render.")
         c=db.get(Chat,body.chat_id)
         if not c or u.id not in (c.user1_id,c.user2_id):raise HTTPException(404,"Chat not found")

@@ -12,7 +12,7 @@ const state = {
   messages: [],
   groupMessages: [],
   chatCalls: [],
-  messagePageSize: 60,
+  messagePageSize: 30,
   chatHasMore: false,
   groupHasMore: false,
   chatListLoadedAt: 0,
@@ -524,12 +524,35 @@ async function loadOlderMessages(){
   const known=new Set(state.messages.map(x=>x.id));
   state.messages=[...rows.filter(x=>!known.has(x.id)),...state.messages];
   renderMessages(false);
-  requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
+
 }
 window.loadOlderMessages=loadOlderMessages;
 function formatChatText300(text){return escapeHtml(text||"").replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>")}
 function fileCard300(mid,a,kind){const name=a.name||a.kind||"Attachment",size=Number(a.size_bytes)||0,type=a.mime_type==='application/pdf'?'PDF':a.kind||'FILE';return `<button type="button" class="ghost v300-file-card" data-v300-file="${Number(mid)}" data-kind="${kind}" data-name="${escapeHtml(name)}"><span>📎</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(type)}${size>0?' · '+Math.max(1,Math.round(size/1024)).toLocaleString()+' KB':''}</small></span></button>`}
+// V306: preserve first visible message through DOM updates, jump before paint.
+function v306Snapshot(host){
+  const rect=host.getBoundingClientRect();const el=[...host.querySelectorAll('[data-mid]')].find(e=>e.getBoundingClientRect().bottom>rect.top);
+  return {top:host.scrollTop,id:el?.dataset.mid,offset:el?el.getBoundingClientRect().top-rect.top:0};
+}
+function v306Restore(host,snapshot,latest){
+  if(latest){host.scrollTop=host.scrollHeight;}
+  else {const el=snapshot.id?[...host.querySelectorAll('[data-mid]')].find(e=>e.dataset.mid===snapshot.id):null;
+    host.scrollTop=el?host.scrollTop+el.getBoundingClientRect().top-host.getBoundingClientRect().top-snapshot.offset:snapshot.top;}
+  v306JumpUpdate(host);
+}
+const v306Paging=new Map();
+function v306JumpUpdate(host){
+  const id=host.id+'Jump306';let button=document.getElementById(id);
+  if(!button){button=document.createElement('button');button.id=id;button.type='button';button.className='v306-jump ghost';button.textContent='↓ Latest';button.onclick=()=>{host.scrollTop=host.scrollHeight;v306JumpUpdate(host)};host.parentElement.appendChild(button);}
+  button.hidden=host.scrollHeight-host.scrollTop-host.clientHeight<130;
+}
+function v306Listen(host,group){host.addEventListener('scroll',()=>{v306JumpUpdate(host);if(host.scrollTop>80||host.clientHeight===0)return;
+  const key=conversationEpoch300+':'+host.id,has=group?state.groupHasMore:state.chatHasMore;
+  if(!has||v306Paging.has(key))return;
+  const p=Promise.resolve().then(()=>group?loadOlderGroupMessages():loadOlderMessages()).catch(e=>toast(e.message,true)).finally(()=>v306Paging.delete(key));v306Paging.set(key,p);
+},{passive:true});}
 function renderMessages(scrollToBottom=true){
+  const host306=$("messageList"),snap306=v306Snapshot(host306);
   const me=state.user?.id,items=[];
   (state.messages||[]).forEach(m=>items.push({type:"message",at:m.created_at,m}));
   (state.chatCalls||[]).forEach(c=>items.push({type:"call",at:c.started_at,c}));
@@ -566,7 +589,7 @@ function renderMessages(scrollToBottom=true){
   $("messageList").innerHTML=html;
   hydrateMediaPreviews("messageList");
   if(window.v2131HydrateChatOffers)window.v2131HydrateChatOffers();
-  if(scrollToBottom)setTimeout(()=>$("messageList").scrollTop=$("messageList").scrollHeight,30);
+  v306Restore(host306,snap306,scrollToBottom);
 }
 /* LEMMIQ_V21315_OPTIMISTIC_SEND */
 async function sendMessage(){
@@ -1079,11 +1102,12 @@ async function openGroup(gid,pushHistory=true){
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
   $("groupSuggestionCard").classList.add("hidden");$("groupSuggestionCard").replaceChildren();
-  $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");renderGroupMessages();renderChats();
   document.querySelector(".chat-layout").classList.add("open-chat");
+  $("groupAssistBar").classList.toggle("hidden",g.ai_mode!=="ASSIST");renderGroupMessages();renderChats();
   if(pushHistory&&location.hash!==`#group-${gid}`)history.pushState({view:"chats",groupId:gid},"",`#group-${gid}`);
 }
 function renderGroupMessages(scrollToBottom=true){
+  const host306=$("groupMessageList"),snap306=v306Snapshot(host306);
   let day="",html="";const me=state.user?.id;
   for(const m of state.groupMessages){
     const d=friendlyDay(m.created_at);if(d!==day){html+=`<div class="date-separator"><span>${escapeHtml(d)}</span></div>`;day=d}
@@ -1091,22 +1115,22 @@ function renderGroupMessages(scrollToBottom=true){
     if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
     else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,true);
     else if(a?.media_id)attach=fileCard300(m.id,a,"group");
-    html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div>${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${photo?attach:""}${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${escapeHtml(m.text)}</div>`:""}${photo?"":attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
+    html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}" data-mid="${m.id}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div>${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${photo?attach:""}${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${escapeHtml(m.text)}</div>`:""}${photo?"":attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
   }
   if(state.groupHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderGroupMessages()">↑ Load older messages</button></div>`+html;
-  $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");if(scrollToBottom)setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
+  $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");v306Restore(host306,snap306,scrollToBottom);
 }
 async function loadOlderGroupMessages(){
   if(!state.activeGroup||!state.groupHasMore||!state.groupMessages.length)return;
   const epoch=conversationEpoch300,token=state.token,gid=state.activeGroup.id;
   const host=$("groupMessageList"),beforeHeight=host?.scrollHeight||0,before=state.groupMessages[0].id;
-  const rows=await api(`/v24/groups/${state.activeGroup.id}/messages?limit=${state.messagePageSize}&before_id=${before}`);
+  const rows=await api(`/v24/groups/${state.activeGroup.id}/messages?limit=${state.messagePageSize}&before=${before}`);
   if(epoch!==conversationEpoch300||token!==state.token||state.activeGroup?.id!==gid)return;
   state.groupHasMore=rows.length>=state.messagePageSize;
   const known=new Set(state.groupMessages.map(x=>x.id));
   state.groupMessages=[...rows.filter(x=>!known.has(x.id)),...state.groupMessages];
   renderGroupMessages(false);
-  requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
+
 }
 window.loadOlderGroupMessages=loadOlderGroupMessages;
 async function sendGroupMessage(){
@@ -1246,7 +1270,7 @@ function prepareCallUi(user,stateText="Ringing…"){
   $("callPerson").textContent=user?.display_name||"LEMMIQ user";
   $("callAvatar").innerHTML=user?.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user?.display_name||"LEMMIQ"));
   $("callEyebrow").textContent=video?"LEMMIQ VIDEO":"LEMMIQ VOICE";
-  $("callFoot").textContent=`${video?"Video":"Voice"} call · LiveKit/WebRTC`;
+  $("callFoot").textContent="LEMMIQ V3.0.6";
   $("callVideoStage").classList.toggle("hidden",!video);
   $("callAvatar").classList.toggle("hidden",video);
   $("cameraCallBtn").classList.toggle("hidden",!video);
@@ -1787,6 +1811,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}});
   $("messageInput").addEventListener("input",()=>{clearTimeout(window.__draftTimer);const cid=state.activeChat?.id,token=state.token,draft=$("messageInput").value;window.__draftTimer=setTimeout(()=>{if(token===state.token&&state.activeChat?.id===cid)saveDraft(draft)},500)});
   $("fileInput").onchange=e=>{uploadAttachment(e.target.files[0]);e.target.value=""};
+  v306Listen($("messageList"),false);v306Listen($("groupMessageList"),true);
   $("voiceBtn").onclick=()=>toggleVoice("direct");$("callBtn").onclick=startVoiceCall;$("videoCallBtn").onclick=startVideoCall;$("chatSearchBtn").onclick=openChatSearch;$("chatMoreBtn").onclick=openChatMore;
   $("chatAiBtn").onclick=personalChatSettings;$("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
 

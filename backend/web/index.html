@@ -57,6 +57,7 @@
   <link rel="stylesheet" href="/web/v21317_ui.css?v=2.13.17">
   <link rel="stylesheet" href="/web/v21318_media.css?v=2.13.18">
   <link rel="stylesheet" href="/web/v300.css?v=3.0.5">
+  <link rel="stylesheet" href="/web/v306.css?v=3.0.6">
   <link rel="stylesheet" href="/web/v301.css?v=3.0.1">
 </head>
 <body>
@@ -501,6 +502,9 @@
       </section>
 
       <section id="view-q-admin" class="view">
+<article id="v306Admin" class="card glass"><h2>Q Predict Market Management Centre</h2><p class="micro">Recent markets across categories. Closing early stops new predictions; the original result-verification deadline remains unchanged.</p><button class="primary" id="v306Refresh" type="button">Load / refresh markets</button><div class="v306-filter"><input id="v306Search" placeholder="Search market ID or question"><select id="v306Status"><option value="">All statuses</option><option>LIVE</option><option>SUSPENDED</option><option>CLOSED</option><option>REVIEW</option><option>DRAFT</option><option>RESOLVED</option><option>VOID</option><option>ARCHIVED</option></select><select id="v306Category"><option value="">All categories</option></select></div><button class="ghost" type="button" hidden id="v306Bulk">Close selected (0)</button><p id="v306MarketStatus" role="status"></p><div id="v306Markets"></div></article>
+<article id="v306Calling" class="card glass"><h2>Calling policy · Master Admin</h2><button class="ghost" type="button" id="v306CallingLoad">Load current setting</button><label><input type="checkbox" id="v306PaidOnly"> Require active Q Starter Pack or higher for outgoing personal calls</label><button type="button" disabled class="primary" id="v306CallingSave">Save calling policy</button><p id="v306CallStatus" role="status"></p></article>
+
         <article id="v301Communication" class="card glass v301-support-panel" hidden><h2>Communication Centre</h2><p class="micro">Official announcements and existing broadcast campaigns.</p><div id="v301BroadcastHost"></div></article>
         <article id="v301SupportAdmin" class="card glass v301-support-panel" hidden><h2>Support Centre</h2><p>Guest support tickets · Master Admin only. Existing signed-in support remains in the @lemmiq chat.</p><button class="ghost" type="button" id="v301SupportLoad">Load / refresh guest tickets</button><div id="v301TicketList"></div><div id="v301TicketDetail"></div><p id="v301AdminFeedback" role="status"></p></article>
         <article class="q28-hero glass">
@@ -601,7 +605,7 @@
     </div>
   </div>
 
-  <div id="callOverlay" class="call-overlay hidden"><div id="callCard" class="call-card glass"><div id="callVideoStage" class="call-video-stage hidden"><div id="remoteVideo" class="call-remote-video"></div><div id="localVideo" class="call-local-video"></div></div><div id="callAvatar" class="avatar call-avatar">Q</div><span id="callEyebrow" class="eyebrow">LEMMIQ CALL</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="cameraCallBtn" class="ghost round hidden">📷</button><button id="flipCameraBtn" class="ghost round hidden">🔄</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><p id="callFoot" class="micro">LiveKit/WebRTC</p></div></div>
+  <div id="callOverlay" class="call-overlay hidden"><div id="callCard" class="call-card glass"><div id="callVideoStage" class="call-video-stage hidden"><div id="remoteVideo" class="call-remote-video"></div><div id="localVideo" class="call-local-video"></div></div><div id="callAvatar" class="avatar call-avatar">Q</div><span id="callEyebrow" class="eyebrow">LEMMIQ CALL</span><h2 id="callPerson">Calling…</h2><p id="callState">Ringing…</p><strong id="callTimer" class="call-timer">00:00</strong><div id="remoteAudio"></div><div class="call-actions"><button id="muteCallBtn" class="ghost round">🎙</button><button id="cameraCallBtn" class="ghost round hidden">📷</button><button id="flipCameraBtn" class="ghost round hidden">🔄</button><button id="speakerCallBtn" class="ghost round">🔊</button><button id="endCallBtn" class="danger round">☎</button></div><button id="v306MinCall" type="button" class="ghost">Minimise call</button><p id="callFoot" class="micro">LEMMIQ V3.0.6</p></div></div>
   <dialog id="modal">
     <div class="modal-card glass">
       <button id="closeModal" class="modal-close">×</button>
@@ -610,7 +614,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=3.0.5" defer></script>
+  <script src="/web/app.js?v=3.0.6" defer></script>
   <script src="/web/v28.js?v=3.0.0" defer></script>
   <script src="/web/v29.js?v=2.10.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
@@ -647,11 +651,12 @@
   <script src="/web/v21311_upgrade.js?v=3.0.1" defer></script>
   <script src="/web/v21312_predict_q.js?v=2.13.16" defer></script>
   <script src="/web/v21313_predict_orders.js?v=2.13.13" defer></script>
-  <script src="/web/v21314_cricket.js?v=2.13.14" defer></script>
+  <script src="/web/v21314_cricket.js?v=3.0.6" defer></script>
   <script src="/web/v21317_calls.js?v=2.13.17" defer></script>
   <script src="/web/v21317_ui.js?v=3.0.0" defer></script>
   <script src="/web/v21318_media.js?v=2.13.18" defer></script>
   <script src="/web/v300.js?v=3.0.5" defer></script>
+  <script src="/web/v306.js?v=3.0.6" defer></script>
   <script src="/web/v301_admin.js?v=3.0.1" defer></script>
 </body>
 </html>

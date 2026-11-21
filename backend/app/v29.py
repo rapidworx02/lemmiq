@@ -693,7 +693,7 @@ def _has_open_candidate(db: Session, template_code: str, signature: dict[str, An
     rows = db.scalars(select(PredictMarket).where(
         PredictMarket.template_code == template_code,
         PredictMarket.wallet_unit == "Q",
-        PredictMarket.status.in_(["REVIEW", "LIVE", "CLOSED", "RESOLVING"]),
+        PredictMarket.status.in_(["REVIEW", "LIVE", "SUSPENDED", "CLOSED", "RESOLVING"]),
     )).all()
     for row in rows:
         if row.status == "LIVE" and row.close_at <= utcnow():
@@ -767,7 +767,7 @@ def _auto_candidates(db: Session) -> list[PredictMarket]:
 
 def _settle_due(db: Session) -> dict[str, int]:
     cfg = _config(db); now = utcnow(); closed = resolved = failed = 0
-    for m in db.scalars(select(PredictMarket).where(PredictMarket.status == "LIVE", PredictMarket.close_at <= now)).all():
+    for m in db.scalars(select(PredictMarket).where(PredictMarket.status.in_(["LIVE", "SUSPENDED"]), PredictMarket.close_at <= now)).all():
         m.status = "CLOSED"; m.updated_at = now; closed += 1
     if cfg.auto_settlement:
         rows = db.scalars(select(PredictMarket).where(PredictMarket.status.in_(["CLOSED", "RESOLVING"]), PredictMarket.resolve_after <= now, PredictMarket.auto_resolve == True)).all()

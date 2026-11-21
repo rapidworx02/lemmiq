@@ -255,7 +255,7 @@ def register_v21314_cricket_markets(app,current_user,get_db):
         _require_admin(db,u,'READ')
         rows=db.scalars(select(PredictMarket).where(PredictMarket.template_code.like(PREFIX+'%'))
                         .order_by(PredictMarket.id.desc()).limit(80)).all()
-        return {'markets':[{'id':m.id,'question':m.question,'status':m.status,
+        return {'markets':[{'id':m.id,'question':m.question,'status':('VOID' if db.get(DemoResolution,m.id) and db.get(DemoResolution,m.id).outcome=='VOID' else 'RESOLVED' if db.get(DemoResolution,m.id) else m.status),
                 'template':m.template_code.removeprefix(PREFIX),'close_at':m.close_at.isoformat(),
                 'official_url':m.resolution_source_url,'reviewed':m.approved_by_user_id is not None}
                 for m in rows]}
