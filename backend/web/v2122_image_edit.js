@@ -121,6 +121,7 @@
       if(body)body.insertAdjacentElement('afterend',btn);else target.appendChild(btn);
     }
   }
+  window.lemmiqEditPhotoV21318=start;
   function setup(){
     for(const [id,kind] of [['messageList','direct'],['groupMessageList','group']]){
       const host=$(id);if(!host)continue;
@@ -135,3 +136,4 @@
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
+// V21318_MEDIA_INSTALLED

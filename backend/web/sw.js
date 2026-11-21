@@ -7,10 +7,12 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21317-lean-shell";
+const CACHE = "lemmiq-v21318-media";
 const SHELL = [
   "/web/",
-  "/web/app.js?v=2.13.17",
+  "/web/app.js?v=2.13.18",
+  "/web/v21318_media.css?v=2.13.18",
+  "/web/v21318_media.js?v=2.13.18",
   "/web/v21317_ui.js?v=2.13.17",
   "/web/v21317_calls.js?v=2.13.17",
   "/web/v21317_ui.css?v=2.13.17",
@@ -53,3 +55,4 @@ self.addEventListener("notificationclick",event=>{
   event.notification.close();const url=new URL(event.notification.data?.url||"/web/#chats",self.location.origin).href;
   event.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(list=>{for(const c of list){if("focus" in c){c.navigate(url);return c.focus()}}return self.clients.openWindow?self.clients.openWindow(url):undefined}));
 });
+// V21318_MEDIA_INSTALLED

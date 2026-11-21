@@ -754,7 +754,7 @@ private fun Chat(vm:LemmiqViewModel){
                     val prev=if(index>0)when(val x=timeline[index-1].second){is MessageDto->v24FriendlyDay(x.created_at);is CallDto->v24FriendlyDay(x.started_at);else->""} else null
                     if(day!=prev)V24DateSeparator(day)
                     when(val x=item.second){
-                        is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x},{editPhotoIdV2122=x.id})
+                        is MessageDto->Bubble(x,vm.store.userId,vm,{vm.trustCheck(x.text)},{actionMessage=x},{editPhotoIdV2122=x.id},{forwardMessage=x})
                         is CallDto->{
                             val isVideo=x.call_type.equals("VIDEO",true)
                             val base=if(isVideo)"Video call" else "Voice call"
@@ -808,20 +808,7 @@ private fun Chat(vm:LemmiqViewModel){
     }
 
     forwardMessage?.let{m->
-        val selected=remember(m.id){mutableStateListOf<Int>()}
-        AlertDialog(onDismissRequest={forwardMessage=null},title={Text("Forward message")},
-            text={LazyColumn(Modifier.heightIn(max=360.dp)){
-                item{Text(m.text,maxLines=3,overflow=TextOverflow.Ellipsis,modifier=Modifier.padding(bottom=8.dp))}
-                items(vm.chats,key={it.id}){chat->
-                    val checked=selected.contains(chat.id)
-                    Row(Modifier.fillMaxWidth().clickable{if(checked)selected.remove(chat.id)else selected.add(chat.id)}.padding(vertical=7.dp),verticalAlignment=Alignment.CenterVertically){
-                        Checkbox(checked,{if(it)selected.add(chat.id)else selected.remove(chat.id)})
-                        V24Avatar(chat.other_user,38);Spacer(Modifier.width(8.dp));Text(chat.other_user.display_name)
-                    }
-                }
-            }},
-            confirmButton={Button({vm.forwardMessage(m.id,selected.toList());forwardMessage=null},enabled=selected.isNotEmpty()){Text("Forward")}},
-            dismissButton={TextButton({forwardMessage=null}){Text("Cancel")}})
+        V21318ForwardDialog(vm,m.id,"direct",m.text.ifBlank{m.attachment?.name?:"Attachment"}){forwardMessage=null}
     }
 
     if(settings)Settings(c,vm){settings=false}
@@ -881,16 +868,16 @@ private fun Chat(vm:LemmiqViewModel){
 }
 
 @Composable
-private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onActions:()->Unit,onEditPhoto:()->Unit){
+private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onActions:()->Unit,onEditPhoto:()->Unit,onForward:()->Unit){
     val mine=m.sender_id==me
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
     val a=m.attachment
-    val isPhoto=isLemmiqImageAttachmentV2102(a)
+    val isPhoto=isLemmiqImageAttachmentV2102(a)&&!m.deleted_for_everyone
     var mediaError by remember(m.id){mutableStateOf<String?>(null)}
     val mediaId=a?.media_id
     var bitmap by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
-    var fullBitmapV21316 by remember(mediaId){mutableStateOf<android.graphics.Bitmap?>(null)}
+    // V21318: full image belongs to the viewer only.
     var photoOpen by remember(m.id){mutableStateOf(false)}
     // LEMMIQ_ANDROID_CREATORS_V2131: render PPV markers as locked cards, not text.
     val creatorOfferV2131=Regex("""^\[\[QCREATORS_PPV:(\d+)]]$""").matchEntire(m.text.trim())
@@ -913,23 +900,13 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
         }
     }
 
-    // Fetch full-resolution photo only when opened, not for every chat bubble.
-    LaunchedEffect(photoOpen,mediaId){
-        if(photoOpen && mediaId!=null && fullBitmapV21316==null){
-            runCatching{
-                val bytes=vm.mediaBytes(mediaId)
-                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
-                BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
-                var sample=1
-                while(bounds.outWidth/sample>1600 || bounds.outHeight/sample>1600)sample*=2
-                BitmapFactory.decodeByteArray(bytes,0,bytes.size,
-                    BitmapFactory.Options().apply{inSampleSize=sample})
-            }.onSuccess{if(it!=null)fullBitmapV21316=it}
-        }
-    }
+    val visionAction:()->Unit={if(mediaId!=null&&!vm.visionBusy){scope.launch{
+        try{vm.scanVisionBytes(vm.mediaBytes(mediaId),"Analyse this chat photo and give me the useful details.",m.id)}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){mediaError="Unable to load this photo"}
+    }}}
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
         Surface(
-            color=if(mine)Purple else Color.White,
+            color=if(isPhoto&&mine)Soft else if(mine)Purple else Color.White,
             shape=RoundedCornerShape(18.dp),
             shadowElevation=if(mine)0.dp else 1.dp
         ){
@@ -938,6 +915,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                     .widthIn(max=330.dp)
                     .padding(if(isPhoto)4.dp else 12.dp)
             ){
+                if(m.forwarded&&!m.deleted_for_everyone)Text("↗ Forwarded",fontSize=10.sp,color=if(mine&&!isPhoto)Color.White else Muted,modifier=Modifier.padding(4.dp))
                 if(!isPhoto){
                     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
                         if(m.ai_generated)Text("✨ AI AUTO",color=if(mine)Color(0xFFE0D9FF) else Purple,fontSize=9.sp,fontWeight=FontWeight.Bold)
@@ -966,7 +944,8 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                         contentDescription="Shared photo",
                                         modifier=Modifier
                                             .fillMaxWidth()
-                                            .heightIn(min=150.dp,max=360.dp)
+                                            .heightIn(max=420.dp)
+                                            .aspectRatio((bmp.width.toFloat()/bmp.height.coerceAtLeast(1)).coerceIn(.79f,2.2f))
                                             .clip(RoundedCornerShape(15.dp))
                                             .clickable{photoOpen=true},
                                         contentScale=ContentScale.Fit
@@ -977,6 +956,9 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                                         modifier=Modifier.align(Alignment.TopEnd).padding(6.dp).clickable(onClick=onActions)
                                     ){
                                         Text("⋯",color=Color.White,fontSize=18.sp,modifier=Modifier.padding(horizontal=9.dp,vertical=2.dp))
+                                    }
+                                    if(mediaId!=null)Box(Modifier.align(Alignment.BottomCenter).padding(5.dp)){
+                                        V21318PhotoActions(if(!vm.visionBusy)visionAction else null,onEditPhoto)
                                     }
                                     if(m.ai_generated){
                                         Surface(
@@ -995,38 +977,18 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                             ){
                                 Box(contentAlignment=Alignment.Center){
                                     if(mediaError==null)CircularProgressIndicator(modifier=Modifier.size(30.dp),strokeWidth=3.dp)
-                                    else Text("Unable to load this photo",color=if(mine)Color.White else Muted,fontSize=11.sp)
+                                    else Text("Unable to load this photo",color=Muted,fontSize=11.sp)
                                 }
                             }
 
                             if(m.text.isNotBlank())Text(
                                 m.text,
                                 Modifier.padding(horizontal=7.dp,vertical=6.dp),
-                                color=if(mine)Color.White else Ink
+                                color=Ink
                             )
 
-                            if(mediaId!=null)TextButton(
-                                enabled=!(vm.visionBusy&&vm.visionSourceMessageId==m.id),
-                                onClick={scope.launch{
-                                    try{
-                                        val bytes=vm.mediaBytes(mediaId)
-                                        vm.scanVisionBytes(bytes,"Analyse this chat photo and give me the useful details.",m.id)
-                                    }catch(_:Exception){mediaError="Unable to load this photo"}
-                                }},
-                                contentPadding=PaddingValues(horizontal=7.dp,vertical=2.dp)
-                            ){
-                                Text(
-                                    if(vm.visionBusy&&vm.visionSourceMessageId==m.id)"Analysing…"
-                                    else if(vm.error?.startsWith("Q Vision")==true)"↻ Retry Q Vision"
-                                    else "📷 Ask Q Vision",
-                                    color=if(mine)Color.White else Purple,
-                                    fontSize=11.sp
-                                )
-                            }
-                            if (mediaId != null) TextButton(onClick=onEditPhoto,
-                                contentPadding=PaddingValues(horizontal=7.dp,vertical=2.dp)) {
-                                Text("✨ Edit with Q", color=if(mine)Color.White else Purple, fontSize=11.sp)
-                            }
+                            // V21318: AI actions live on the photo overlay.
+
                         }
 
                         a.kind=="VIDEO" -> {
@@ -1071,8 +1033,8 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                 }
                 if(mediaError!=null && !isPhoto)Text(mediaError.orEmpty(),fontSize=10.sp,color=if(mine)Color.White else Color.Red)
                 Row(Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp),verticalAlignment=Alignment.CenterVertically){
-                    Text(v24Time(m.created_at)+(if(m.edited_at!=null)" · edited" else ""),color=if(mine)Color(0xFFDCD6FF) else Muted,fontSize=9.sp)
-                    if(mine)Text(if(m.read_at!=null)"  ✓✓" else "  ✓",color=Color(0xFFDCD6FF),fontSize=10.sp)
+                    Text(v24Time(m.created_at)+(if(m.edited_at!=null)" · edited" else ""),color=if(mine&&!isPhoto)Color(0xFFDCD6FF) else Muted,fontSize=9.sp)
+                    if(mine)Text(if(m.read_at!=null)"  ✓✓" else "  ✓",color=if(isPhoto)Purple else Color(0xFFDCD6FF),fontSize=10.sp)
                 }
                 if(!mine && a==null && !m.deleted_for_everyone)TextButton(onClick=onTrust,modifier=Modifier.align(Alignment.Start).heightIn(min=44.dp),contentPadding=PaddingValues(horizontal=0.dp,vertical=2.dp)){
                     Text("🛡 Fact / Scam Check",color=Purple,fontSize=12.sp,fontWeight=FontWeight.Bold)
@@ -1082,7 +1044,11 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
     }
 
     if(photoOpen){
-        (fullBitmapV21316?:bitmap)?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
+        if(!m.deleted_for_everyone&&mediaId!=null)bitmap?.let{bmp->
+            V21318PhotoViewer(preview=bmp,sender=if(mine)"You" else vm.active?.other_user?.display_name?:"Contact",
+                stamp="${v24FriendlyDay(m.created_at)} · ${v24Time(m.created_at)}",loadOriginal={vm.mediaBytes(mediaId)},
+                onDismiss={photoOpen=false},onVision=visionAction,onEdit=onEditPhoto,onActions=onActions,onForward=onForward)
+        }
     }
 }
 
@@ -2199,3 +2165,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
         dismissButton={TextButton({resetMoney=false}){Text("Cancel")}}
     )
 }
+// V21318_MEDIA_INSTALLED

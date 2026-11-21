@@ -370,6 +370,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
     suspend fun mediaBytes(id:Int)=api.mediaBytes(id)
     suspend fun mediaThumbnailBytes(id:Int)=api.mediaThumbnailBytesV21316(id)
+    suspend fun groupThumbnailV21318(id:Int)=api.groupThumbnailV21318(id)
+    suspend fun forwardMediaV21318(mid:Int,chatIds:List<Int>,groupIds:List<Int>,sourceKind:String):Int{
+        val count=api.forwardMediaV21318(mid,chatIds,groupIds,sourceKind)
+        refreshChats();if(groupIds.isNotEmpty())refreshGroups()
+        return count
+    }
 
     fun reloadExternalSettings(){
         externalEnabled=ExternalConsent.enabled(appCtx)
@@ -1328,3 +1334,4 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         }
     }
 }
+// V21318_MEDIA_INSTALLED

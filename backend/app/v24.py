@@ -41,7 +41,9 @@ def gattach(db,mid):
 
 def gmjson(db,m):
     sender=db.get(User,m.sender_id)
+    from .models import ForwardedMessage
     return {"id":m.id,"group_id":m.group_id,"sender_id":m.sender_id,
+            "forwarded":bool(db.get(ForwardedMessage,{"kind":"group","message_id":m.id})),
             "sender":_user_json(sender) if sender else None,"text":m.text,
             "created_at":m.created_at.isoformat(),"ai_generated":m.ai_generated,"attachment":gattach(db,m.id)}
 
@@ -96,6 +98,8 @@ class ReplyIn(BaseModel):
     reply_to_message_id:int
 class ForwardIn(BaseModel):
     chat_ids:list[int]=Field(default_factory=list,max_length=20)
+    group_ids:list[int]=Field(default_factory=list,max_length=20)
+    source_kind:str="direct"
 class ChatPrefIn(BaseModel):
     pinned:bool|None=None
     archived:bool|None=None
@@ -355,6 +359,16 @@ def register_routes(current_user):
         if not a or not m or not a.object_key:raise HTTPException(404,"Attachment not found")
         gmember(db,m.group_id,u.id);return StreamingResponse(media_store.stream(a.object_key),media_type=a.mime_type or "application/octet-stream")
 
+    @router.get("/v24/group-media/{mid}/thumb")
+    def group_media_thumb(mid:int,u=Depends(current_user),db:Session=Depends(dep_db)):
+        from fastapi.responses import Response
+        a=db.get(GroupMessageAttachment,mid); m=db.get(GroupMessage,mid)
+        if not a or not m or not a.object_key or not (a.kind=="PHOTO" or (a.mime_type or "").lower().startswith("image/")):
+            raise HTTPException(404,"Photo unavailable")
+        gmember(db,m.group_id,u.id)
+        return Response(media_store.thumbnail(a.object_key),media_type="image/webp",
+            headers={"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"})
+
     # -------- voice notes --------
     @router.post("/v24/chats/{cid}/voice")
     async def direct_voice(cid:int,background:BackgroundTasks,file:UploadFile=File(...),duration_ms:int=Form(0),u=Depends(current_user),db:Session=Depends(dep_db)):
@@ -467,17 +481,29 @@ def register_routes(current_user):
         return data
 
     @router.post("/v24/messages/{mid}/forward")
-    async def forward_message(mid:int,body:ForwardIn,u=Depends(current_user),db:Session=Depends(dep_db)):
-        source,_=direct_message_for_user(db,mid,u.id)
-        meta=db.get(MessageMeta,mid)
-        text="This message was deleted" if meta and meta.deleted_for_everyone else ((meta.edited_text if meta and meta.edited_text is not None else source.text) or "")
-        created=[]
-        for cid in list(dict.fromkeys(body.chat_ids))[:20]:
-            c=db.get(Chat,cid)
-            if not c or u.id not in (c.user1_id,c.user2_id):continue
-            m=Message(chat_id=cid,sender_id=u.id,text=text);c.updated_at=datetime.now(timezone.utc);db.add(m);db.flush();created.append(_msg_json(m,db))
+    @router.post("/v24/messages/{mid}/forward-media")
+    async def forward_message(mid:int,body:ForwardIn,background:BackgroundTasks,u=Depends(current_user),db:Session=Depends(dep_db)):
+        from .v21318_media import create_forwards
+        direct,groups=create_forwards(db,mid,u.id,body.chat_ids,body.group_ids,body.source_kind)
+        # Serialize only after attachments and forwarding metadata have been flushed.
+        created=[(_msg_json(m,db),other) for m,other in direct]
+        group_created=[(gmjson(db,m),g.id,g.name) for m,g in groups]
         db.commit()
-        return {"created":created}
+        # Commit first; notification failure must not undo or duplicate a message.
+        for data,other in created:
+            for uid in {other,u.id}:
+                try:await _push(uid,{"type":"message","data":data})
+                except Exception:pass
+            try:background.add_task(push_service.notify,_push_tokens(db,other),u.display_name,data["chat_id"],"Forwarded message",1)
+            except Exception:pass
+        for data,gid,gname in group_created:
+            try:await gpush(db,gid,{"type":"group_message","group_id":gid,"data":data})
+            except Exception:pass
+            try:
+                for x in db.scalars(select(GroupMember).where(GroupMember.group_id==gid,GroupMember.user_id!=u.id)).all():
+                    background.add_task(push_service.notify_data,_push_tokens(db,x.user_id),{"type":"group","group_id":gid,"group_name":gname,"sender_name":u.display_name,"body":"Forwarded message"})
+            except Exception:pass
+        return {"created":[d for d,_ in created],"groups":[d for d,_,_ in group_created],"count":len(created)+len(group_created)}
 
     @router.get("/v24/chats/{cid}/search")
     def search_chat(cid:int,q:str,u=Depends(current_user),db:Session=Depends(dep_db)):
@@ -784,3 +810,4 @@ def register_v24(app,current_user,get_db,push,push_tokens,user_json,msg_json):
     install(get_db,current_user,push,push_tokens,user_json,msg_json)
     register_routes(current_user)
     app.include_router(router)
+# V21318_MEDIA_INSTALLED

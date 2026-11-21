@@ -580,6 +580,11 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("text" to text,"reply_to_message_id" to replyTo)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v24/chats/$cid/reply").post(rb).build()),MessageDto::class.java)
     }
+    suspend fun forwardMediaV21318(mid:Int,chatIds:List<Int>,groupIds:List<Int>,sourceKind:String):Int{
+        val rb=gson.toJson(mapOf("chat_ids" to chatIds,"group_ids" to groupIds,"source_kind" to sourceKind)).toRequestBody(json)
+        val data=gson.fromJson(req(b("$base/v24/messages/$mid/forward-media").post(rb).build()),com.google.gson.JsonObject::class.java)
+        return data.get("count")?.asInt?.takeIf{it>0}?:throw IOException("No messages forwarded. Update server first.")
+    }
     suspend fun forwardMessage(mid:Int,chatIds:List<Int>){
         val rb=gson.toJson(mapOf("chat_ids" to chatIds)).toRequestBody(json)
         req(b("$base/v24/messages/$mid/forward").post(rb).build())
@@ -804,6 +809,14 @@ class Api(private val store:SessionStore){
             .header("Sec-WebSocket-Protocol",V21316Reliability.websocketProtocols(ticket))
             .build(),listener)
     }
+    suspend fun groupThumbnailV21318(id:Int):ByteArray=withContext(Dispatchers.IO){
+        mediaClient.newCall(b("$base/v24/group-media/$id/thumb").get().build()).execute().use{r->
+            if(!r.isSuccessful)throw IOException("Thumbnail HTTP ${r.code}")
+            val body=r.body?:throw IOException("Empty thumbnail")
+            if(body.contentLength()>512_000)throw IOException("Thumbnail too large")
+            body.bytes().also{if(it.size>512_000)throw IOException("Thumbnail too large")}
+        }
+    }
     suspend fun mediaThumbnailBytesV21316(id:Int):ByteArray=withContext(Dispatchers.IO){
         mediaClient.newCall(b("$base/v21316/media/thumb/$id").get().build()).execute().use{r->
             if(!r.isSuccessful)throw IOException("Thumbnail HTTP ${r.code}")
@@ -815,3 +828,4 @@ class Api(private val store:SessionStore){
         }
     }
 }
+// V21318_MEDIA_INSTALLED

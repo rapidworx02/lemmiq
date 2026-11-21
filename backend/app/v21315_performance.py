@@ -124,6 +124,9 @@ def _message_page(db: Session, cid: int, uid: int, limit: int, before: int | Non
     if not rows:
         return []
     ids = [m.id for m in rows]
+    from .models import ForwardedMessage
+    forwarded_ids = set(db.scalars(select(ForwardedMessage.message_id).where(
+        ForwardedMessage.kind == 'direct', ForwardedMessage.message_id.in_(ids))).all())
     meta = {x.message_id: x for x in db.scalars(
         select(MessageMeta).where(MessageMeta.message_id.in_(ids))
     ).all()}
@@ -166,6 +169,7 @@ def _message_page(db: Session, cid: int, uid: int, limit: int, before: int | Non
             'ai_generated': m.ai_generated,
             'edited_at': md.edited_at.isoformat() if md and md.edited_at else None,
             'deleted_for_everyone': deleted,
+            'forwarded': m.id in forwarded_ids and not deleted,
             'reply_to_message_id': md.reply_to_message_id if md else None,
             'attachment': ({
                 'kind': att.kind, 'name': att.original_name,
@@ -198,3 +202,4 @@ def register_v21315_performance(app, current_user, get_db):
         return _message_page(db, cid, u.id, limit, before if before is not None else before_id)
 
     app.include_router(router)
+# V21318_MEDIA_INSTALLED

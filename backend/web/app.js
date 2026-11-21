@@ -113,6 +113,9 @@ function saveSession(data){
   localStorage.setItem("lemmiq_user",JSON.stringify(state.user));
 }
 function logout(){
+  window.v318Media?.close();
+  for(const url of state.mediaBlobUrls.values())URL.revokeObjectURL(url);
+  state.mediaBlobUrls.clear();previewJobs.length=0;
   localStorage.removeItem("lemmiq_token");localStorage.removeItem("lemmiq_user");
   state.token="";state.user=null;
   if(state.socket) try{state.socket.close()}catch{}
@@ -400,48 +403,34 @@ function isImageAttachment(a){
   return a?.kind==="PHOTO" || mime.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/i.test(name);
 }
 function mediaPreviewHtml(messageId,a,isGroup=false){
-  const name=escapeHtml(a?.name||"Photo");
-  const endpoint=isGroup?`/v24/group-media/${messageId}`:`/v21316/media/thumb/${messageId}`;
-  const fullEndpoint=isGroup?endpoint:`/media/${messageId}`;
-  return `<button class="lemmiq-media-preview" data-media-endpoint="${escapeHtml(endpoint)}" data-full-media-endpoint="${escapeHtml(fullEndpoint)}" data-media-name="${name}">
-    <span class="lemmiq-media-loading">Loading photo…</span>
-  </button>`;
+  const name=escapeHtml(a?.name||"Photo"),kind=isGroup?"group":"direct";
+  const endpoint=isGroup?`/v24/group-media/${messageId}/thumb`:`/v21316/media/thumb/${messageId}`;
+  return `<div class="v318-photo-wrap" data-kind="${kind}" data-id="${Number(messageId)}"><button class="lemmiq-media-preview" data-media-endpoint="${escapeHtml(endpoint)}" data-media-name="${name}" data-kind="${kind}" data-id="${Number(messageId)}" aria-label="Open photo"><span class="lemmiq-media-loading">Loading photo…</span></button><div class="v318-photo-actions"><button type="button" data-v318-vision>Q Vision</button><button type="button" class="v2122-edit-trigger" data-source="${Number(messageId)}" data-v318-edit>Edit with Q</button><button type="button" data-v318-menu aria-label="Photo actions">⋯</button></div></div>`;
 }
 /* LEMMIQ_V21315_LAZY_MEDIA */
 const previewJobs=[];
 let previewActive=0;
 async function hydrateVisiblePreview(btn){
-  const endpoint=btn.dataset.mediaEndpoint;
+  const endpoint=btn.dataset.mediaEndpoint,token=state.token;
   try{
     let src=state.mediaBlobUrls.get(endpoint);
     if(!src){
-      const r=await fetch(endpoint,{headers:authHeaders()});
+      const r=await fetch(endpoint,{headers:authHeaders(),cache:"no-store"});
       if(!r.ok)throw new Error(`HTTP ${r.status}`);
       const blob=await r.blob();
+      if(token!==state.token||!btn.isConnected)return;
       if(!String(blob.type||"").startsWith("image/"))throw new Error("Not an image");
+      // Bounded thumbnail cache; do not cache original photo blobs.
       src=URL.createObjectURL(blob);state.mediaBlobUrls.set(endpoint,src);
+      while(state.mediaBlobUrls.size>160){const k=state.mediaBlobUrls.keys().next().value;URL.revokeObjectURL(state.mediaBlobUrls.get(k));state.mediaBlobUrls.delete(k)}
     }
-    if(!btn.isConnected)return;
+    if(!btn.isConnected||token!==state.token)return;
     btn.innerHTML=`<img src="${src}" alt="${escapeHtml(btn.dataset.mediaName||"Photo")}" loading="lazy" decoding="async">`;
-    btn.onclick=async()=>{
-      const full=btn.dataset.fullMediaEndpoint||endpoint;
-      try{
-        let large=state.mediaBlobUrls.get(full);
-        if(!large){
-          const r=await fetch(full,{headers:authHeaders()});
-          if(!r.ok)throw new Error(`HTTP ${r.status}`);
-          const blob=await r.blob();
-          if(!String(blob.type||'').startsWith('image/'))throw new Error('Not an image');
-          large=URL.createObjectURL(blob);state.mediaBlobUrls.set(full,large);
-        }
-        openMediaLightbox(large,btn.dataset.mediaName||'Photo');
-      }catch(e){toast('Unable to open full photo: '+e.message,true);}
-    };
+    btn.onclick=()=>window.v318Media?.show(btn.dataset.kind,Number(btn.dataset.id));
   }catch{
-    if(!btn.isConnected)return;
-    btn.classList.add("failed");
-    btn.innerHTML=`<span>📎 ${escapeHtml(btn.dataset.mediaName||"Attachment")}</span>`;
-    btn.onclick=()=>{};
+    if(!btn.isConnected||token!==state.token)return;
+    btn.classList.add("failed");btn.innerHTML=`<span>Photo unavailable · Retry</span>`;
+    btn.onclick=()=>{delete btn.dataset.loaded;btn.classList.remove("failed");enqueuePreview(btn)};
   }
 }
 function pumpPreviewJobs(){
@@ -465,6 +454,7 @@ const mediaPreviewObserver=typeof IntersectionObserver!=="undefined"?new Interse
 },{rootMargin:"250px"}):null;
 function hydrateMediaPreviews(hostId){
   const host=$(hostId);if(!host)return;
+  window.v318Media?.bind(host);
   host.querySelectorAll(".lemmiq-media-preview:not([data-loaded])").forEach(btn=>{
     if(mediaPreviewObserver)mediaPreviewObserver.observe(btn);else enqueuePreview(btn);
   });
@@ -509,19 +499,19 @@ function renderMessages(scrollToBottom=true){
       html+=`<div class="msg call-event"><strong>📞 ${label}</strong><div class="micro">${detail}</div></div>`;
       continue;
     }
-    const m=item.m,mine=m.sender_id===me,a=m.attachment;let attach="";
+    const m=item.m,mine=m.sender_id===me,a=m.attachment;const photo=Boolean(a?.media_id&&isImageAttachment(a)&&!m.deleted_for_everyone);let attach="";
     if(a?.kind==="CONTACT")attach=`<div class="answer-box">👤 <strong>${escapeHtml(a.contact_name)}</strong><br><small>${escapeHtml(a.contact_phone)}</small></div>`;
     else if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},false,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button><button class="mini" onclick="voiceAI(${m.id})">Q</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
     else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,false);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
     const quote=m.reply_to?`<div class="reply-quote">${escapeHtml(m.reply_to.text||"")}</div>`:"";
     const reactions=(m.reactions||[]).map(r=>`<button class="reaction-pill" onclick="reactMessage(${m.id},'${escapeHtml(r.emoji)}')">${escapeHtml(r.emoji)} ${r.count}</button>`).join("");
-    html+=`<div class="msg ${mine?"mine":"theirs"}" data-mid="${m.id}">
+    html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}" data-mid="${m.id}">
       <button class="mini msg-action-trigger message-menu" onclick="openMessageMenu(${m.id})">⋯</button>
-      ${m.ai_generated?`<div class="micro">✨ AI generated</div>`:""}${quote}
-      <div>${(window.v2131RenderChatOffer?.(m.text,mine))||escapeHtml(m.text).replace(/\n/g,"<br>")}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>
-      ${attach}${reactions?`<div class="reaction-strip">${reactions}</div>`:""}
-      ${!mine&&!m.deleted_for_everyone?`<div class="msg-actions"><button class="mini" onclick="checkMessage(${m.id})">🛡 Fact / Scam Check</button></div>`:""}
+      ${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${m.ai_generated&&!photo?`<div class="micro">✨ AI generated</div>`:""}${quote}${photo?attach:""}
+      ${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${(window.v2131RenderChatOffer?.(m.text,mine))||escapeHtml(m.text).replace(/\n/g,"<br>")}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>`:""}
+      ${photo?"":attach}${reactions?`<div class="reaction-strip">${reactions}</div>`:""}
+      ${!mine&&!m.deleted_for_everyone&&!photo?`<div class="msg-actions"><button class="mini" onclick="checkMessage(${m.id})">🛡 Fact / Scam Check</button></div>`:""}
       <div class="meta"><span>${timeOnly(m.created_at)}</span>${mine?`<span>${m.read_at?"✓✓":"✓"}</span>`:""}</div>
     </div>`;
   }
@@ -969,12 +959,13 @@ async function openMessageMenu(id){
   if($("maDeleteAll"))$("maDeleteAll").onclick=async()=>{if(confirm("Delete this message for everyone?")){await api(`/v24/messages/${id}?scope=everyone`,{method:"DELETE"});closeModal();await openChat(state.activeChat.id,false)}};
   $("maDeleteMe").onclick=async()=>{await api(`/v24/messages/${id}?scope=me`,{method:"DELETE"});closeModal();await openChat(state.activeChat.id,false)};
 }
-async function openForwardDialog(m){
-  openModal(`<h3>Forward message</h3><p>${escapeHtml(m.text||"")}</p><div id="forwardTargets"></div><button id="forwardNow" class="primary full">Forward</button>`);
-  const selected=new Set();
-  $("forwardTargets").innerHTML=state.chats.map(c=>`<label class="check-row"><input type="checkbox" data-fwd="${c.id}"> ${escapeHtml(c.other_user.display_name)}</label>`).join("");
-  qsa("[data-fwd]").forEach(x=>x.onchange=()=>x.checked?selected.add(Number(x.dataset.fwd)):selected.delete(Number(x.dataset.fwd)));
-  $("forwardNow").onclick=async()=>{if(!selected.size)return toast("Choose at least one chat",true);await api(`/v24/messages/${m.id}/forward`,{method:"POST",body:JSON.stringify({chat_ids:[...selected]})});closeModal();toast("Message forwarded")};
+async function openForwardDialog(m,sourceKind="direct"){
+  if(m.deleted_for_everyone||String(m.text||"").includes("[[QCREATORS_"))return toast("This message cannot be forwarded",true);
+  openModal(`<h3>Forward message</h3><p>${escapeHtml(m.text||m.attachment?.name||"Attachment")}</p><p class="micro">Choose up to 20 conversations.</p><div id="forwardTargets"></div><p id="forwardError" role="status"></p><button id="forwardNow" class="primary full">Forward</button>`);
+  const chats=new Set(),groups=new Set();
+  $("forwardTargets").innerHTML=(state.chats||[]).map(c=>`<label class="check-row"><input type="checkbox" data-fwd="${Number(c.id)}" data-kind="direct"> ${escapeHtml(c.other_user.display_name)}</label>`).join("")+(state.groups||[]).map(g=>`<label class="check-row"><input type="checkbox" data-fwd="${Number(g.id)}" data-kind="group"> ${escapeHtml(g.name)}</label>`).join("");
+  qsa("[data-fwd]").forEach(x=>x.onchange=()=>{const set=x.dataset.kind==="group"?groups:chats,id=Number(x.dataset.fwd);if(!x.checked)set.delete(id);else if(chats.size+groups.size<20)set.add(id);else x.checked=false});
+  $("forwardNow").onclick=async()=>{const button=$("forwardNow");if(button.disabled)return;if(!chats.size&&!groups.size)return toast("Choose at least one chat",true);button.disabled=true;try{const result=await api(`/v24/messages/${m.id}/forward-media`,{method:"POST",body:JSON.stringify({chat_ids:[...chats],group_ids:[...groups],source_kind:sourceKind})});if(!result.count)throw Error("No messages forwarded. Update the server first.");closeModal();toast(`Forwarded to ${result.count} conversation(s)`);scheduleChatListRefresh();}catch(e){const el=$("forwardError");if(el)el.textContent=e.message||"Forward failed";}finally{button.disabled=false}};
 }
 async function saveDraft(text){
   if(!state.activeChat)return;
@@ -1033,11 +1024,11 @@ function renderGroupMessages(){
   let day="",html="";const me=state.user?.id;
   for(const m of state.groupMessages){
     const d=friendlyDay(m.created_at);if(d!==day){html+=`<div class="date-separator"><span>${escapeHtml(d)}</span></div>`;day=d}
-    const mine=m.sender_id===me,a=m.attachment;let attach="";
+    const mine=m.sender_id===me,a=m.attachment,photo=Boolean(a?.media_id&&isImageAttachment(a));let attach="";
     if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
     else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,true);
     else if(a?.media_id)attach=`<button class="mini" onclick="downloadGroupMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
-    html+=`<div class="msg ${mine?"mine":"theirs"}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div><div>${escapeHtml(m.text)}</div>${attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
+    html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div>${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${photo?attach:""}${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${escapeHtml(m.text)}</div>`:""}${photo?"":attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
   }
   if(state.groupHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderGroupMessages()">↑ Load older messages</button></div>`+html;
   $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
@@ -1760,7 +1751,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.17").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.18").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
@@ -1787,3 +1778,4 @@ window.loadChats=loadChats;
 window.setView=setView;
 window.askAgent=askAgent;
 window.checkMessage=checkMessage;
+// V21318_MEDIA_INSTALLED

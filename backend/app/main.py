@@ -27,7 +27,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.17")
+app = FastAPI(title="LEMMIQ Server", version="2.13.18")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -128,13 +128,15 @@ def get_settings(db: Session, cid: int, uid: int):
     return s
 
 def msg_json(m: Message, db: Session | None = None):
+    from .models import ForwardedMessage
+    forwarded = bool(db is not None and db.get(ForwardedMessage, {"kind":"direct","message_id":m.id}))
     meta = db.get(MessageMeta, m.id) if db is not None else None
     deleted = bool(meta and meta.deleted_for_everyone)
     effective_text = "This message was deleted" if deleted else ((meta.edited_text if meta and meta.edited_text is not None else m.text) or "")
     data = {"id": m.id, "chat_id": m.chat_id, "sender_id": m.sender_id, "text": effective_text,
             "created_at": m.created_at.isoformat(), "read_at": m.read_at.isoformat() if m.read_at else None,
             "ai_generated": m.ai_generated, "edited_at": meta.edited_at.isoformat() if meta and meta.edited_at else None,
-            "deleted_for_everyone": deleted, "reply_to_message_id": meta.reply_to_message_id if meta else None}
+            "deleted_for_everyone": deleted, "forwarded": forwarded and not deleted, "reply_to_message_id": meta.reply_to_message_id if meta else None}
     attach = None if deleted else (db.get(MessageAttachment, m.id) if db is not None else None)
     voice = db.get(VoiceNote, m.id) if db is not None and attach and attach.kind == "VOICE" else None
     data["attachment"] = ({"kind": attach.kind, "name": attach.original_name,
@@ -833,7 +835,11 @@ def private_media(message_id:int,u:User=Depends(current_user),db:Session=Depends
     if not item or not item.object_key:
         raise HTTPException(404,"Attachment not found")
     message=db.get(Message,message_id)
+    if not message:raise HTTPException(404,"Attachment not found")
     ensure_member(db,message.chat_id,u.id)
+    meta=db.get(MessageMeta,message_id)
+    if (meta and meta.deleted_for_everyone) or db.get(MessageHidden,{"message_id":message_id,"user_id":u.id}):
+        raise HTTPException(404,"Attachment not found")
     safe_name=(item.original_name or "file").replace('"','').replace('\r','').replace('\n','')
     return StreamingResponse(media_store.stream(item.object_key),media_type=item.mime_type or "application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{safe_name}"',
@@ -1074,7 +1080,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "2.13.17",
+        "version": "2.13.18",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1214,3 +1220,4 @@ def web_root():
 
 if WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="lemmiq-web")
+# V21318_MEDIA_INSTALLED

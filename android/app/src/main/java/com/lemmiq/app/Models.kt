@@ -11,7 +11,7 @@ data class MessageDto(
     val id:Int,val chat_id:Int,val sender_id:Int,val text:String,val created_at:String,
     val read_at:String?=null,val ai_generated:Boolean=false,val attachment:AttachmentDto?=null,
     val edited_at:String?=null,val deleted_for_everyone:Boolean=false,val reply_to_message_id:Int?=null,
-    val reply_to:ReplyPreviewDto?=null,val reactions:List<ReactionDto> = emptyList()
+    val reply_to:ReplyPreviewDto?=null,val reactions:List<ReactionDto> = emptyList(),val forwarded:Boolean=false
 )
 
 data class ReplyPreviewDto(val id:Int=0,val sender_id:Int=0,val text:String="")
@@ -124,7 +124,7 @@ data class GroupDto(
 )
 data class GroupMessageDto(
     val id:Int=0,val group_id:Int=0,val sender_id:Int=0,val sender:UserDto?=null,val text:String="",
-    val created_at:String="",val ai_generated:Boolean=false,val attachment:AttachmentDto?=null
+    val created_at:String="",val ai_generated:Boolean=false,val attachment:AttachmentDto?=null,val forwarded:Boolean=false
 )
 data class GroupSummaryDto(val summary:String="",val decisions:List<String> = emptyList(),val actions:List<String> = emptyList())
 data class GroupAskDto(val answer:String="",val references:List<String> = emptyList())
@@ -385,3 +385,4 @@ data class PredictLeaderDto(
     val rank:Int=0,val user:UserDto?=null,val accuracy_percent:Double=0.0,
     val net_won_q:Double=0.0,val net_won_pc:Double=0.0,val resolved:Int=0
 )
+// V21318_MEDIA_INSTALLED

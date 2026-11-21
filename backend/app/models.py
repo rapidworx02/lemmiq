@@ -379,3 +379,11 @@ class UserReport(Base):
     reason: Mapped[str] = mapped_column(String(60), default="OTHER")
     details: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+# V21318: separate metadata table; existing messages need no migration/backfill.
+class ForwardedMessage(Base):
+    __tablename__ = "v21318_forwarded_messages"
+    kind: Mapped[str] = mapped_column(String(10), primary_key=True)
+    message_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+# V21318_MEDIA_INSTALLED

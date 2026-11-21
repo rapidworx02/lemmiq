@@ -335,11 +335,14 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     var mediaError by remember(m.id){mutableStateOf<String?>(null)}
     var editPhotoV2122 by remember(m.id){mutableStateOf(false)}
     var photoOpen by remember(m.id){mutableStateOf(false)}
+    var forwarding by remember(m.id){mutableStateOf(false)}
+    val scope=rememberCoroutineScope()
+    val visionAction:()->Unit={if(!vm.visionBusy)scope.launch{try{vm.scanVisionBytes(vm.groupMediaBytes(m.id),"Analyse this group photo and give me useful details.")}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(_:Exception){mediaError="Unable to load photo"}}}
 
     LaunchedEffect(mediaId,isPhoto){
         if(mediaId!=null && isPhoto){
             try{
-                val bytes=withContext(Dispatchers.IO){vm.groupMediaBytes(m.id)}
+                val bytes=withContext(Dispatchers.IO){vm.groupThumbnailV21318(m.id)}
                 val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
                 BitmapFactory.decodeByteArray(bytes,0,bytes.size,bounds)
                 var sample=1
@@ -351,19 +354,23 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     }
 
     Column(Modifier.fillMaxWidth(),horizontalAlignment=if(mine)Alignment.End else Alignment.Start){
-        Surface(color=if(mine)V24Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
+        Surface(color=if(isPhoto&&mine)V24Soft else if(mine)V24Purple else Color.White,shape=RoundedCornerShape(18.dp),shadowElevation=if(mine)0.dp else 1.dp){
             Column(Modifier.widthIn(max=330.dp).padding(if(isPhoto)4.dp else 11.dp)){
                 if(!mine)Text(m.sender?.display_name?:"Member",fontSize=9.sp,color=V24Purple,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=if(isPhoto)6.dp else 0.dp,vertical=if(isPhoto)4.dp else 0.dp))
+                if(m.forwarded)Text("↗ Forwarded",fontSize=10.sp,color=if(mine&&!isPhoto)Color.White else V24Muted)
                 when{
                     a?.kind=="VOICE" -> V24VoiceContent(a,m.id,true,vm,mine)
                     isPhoto -> {
                         bitmap?.let{bmp->
+                            Box(Modifier.fillMaxWidth()){
                             Image(
                                 bmp.asImageBitmap(),
                                 contentDescription="Group photo",
                                 modifier=Modifier.fillMaxWidth().heightIn(min=150.dp,max=360.dp).clip(RoundedCornerShape(15.dp)).clickable{photoOpen=true},
                                 contentScale=ContentScale.Fit
                             )
+                            Box(Modifier.align(Alignment.BottomCenter).padding(5.dp)){V21318PhotoActions(visionAction,{editPhotoV2122=true},{forwarding=true})}
+                            }
                         } ?: Surface(
                             color=if(mine)Color.White.copy(alpha=.10f) else V24Soft,
                             shape=RoundedCornerShape(14.dp),
@@ -374,17 +381,16 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
                                 else Text("Unable to load this photo",fontSize=11.sp,color=if(mine)Color.White else V24Muted)
                             }
                         }
-                        if(m.text.isNotBlank())V2138LinkedText(m.text,if(mine)Color.White else V24Ink)
-                        if(mediaId!=null)TextButton(onClick={editPhotoV2122=true}){Text("✨ Edit with Q", fontSize=11.sp, color=if(mine)Color.White else V24Purple)}
+                        if(m.text.isNotBlank())V2138LinkedText(m.text,V24Ink)
                     }
                     else -> V2138LinkedText(m.text,if(mine)Color.White else V24Ink)
                 }
-                if(m.text.isNotBlank())TextButton(onClick={
+                if(!isPhoto&&m.text.isNotBlank())TextButton(onClick={
                     val cb=ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     cb.setPrimaryClip(android.content.ClipData.newPlainText("LEMMIQ group message",m.text))
                     android.widget.Toast.makeText(ctx,"Message copied",android.widget.Toast.LENGTH_SHORT).show()
                 }){Text("Copy",fontSize=10.sp,color=if(mine)Color.White else V24Purple)}
-                Text(v24Time(m.created_at),fontSize=9.sp,color=if(mine)Color.White.copy(alpha=.75f) else V24Muted,modifier=Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp))
+                Text(v24Time(m.created_at),fontSize=9.sp,color=if(mine&&!isPhoto)Color.White.copy(alpha=.75f) else V24Muted,modifier=Modifier.align(Alignment.End).padding(horizontal=if(isPhoto)7.dp else 0.dp,vertical=if(isPhoto)3.dp else 0.dp))
             }
         }
     }
@@ -392,8 +398,9 @@ private fun V24GroupBubble(m:GroupMessageDto,vm:LemmiqViewModel){
     if(editPhotoV2122) V2122ImageEditDialog(sourceKind="group", sourceMessageId=m.id,
         groupId=vm.activeGroup?.id, onClose={editPhotoV2122=false},
         onSent={vm.activeGroup?.let{vm.openGroup(it)}; Unit})
+    if(forwarding)V21318ForwardDialog(vm,m.id,"group",m.text.ifBlank{m.attachment?.name?:"Attachment"}){forwarding=false}
     if(photoOpen){
-        bitmap?.let{bmp->LemmiqFullScreenPhotoV2102(bitmap=bmp,onDismiss={photoOpen=false})}
+        bitmap?.let{bmp->V21318PhotoViewer(preview=bmp,sender=if(mine)"You" else m.sender?.display_name?:"Group member",stamp=v24Time(m.created_at),loadOriginal={vm.groupMediaBytes(m.id)},onDismiss={photoOpen=false},onVision=visionAction,onEdit={editPhotoV2122=true},onForward={forwarding=true})}
     }
 }
 
@@ -781,3 +788,4 @@ fun v24FriendlyDay(iso:String):String=runCatching{
         else->if(d.isAfter(now.minusDays(7)))d.format(DateTimeFormatter.ofPattern("EEEE")) else d.format(DateTimeFormatter.ofPattern("d MMMM yyyy"))
     }
 }.getOrElse{""}
+// V21318_MEDIA_INSTALLED
