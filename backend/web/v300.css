@@ -68,3 +68,40 @@ body:has(#view-q-economy.active) #globalQOrb,body:has(#view-q-creators.active) #
 #view-q-economy #q28Tab-wallet .grid.two{grid-template-columns:1fr}#view-q-economy #q28Tab-wallet .card{padding:12px;border-radius:14px}
 #view-q-economy .v2136-q-switcher,#view-q-predict .v2136-q-switcher,#v2134MoreInbox{display:none!important}
 /* V304_INSTALLED */
+
+/* V305: mobile chat list is its own vertically scrollable region. */
+@media(max-width:900px){
+ body.v305-chat-list:not(.v300-conversation) #appView:not(.hidden){
+  position:fixed!important;inset:0 0 auto 0!important;width:100%!important;
+  height:var(--v300-vh,100dvh)!important;min-height:0!important;max-height:none!important;
+  box-sizing:border-box!important;display:flex!important;flex-direction:column!important;
+  padding:8px 8px max(8px,env(safe-area-inset-bottom,0px))!important;
+  gap:6px!important;overflow:hidden!important;
+ }
+ body.v305-chat-list:not(.v300-conversation) #appView .workspace{
+  order:0;display:flex!important;flex-direction:column!important;flex:1 1 0!important;
+  min-height:0!important;min-width:0!important;height:auto!important;overflow:hidden!important;
+ }
+ body.v305-chat-list:not(.v300-conversation) #appView .topbar{flex:0 0 auto!important}
+ body.v305-chat-list:not(.v300-conversation) #appView .sidebar{
+  order:1;position:relative!important;inset:auto!important;flex:0 0 auto!important;
+  width:100%!important;box-sizing:border-box!important;margin:0!important;
+ }
+ body.v305-chat-list:not(.v300-conversation) #view-chats.active,
+ body.v305-chat-list:not(.v300-conversation) #view-chats.active .chat-layout:not(.open-chat),
+ body.v305-chat-list:not(.v300-conversation) #view-chats.active .chat-layout:not(.open-chat) .conversation-list{
+  display:flex!important;flex-direction:column!important;flex:1 1 0!important;
+  height:auto!important;min-height:0!important;max-height:none!important;min-width:0!important;
+  overflow:hidden!important;
+ }
+ body.v305-chat-list:not(.v300-conversation) #view-chats .chat-layout:not(.open-chat){gap:0!important}
+ body.v305-chat-list:not(.v300-conversation) #view-chats .chat-layout:not(.open-chat) .chat-pane{display:none!important}
+ body.v305-chat-list #view-chats .conversation-list > :not(#conversationList){flex:0 0 auto!important}
+ body.v305-chat-list #view-chats #conversationList{
+  flex:1 1 0!important;min-height:0!important;height:auto!important;max-height:none!important;
+  overflow-y:auto!important;overflow-x:hidden!important;touch-action:pan-y;
+  overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;
+  padding-bottom:76px!important;scroll-padding-bottom:76px;
+ }
+}
+/* V305_INSTALLED */

@@ -151,7 +151,25 @@ function showApp(){
   if(window.refreshV28Access) window.refreshV28Access();
 }
 let conversationEpoch300=0;
+// Chat-list position stays in memory only and is keyed to the current user/filter.
+let chatListScroll305=0,chatListKey305='',chatListRestoreSeq305=0,chatListRestoring305=false;
+function chatListFilterKey305(){return JSON.stringify([state.user?.id??null,($("chatFilter")?.value||"").toLowerCase().trim(),state.chatFilterMode]);}
+function chatListVisible305(el){return !!(el&&el.clientHeight>0&&$("view-chats")?.classList.contains("active")&&!document.querySelector(".chat-layout")?.classList.contains("open-chat"));}
+function rememberChatList305(){
+  const el=$("conversationList"),key=chatListFilterKey305();
+  if(chatListKey305!==key){chatListKey305=key;chatListScroll305=0;return;}
+  if(!chatListRestoring305&&chatListVisible305(el))chatListScroll305=el.scrollTop;
+}
+function restoreChatList305(){
+  const el=$("conversationList"),key=chatListFilterKey305(),seq=++chatListRestoreSeq305;
+  if(chatListKey305!==key){chatListKey305=key;chatListScroll305=0;}
+  const top=chatListScroll305;chatListRestoring305=true;
+  // The layout observer applies the list/home class before the next frame.
+  if(chatListVisible305(el))el.scrollTop=top;
+  requestAnimationFrame(()=>{if(seq!==chatListRestoreSeq305)return;chatListRestoring305=false;if(key===chatListFilterKey305()&&chatListVisible305(el))el.scrollTop=top;});
+}
 function chatsHome(pushHistory=false){
+  rememberChatList305();
   ++conversationEpoch300;
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
   $("globalQOrb")?.classList.remove("q2106-hide-orb");
@@ -160,14 +178,14 @@ function chatsHome(pushHistory=false){
   if($("activeChat"))$("activeChat").classList.add("hidden");
   if($("activeGroup"))$("activeGroup").classList.add("hidden");
   if($("emptyChat"))$("emptyChat").classList.remove("hidden");
-  if($("conversationList"))$("conversationList").scrollTop=0;
   window.scrollTo({top:0,behavior:"instant"});
-  renderChats();
+  renderChats(true);
   loadChats().catch(()=>{});
   if(pushHistory)history.pushState({view:"chats"},"","#chats");
 }
 
 function setView(name){
+  rememberChatList305();
   qsa(".view").forEach(v=>v.classList.remove("active"));
   if(name!=="chats"){++conversationEpoch300;$("globalQOrb")?.classList.remove("q2106-hide-orb");}
   const target=$(`view-${name}`);if(!target)return;
@@ -194,6 +212,7 @@ function setView(name){
     "professional-inbox":["Professional Creator Inbox","Paid creator messages separate from your personal chats."]
   }[name]||["LEMMIQ","Messaging with social IQ."];
   $("pageTitle").textContent=meta[0];$("pageSub").textContent=meta[1];
+  if(name==="chats")restoreChatList305();
   refreshView(name);
 }
 async function refreshView(name){
@@ -323,7 +342,8 @@ function scheduleChatListRefresh(){
   clearTimeout(window.__lemmiqChatListRefresh);
   window.__lemmiqChatListRefresh=setTimeout(()=>loadChats(true).catch(()=>{}),800);
 }
-function renderChats(){
+function renderChats(restore305=false){
+  if(restore305!==true)rememberChatList305();
   const query=($("chatFilter")?.value||"").toLowerCase().trim();
   let rows=[
     ...state.chats.map(c=>({kind:"chat",data:c,updated:c.updated_at||"",unread:c.unread||0,pinned:!!c.pinned,
@@ -354,8 +374,10 @@ function renderChats(){
       ${c.unread?`<span class="badge">${c.unread}</span>`:""}</button>`;
   }).join(""):``;
   el.innerHTML=qRow+normalRows || `<div class="empty-state"><p>No matching conversations.</p></div>`;
+  restoreChatList305();
 }
 async function openQThread(){
+  rememberChatList305();
   const epoch=++conversationEpoch300,token=state.token;
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
   $("globalQOrb")?.classList.add("q2106-hide-orb");
@@ -390,6 +412,7 @@ async function cancelQThread(key){
   catch(e){toast(e.message,true)}
 }
 async function openChat(cid,mark=true){
+  rememberChatList305();
   const epoch=++conversationEpoch300,token=state.token;
   let chat=state.chats.find(x=>x.id===cid);
   if(!chat){await loadChats();chat=state.chats.find(x=>x.id===cid)}
@@ -1039,6 +1062,7 @@ async function showNewGroup(){
   $("ngCreate").onclick=async()=>{const name=$("ngName").value.trim();if(!name||!chosen.size)return toast("Add a group name and at least one member",true);const g=await api("/v24/groups",{method:"POST",body:JSON.stringify({name,member_ids:[...chosen.keys()]})});closeModal();await loadChats();await openGroup(g.id)};
 }
 async function openGroup(gid,pushHistory=true){
+  rememberChatList305();
   const epoch=++conversationEpoch300,token=state.token;
   state.activeChat=null;state.replyTo=null;state.activeGroup=null;state.groupMessages=[];
   $("messageList").replaceChildren();$("groupMessageList").replaceChildren();
@@ -1801,7 +1825,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.4").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.5").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
@@ -1834,3 +1858,4 @@ window.checkMessage=checkMessage;
 // V302_INSTALLED
 // V303_INSTALLED
 // V304_INSTALLED
+// V305_INSTALLED
