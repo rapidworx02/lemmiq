@@ -83,7 +83,7 @@ function renderMeAvatar(){
 
 
 function toast(msg, error=false){
-  const t=$("toast"); t.textContent=msg; t.className="toast"+(error?" error":"");
+  const t=$("toast"); t.textContent=String(msg??"").slice(0,360); t.className="toast"+(error?" error":"");
   clearTimeout(window.__toast); window.__toast=setTimeout(()=>t.classList.add("hidden"),3500);
 }
 function authHeaders(extra={}) {
@@ -91,24 +91,47 @@ function authHeaders(extra={}) {
 }
 async function api(path, opts={}){
   const requestToken=state.token;
-  const headers = authHeaders(opts.headers || {});
-  if (opts.body && !(opts.body instanceof FormData) && !headers["Content-Type"]) headers["Content-Type"]="application/json";
-  const r = await fetch(path,{...opts,headers});
-  if(requestToken!==state.token)throw new Error("Session changed");
-  if (r.status===401 && requestToken){ logout(); throw new Error("Session expired"); }
-  let body=null;
-  const ct=r.headers.get("content-type")||"";
-  if(ct.includes("application/json")) body=await r.json(); else body=await r.text();
-  if(!r.ok) {
-    // FastAPI's 422 errors may contain a list of validation objects, not a string.
-    const raw = body?.detail ?? body?.message ?? body ?? `HTTP ${r.status}`;
-    const message = Array.isArray(raw)
-      ? raw.map(x => typeof x === 'string' ? x : (x?.msg || x?.message || JSON.stringify(x))).join('; ')
-      : (raw && typeof raw === 'object' ? (raw.msg || raw.message || JSON.stringify(raw)) : String(raw));
-    throw new Error(message || `HTTP ${r.status}`);
+  const headers=authHeaders(opts.headers||{});
+  if(opts.body && !(opts.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type']='application/json';
+  const method=String(opts.method||'GET').toUpperCase();
+  const endpoint=String(path).split('?')[0].replace(/[\r\n]/g,'').slice(0,180);
+  const fail=(message,status=0)=>{const e=new Error(`${endpoint}: ${message}${status?' (HTTP '+status+')':''}`);e.status=status;return e};
+  const retryable=method==='GET' && !opts.signal && /^\/(?:v28|v29|v306)\/(?:admin|predict\/admin)(?:\/|$)/.test(endpoint);
+  // Only retry safe, read-only admin requests on temporary gateway failures.
+  for(let attempt=0;attempt<2;attempt++){
+    if(requestToken!==state.token)throw new Error('Session changed');
+    let r;
+    try{r=await fetch(path,{...opts,headers});}catch(e){
+      if(e?.name==='AbortError')throw e;
+      if(retryable&&attempt===0){await new Promise(resolve=>setTimeout(resolve,700));continue;}
+      throw fail('Network connection failed. Check server availability.');
+    }
+    if(requestToken!==state.token)throw new Error('Session changed');
+    if(r.status===401&&requestToken){logout();throw fail('Session expired',401);}
+    if(retryable&&attempt===0&&[502,503,504].includes(r.status)){
+      await r.body?.cancel().catch(()=>{});await new Promise(resolve=>setTimeout(resolve,700));continue;
+    }
+    const ct=(r.headers.get('content-type')||'').toLowerCase();
+    let body=null;
+    if(ct.includes('application/json')||ct.includes('+json')){
+      try{body=await r.json()}catch{throw fail('Invalid JSON response from server.',r.status)}
+    }else{
+      if(r.status===204||r.status===205)return null;
+      const raw=await r.text();
+      if(ct.includes('text/html')||/^\s*<(?:!doctype|html|head|body|svg)\b/i.test(raw)){
+        const hint=r.status===404?'API endpoint not found. Check deployed backend version.':r.status>=500?'Backend or gateway unavailable. Check Render logs.':'Unexpected HTML instead of API data. Check server routing.';
+        throw fail(hint,r.status);
+      }
+      body=raw;
+    }
+    if(!r.ok){
+      const raw=body?.detail??body?.message??body??`HTTP ${r.status}`;
+      const msg=Array.isArray(raw)?raw.map(x=>typeof x==='string'?x:(x?.msg||x?.message||'Validation error')).join('; '):typeof raw==='object'&&raw?(raw.msg||raw.message||'Request failed'):String(raw);
+      throw fail(msg.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim().slice(0,220)||'Request failed',r.status);
+    }
+    if(requestToken!==state.token)throw new Error('Session changed');
+    return body;
   }
-  if(requestToken!==state.token)throw new Error("Session changed");
-  return body;
 }
 function saveSession(data){
   state.token=data.token; state.user=data.user;
