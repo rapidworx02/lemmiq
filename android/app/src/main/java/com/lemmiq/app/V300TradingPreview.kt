@@ -15,11 +15,18 @@ private val pools300=listOf(PreviewPool300("Q Shield AI",100,1000,30),PreviewPoo
 
 /** Read-only product concept. No trading requests, allocation control or balance mutation. */
 @Composable
-fun V300TradingPreview(reference:Double){
+fun V300TradingPreview(reference:Double, available:Double=Double.NaN){
     val valid=reference.isFinite()&&reference>0.0
     val fmt=NumberFormat.getNumberInstance().apply{maximumFractionDigits=6}
     Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(10.dp)){
-        Text("AI Trading Pools",fontSize=24.sp,fontWeight=FontWeight.Bold)
+        Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.primaryContainer)){
+            Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+                Text("Q Predict Wallet · available Q",fontSize=12.sp)
+                Text(if(available.isFinite())"${fmt.format(available)} Q" else "Unavailable",fontSize=23.sp,fontWeight=FontWeight.Bold)
+                Text("Shared wallet for future allocations",fontSize=12.sp)
+            }
+        }
+        Text("AI Trading Pools",fontSize=20.sp,fontWeight=FontWeight.Bold)
         Text("Powered by RapidTradeX · Coming Soon",color=MaterialTheme.colorScheme.primary,fontSize=13.sp)
         Text("Planned shared Q Predict wallet. No separate Q purchase. Q Economy and Demo balances remain separate.",fontSize=13.sp)
         Text(if(valid)"Reference: ${fmt.format(reference)} USDT/Q" else "Reference price unavailable · Q equivalents not shown",fontSize=12.sp)
@@ -40,3 +47,4 @@ fun V300TradingPreview(reference:Double){
         Text("Concept only. No trading, deposits, allocations or profit credits are available. Capital losses are possible. Returns and redemptions are not guaranteed. Subject to appropriate financial authorisation.",fontSize=12.sp)
     }
 }
+// V302_INSTALLED

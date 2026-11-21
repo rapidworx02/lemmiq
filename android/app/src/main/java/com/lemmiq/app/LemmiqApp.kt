@@ -310,7 +310,7 @@ private fun Home(vm:LemmiqViewModel){
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!chatsUpdatesOpen317&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
                 // V21342_HIDE_Q_OVER_CREATOR: no floating assistant over any More/Professional chat composer.
-                if(!qFullScreen && !showMore && tab!=1 && tab!=4 && !chatsUpdatesOpen317 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
+                if(!qFullScreen && !showMore && tab!=1 && tab!=3 && tab!=4 && !(tab==2 && qPredictOpen) && !chatsUpdatesOpen317 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,
@@ -2173,3 +2173,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
 // V21318_MEDIA_INSTALLED
 // V300_INSTALLED
 // V301_INSTALLED
+// V302_INSTALLED

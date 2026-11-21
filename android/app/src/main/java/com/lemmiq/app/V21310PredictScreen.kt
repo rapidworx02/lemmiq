@@ -119,20 +119,20 @@ fun V21310PredictScreen(){
     }
     val permitted=home?.optBoolean("payments_enabled",false)==true
 
-    LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF7F7FB)),
+    LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding=PaddingValues(12.dp,12.dp,12.dp,120.dp),verticalArrangement=Arrangement.spacedBy(11.dp)){
         item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
             FilterChip(!tradingPreview300,{tradingPreview300=false},label={Text("Predict")},modifier=Modifier.weight(1f))
             FilterChip(tradingPreview300,{tradingPreview300=true;selected=null;buyOpen=false;showHistory=false},label={Text("AI Trading Pools",fontSize=11.sp)},modifier=Modifier.weight(1f))
         }}
-        if(tradingPreview300){item{V300TradingPreview(config300?.optDouble("reference_usdt_per_q",0.0)?:0.0)}}else{
+        if(tradingPreview300){item{V300TradingPreview(config300?.optDouble("reference_usdt_per_q",0.0)?:0.0,config300?.optDouble("available_q",Double.NaN)?:Double.NaN)}}else{
         item{
             Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF29215F)),shape=RoundedCornerShape(21.dp)){
-                Column(Modifier.fillMaxWidth().padding(19.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text("LEMMIQ Q PREDICT",color=Color(0xFFDCD5FF),fontSize=11.sp,fontWeight=FontWeight.Bold)
-                    Text(if(demoMode)"Demo predictions" else "Q Predict Wallet",color=Color.White,fontWeight=FontWeight.Black,fontSize=25.sp)
+                Column(Modifier.fillMaxWidth().padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
+                    Text(if(demoMode)"PRACTICE · NO CASH VALUE" else "DEDICATED Q PREDICT WALLET",color=Color(0xFFDCD5FF),fontSize=10.sp,fontWeight=FontWeight.Bold)
+                    Text(if(demoMode)"Demo predictions" else "Q Predict Wallet",color=Color.White,fontWeight=FontWeight.Black,fontSize=20.sp)
                     Text(if(demoMode)"${pqNumber(source?.optDouble("available",0.0)?:0.0)} Demo USDT" else "${pqNumber(source?.optDouble("available_q",0.0)?:0.0)} Q",
-                        color=Color.White,fontWeight=FontWeight.Black,fontSize=27.sp)
+                        color=Color.White,fontWeight=FontWeight.Black,fontSize=22.sp)
                     Text(if(demoMode)"Virtual credits, no cash value" else "Locked: ${pqNumber(source?.optDouble("locked_q",0.0)?:0.0)} Q · Main Q Economy wallet is separate",
                         color=Color(0xFFEAE4FF),fontSize=11.sp)
                     if(!demoMode)Text("Buy Q +5% · Sell Q −5%",color=Color(0xFFDFD8FF),fontSize=11.sp)
@@ -282,3 +282,4 @@ fun V21310PredictScreen(){
 }
 // V300_INSTALLED
 // V301_INSTALLED
+// V302_INSTALLED

@@ -1,5 +1,5 @@
 /* LEMMIQ 2.13.10: replace old flat Demo UI, retain previous non-predict upgrades. */
-#view-q-predict.v21310-active > :not(#v21310PredictRoot){display:none!important}
+#view-q-predict.v21310-active > :not(#v21310PredictRoot):not(.v300-predict-switch):not(#v300Trading){display:none!important}
 #v21310PredictRoot{margin:0 auto;max-width:1050px;padding:12px 8px 130px;color:var(--text)}
 .pq-head,.pq-actions,.pq-tabs,.pq-counters,.pq-data,.pq-line{display:flex;align-items:center;gap:12px;justify-content:space-between}
 .pq-head{margin-bottom:12px}.pq-head h2{margin:0}.pq-head small{color:var(--muted)}
@@ -13,3 +13,32 @@
 .pq-admin{margin:18px 0;border:1px solid rgba(129,108,240,.45);border-radius:18px;padding:16px;background:rgba(105,80,220,.07)}.pq-admin-list{display:grid;gap:9px}
 #v2138NotifBack{display:none!important} /* LEM-012 — bottom More returns to More home */
 @media(max-width:650px){.pq-hero{padding:17px}.pq-counters strong{font-size:18px}.pq-actions button{flex:1}.pq-markets{grid-template-columns:1fr}.pq-data{grid-template-columns:1fr}.pq-counters{gap:7px}}
+
+/* V302: scoped Predict layout; keep legacy wallets, admin and modals intact. */
+#view-q-predict.v21310-active > .v300-predict-switch{display:flex!important;max-width:1050px;margin:6px auto 8px;gap:6px}
+#view-q-predict.v21310-active > #v300Trading:not([hidden]){display:block!important;max-width:1050px;margin:0 auto;padding:0 8px 110px}
+#view-q-predict #v300Trading[hidden],#view-q-predict #v21310PredictRoot[hidden]{display:none!important}
+body.v302-predict-active #globalQOrb{display:none!important}
+body:has(#view-q-predict.active) #globalQOrb{display:none!important}
+#view-q-predict #v21310PredictRoot{padding-top:0}
+#view-q-predict .pq-head{display:none!important}
+#view-q-predict .pq-tabs{margin:6px 0 10px;gap:6px}
+#view-q-predict .pq-tabs button{flex:1;padding:8px 12px;min-height:42px}
+#view-q-predict .pq-hero{padding:14px 15px;border-radius:16px}
+#view-q-predict .pq-hero h2{font-size:20px;margin:3px 0 6px}
+#view-q-predict .pq-hero p{font-size:12px;line-height:1.35;margin:4px 0 9px}
+#view-q-predict .pq-counters>div{min-width:0;padding:9px;gap:3px;border-radius:10px}
+#view-q-predict .pq-counters strong{font-size:17px;overflow-wrap:anywhere}
+#view-q-predict .pq-rates{margin-top:9px;font-size:11px;line-height:1.4}
+#view-q-predict .pq-hero+.pq-actions{gap:6px;margin:9px 0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+#view-q-predict .pq-hero+.pq-actions>button{min-width:0;min-height:44px;padding:7px 5px;font-size:12px;white-space:normal;overflow-wrap:anywhere}
+#view-q-predict .pq-note,#view-q-predict .pq12-access{padding:10px 12px;margin:9px 0;font-size:12px;line-height:1.45;border-radius:12px}
+#view-q-predict .pq12-access p{font-size:12px;line-height:1.45;margin:5px 0 0}
+#view-q-predict .v302-preview-wallet{background:#29215f;color:white;border-radius:15px;padding:13px 15px;margin:8px 0 13px;display:grid;gap:5px}
+#view-q-predict .v302-preview-wallet strong{font-size:22px;color:white}
+#view-q-predict .v302-preview-wallet small{color:#eae4ff;font-size:12px}
+#view-q-predict #v300Trading h2{font-size:20px;margin:10px 0 5px}
+#view-q-predict .v300-pool{padding:12px;border-radius:12px}
+#view-q-predict .v300-pool dd{overflow-wrap:anywhere}
+@media(max-width:650px){#view-q-predict .pq-markets{grid-template-columns:minmax(0,1fr)}#view-q-predict .pq-market{padding:12px}#view-q-predict .pq-filter{grid-template-columns:minmax(0,1fr)}}
+/* V302_INSTALLED */

@@ -359,7 +359,9 @@ def register_v21310_predict_q(app,current_user,get_db):
             master=False
         try:price=value(_reference(db))
         except HTTPException:price=None
-        return {'reference_usdt_per_q':price,'master_admin':master}
+        wallet = db.get(Wallet, u.id)
+        return {'reference_usdt_per_q':price,'master_admin':master,
+                'available_q': value(wallet.available) if wallet else 0.0}
 
     @router.get('/home')
     def home(u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -546,3 +548,4 @@ def register_v21310_predict_q(app,current_user,get_db):
 
     app.include_router(router)
 # V300_INSTALLED
+# V302_INSTALLED
