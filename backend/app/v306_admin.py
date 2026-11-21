@@ -4,9 +4,9 @@ Existing settlement and treasury routes are deliberately not replaced.
 from datetime import datetime, timezone
 from typing import Literal
 import json
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, Integer, ForeignKey, select
+from sqlalchemy import Boolean, Integer, ForeignKey, select, case, and_, func
 from sqlalchemy.orm import Mapped, mapped_column, Session
 from .database import Base
 from .v29 import PredictMarket, _require_admin
@@ -47,23 +47,36 @@ def calling_allowed(db,u):
 def register_v306_admin(app,current_user,get_db):
     router=APIRouter(prefix='/v306/admin')
     @router.get('/markets')
-    def markets(u=Depends(current_user),db:Session=Depends(get_db)):
+    def markets(q:str=Query('',max_length=260),category:str=Query('',max_length=40),status:str=Query('',max_length=24),page:int=Query(1,ge=1,le=100000),limit:int=Query(50,ge=1,le=100),u=Depends(current_user),db:Session=Depends(get_db)):
         _require_admin(db,u,'READ','Q_PREDICT')
         access='READ'
         for level in ('WRITE','FULL'):
-            try: _require_admin(db,u,level,'Q_PREDICT'); access=level
+            try: _require_admin(db,u,level,'Q_PREDICT');access=level
             except HTTPException as e:
-                if e.status_code!=403: raise
+                if e.status_code!=403:raise
                 break
-        rows=db.scalars(select(PredictMarket).order_by(PredictMarket.id.desc()).limit(300)).all()
-        ids=[m.id for m in rows]
-        archived=set(db.scalars(select(Archive306.market_id).where(Archive306.market_id.in_(ids))).all())
-        demo={r.market_id:r.outcome for r in db.scalars(select(DemoResolution).where(DemoResolution.market_id.in_(ids))).all()}
-        def item(m):
-            status='ARCHIVED' if m.id in archived else ('VOID' if demo.get(m.id)=='VOID' and cricket(m) else 'RESOLVED' if m.id in demo and cricket(m) else m.status)
-            if status in ('LIVE','SUSPENDED') and aware(m.close_at)<=utcnow():status='CLOSED'
-            return dict(id=m.id,question=m.question,category=m.category,status=status,close_at=aware(m.close_at).isoformat(),demo_only=cricket(m),template=m.template_code,official_url=m.resolution_source_url)
-        return {'access':access,'markets':[item(m) for m in rows], 'limit':300}
+        is_cricket=PredictMarket.template_code.startswith('CRICKET_V21314_',autoescape=True)
+        effective=case(
+            (Archive306.market_id.is_not(None),'ARCHIVED'),
+            (and_(is_cricket,DemoResolution.outcome=='VOID'),'VOID'),
+            (and_(is_cricket,DemoResolution.market_id.is_not(None)),'RESOLVED'),
+            (and_(PredictMarket.status.in_(['LIVE','SUSPENDED']),PredictMarket.close_at<=utcnow()),'CLOSED'),
+            else_=PredictMarket.status)
+        base=select(PredictMarket,effective.label('effective_status')).outerjoin(Archive306,Archive306.market_id==PredictMarket.id).outerjoin(DemoResolution,DemoResolution.market_id==PredictMarket.id)
+        q=q.strip();category=category.strip();status=status.strip().upper()
+        if q:
+            if q.lstrip('#').isdigit():
+                digits=q.lstrip('#');base=base.where(PredictMarket.id==int(digits) if len(digits)<=10 and int(digits)<=2147483647 else False)
+            else:
+                pattern=q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_');base=base.where(PredictMarket.question.ilike('%'+pattern+'%',escape='\\'))
+        if category:base=base.where(PredictMarket.category==category)
+        if status:base=base.where(effective==status)
+        total=int(db.scalar(select(func.count()).select_from(base.subquery())) or 0)
+        pages=max(1,(total+limit-1)//limit);page=min(page,pages)
+        rows=db.execute(base.order_by(PredictMarket.id.desc()).offset((page-1)*limit).limit(limit)).all()
+        cats=db.scalars(select(PredictMarket.category).distinct().order_by(PredictMarket.category)).all()
+        return {'access':access,'markets':[dict(id=m.id,question=m.question,category=m.category,status=st,close_at=aware(m.close_at).isoformat(),demo_only=cricket(m),template=m.template_code,official_url=m.resolution_source_url) for m,st in rows], 'limit':limit,'page':page,'pages':pages,'total':total,'categories':cats}
+
     @router.post('/markets/action')
     def action(body:Action306,u=Depends(current_user),db:Session=Depends(get_db)):
         _require_admin(db,u,'WRITE' if body.action in ('SUSPEND','RESUME') else 'FULL','Q_PREDICT')

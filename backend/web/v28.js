@@ -536,7 +536,7 @@
     if($("q28AdminReferralOverview"))$("q28AdminReferralOverview").innerHTML=`<span>${ro.total_referred_users||0} referred users</span><span>${fmtQ(ro.free_signup_q||0)} Q signup rewards</span><span>${fmtQ(ro.package_paid_q||0)} Q package rewards</span>${Number(ro.package_pending_q||0)>0?`<span>${fmtQ(ro.package_pending_q)} Q pending</span>`:""}`;
   }
 
-  async function loadQAdmin(){
+  async function legacyLoadQAdmin307(){
     try{
       const [me,economy,wallets,walletMatrix,packageRules,users,audit,payments,ledger,market,config,wallet,roles,referralRules,referralOverview]=await Promise.all([
         qApi("/admin/me"),qApi("/admin/economy"),qApi("/admin/payment-wallets"),qApi("/admin/payment-wallet-matrix"),qApi("/admin/package-rules"),qApi("/admin/users"),qApi("/admin/audit"),qApi("/admin/payment-orders"),
@@ -544,8 +544,103 @@
       ]);
       v28.admin={me,economy,config};v28.adminWallets=wallets;v28.adminWalletMatrix=walletMatrix;v28.adminPackageRules=packageRules;v28.adminUsers=users;v28.adminAudit=audit;v28.adminPayments=payments;v28.adminLedger=ledger;v28.adminMarket=market;v28.wallet=wallet;v28.adminRoles=roles;v28.adminReferralRules=referralRules;v28.adminReferralOverview=referralOverview;
       renderAdmin();
-    }catch(e){toast(e.message,true);setView("more")}
+    }catch(e){toast(e.message,true);throw e}
   }
+  function renderAdmin307(group){
+    const a=v28.admin;
+    switch(group){
+      case 'overview': {
+    $("q28AdminOverview").innerHTML=adminStats(a.economy);
+        break;
+      }
+      case 'users': {
+    renderAdminUsers();
+        break;
+      }
+      case 'payments': {
+    renderWalletMatrix();
+    const pending=v28.adminPayments.filter(x=>x.status==="PENDING");
+    $("q28AdminPayments").innerHTML=pending.length?pending.map(o=>qRow(
+      `${escapeHtml(o.package_name)} · ${fmtQ(o.expected_usdt)} USDT · ${o.network}`,
+      `${escapeHtml(o.order_code)} · User #${o.user?.id||o.user_id} · ${escapeHtml(o.user?.display_name||"")} · @${escapeHtml(o.user?.username||"")}<br>TX: ${escapeHtml(o.tx_hash||"")}`,
+      o.explorer_url?`<a target="_blank" rel="noopener" href="${escapeHtml(o.explorer_url)}">Explorer ↗</a>`:"",
+      `<button class="primary" data-admin-pay="approve" data-id="${o.id}">Approve</button><button class="danger" data-admin-pay="reject" data-id="${o.id}">Reject</button>`
+    )).join(""):`<div class="empty-state"><p>No pending USDT payments.</p></div>`;
+    qsa("[data-admin-pay]").forEach(b=>b.onclick=()=>adminPaymentAction(Number(b.dataset.id),b.dataset.adminPay));
+
+        break;
+      }
+      case 'economy': {
+    renderPackageMasterRules();
+    $("q28AdminTreasury").innerHTML=(a.economy.system_wallets||[]).map(w=>qRow(escapeHtml(w.label),escapeHtml(w.key),`${fmtQ(w.balance_q)} Q`)).join("");
+    const opts=(a.economy.system_wallets||[]).map(w=>`<option value="${escapeHtml(w.key)}">${escapeHtml(w.label)}</option>`).join("");
+    $("q28TreasuryFrom").innerHTML=opts;$("q28TreasuryTo").innerHTML=opts;
+    if($("q28TreasuryTo").options.length>1)$("q28TreasuryTo").selectedIndex=1;
+
+    $("q28AdminLedger").innerHTML=v28.adminLedger.slice(0,100).map(x=>qRow(
+      `${escapeHtml(x.kind)} · ${fmtQ(x.amount_q)} Q`,
+      `${dt(x.created_at)}${x.note?` · ${escapeHtml(x.note)}`:""}`,
+      `${adminParty(x.from_system,x.from_user_info,x.from_user)} → ${adminParty(x.to_system,x.to_user_info,x.to_user)}`
+    )).join("");
+
+    const rules=Object.fromEntries((v28.adminReferralRules||[]).map(x=>[x.package_code,x.reward_q]));
+    $("q28RefStarter").value=rules.STARTER_10??10;
+    $("q28RefPlus").value=rules.PLUS_50??25;
+    $("q28RefPro").value=rules.PRO_100??50;
+    $("q28RefPremium").value=rules.PREMIUM_500??200;
+    $("q28RefElite").value=rules.ELITE_1000??400;
+    const ro=v28.adminReferralOverview||{};
+    if($("q28AdminReferralOverview"))$("q28AdminReferralOverview").innerHTML=`<span>${ro.total_referred_users||0} referred users</span><span>${fmtQ(ro.free_signup_q||0)} Q signup rewards</span><span>${fmtQ(ro.package_paid_q||0)} Q package rewards</span>${Number(ro.package_pending_q||0)>0?`<span>${fmtQ(ro.package_pending_q)} Q pending</span>`:""}`;        break;
+      }
+      case 'analytics': {
+    if($("q28AdminAudit"))$("q28AdminAudit").innerHTML=(v28.adminAudit||[]).slice(0,100).map(x=>qRow(
+      escapeHtml(x.action),
+      `${dt(x.created_at)} · ${escapeHtml(x.reason||"")}`,
+      `${x.admin?`Admin #${x.admin.id} · @${escapeHtml(x.admin.username||"")}`:""}${x.target_user?`<br>Target User #${x.target_user.id} · ${escapeHtml(x.target_user.display_name||"")} · @${escapeHtml(x.target_user.username||"")}`:""}${x.subscription_lot_id?`<br>Package #${x.subscription_lot_id}`:""}`
+    )).join("")||`<div class="empty-state"><p>No admin changes logged yet.</p></div>`;
+
+        break;
+      }
+      case 'market': {
+    const disputes=v28.adminMarket.filter(x=>x.status==="DISPUTED");
+    $("q28AdminMarketOrders").innerHTML=disputes.length?disputes.map(o=>qRow(
+      `${escapeHtml(o.order_code)} · ${fmtQ(o.total_q)} Q`,
+      escapeHtml(o.dispute_note||"No dispute note"),status(o.status),
+      `<button class="ghost" data-dispute-outcome="BUYER" data-id="${o.id}">Refund buyer</button><button class="primary" data-dispute-outcome="SELLER" data-id="${o.id}">Pay seller</button>`
+    )).join(""):`<div class="empty-state"><p>No open disputes.</p></div>`;
+    qsa("[data-dispute-outcome]").forEach(b=>b.onclick=()=>resolveDispute(Number(b.dataset.id),b.dataset.disputeOutcome));
+
+        break;
+      }
+      case 'settings': {
+    const cfg=a.config;
+    $("q28AdminPrice").value=cfg.q_reference_usd;
+    $("q28AdminFee").value=cfg.marketplace_fee_percent;
+    $("q28AdminBasic").value=v28.wallet?.basic_daily_q??2;
+    $("q28AdminSignup").value=v28.wallet?.signup_bonus_q??100;
+    $("q28AdminReferrer").value=v28.wallet?.referral_reward_q??25;
+    $("q28AdminReferred").value=25;
+        break;
+      }
+    }
+  }
+  const core307={overview:[['economy','/admin/economy']],users:[['adminUsers','/admin/users']],payments:[['adminWalletMatrix','/admin/payment-wallet-matrix'],['adminPayments','/admin/payment-orders']],economy:[['economy','/admin/economy'],['adminPackageRules','/admin/package-rules'],['adminLedger','/admin/ledger'],['adminReferralRules','/admin/referral-rules'],['adminReferralOverview','/admin/referrals']],analytics:[['adminAudit','/admin/audit']],market:[['adminMarket','/admin/market/orders']],settings:[['config','/config'],['wallet','/wallet']]};
+  async function loadCore307(group){
+    const requests=core307[group]||[];if(!requests.length)return;
+    const token=state.token;
+    const anchors={users:['q28AdminUsers'],payments:['q28WalletMatrix','q28AdminPayments'],economy:['q28PackageMasterRules','q28AdminTreasury','q28AdminLedger','q28RefStarter'],analytics:['q28AdminAudit'],market:['q28AdminMarketOrders'],settings:['q28AdminPrice']};
+    const cards=(anchors[group]||[]).map(id=>document.getElementById(id)?.closest('article')).filter(Boolean);
+    cards.forEach(card=>{card.inert=true;card.setAttribute('aria-busy','true')});
+    const result=await Promise.allSettled(requests.map(([,url])=>qApi(url)));
+    if(token!==state.token)return;
+    const errors=result.flatMap((x,i)=>x.status==='rejected'?[requests[i][1]+': '+(x.reason?.message||'unavailable')]:[]);
+    if(errors.length){cards.forEach(card=>card.removeAttribute('aria-busy'));throw new Error(errors.join(' · '));}
+    v28.admin=v28.admin||{};
+    result.forEach((x,i)=>{const key=requests[i][0];if(key==='economy'||key==='config')v28.admin[key]=x.value;else v28[key]=x.value;});
+    renderAdmin307(group);cards.forEach(card=>{card.inert=false;card.removeAttribute('aria-busy')});
+  }
+  window.v307LoadCore=loadCore307;
+  async function loadQAdmin(){if(document.getElementById('view-q-admin')?.dataset.v307Ready==='master'){try{await window.v307LoadSection(window.v307AdminGroup(),true)}catch(e){toast(e.message,true)}}else return legacyLoadQAdmin307()}
   window.loadQAdmin=loadQAdmin;
 
   async function uploadWalletQr(id){

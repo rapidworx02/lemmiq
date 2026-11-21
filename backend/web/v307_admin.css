@@ -1,0 +1,21 @@
+/* Q Admin stable shell: legacy cards never paint before role verification. */
+#view-q-admin:not([data-v307-ready]) > :not(#v307Gate){display:none!important}
+#view-q-admin[data-v307-ready] > #v307Gate{display:none!important}
+#view-q-admin[data-v307-ready] > :not(#v2124AdminShell):not(.q28-hero):not(#rbacDelegated):not(#v307Gate){visibility:hidden}
+#view-q-admin[data-v307-ready="delegated"] > :not(#v2124AdminShell):not(.q28-hero):not(#rbacDelegated):not(#v307Gate){visibility:visible}
+body.v307-admin-active #globalQOrb{display:none!important}
+#view-q-admin .q28-hero{padding:12px 14px!important;display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:0!important;margin:0 0 8px!important}
+#view-q-admin .q28-hero h2{font-size:1.2rem!important;margin:2px 0!important}
+#view-q-admin .q28-hero .q28-balance{padding:5px 8px!important;min-width:0!important;max-width:48%;overflow-wrap:anywhere}
+#view-q-admin .q28-hero .q28-balance strong{font-size:.85rem!important}
+#view-q-admin .q28-hero .q28-balance span,#view-q-admin .q28-hero>div:first-child p{display:none!important}
+#v307Gate,#v307SectionStatus{padding:12px;overflow-wrap:anywhere}
+#v307SectionStatus{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#v307SectionStatus p{flex:1;margin:0;font-size:.85rem}
+#view-q-admin .v2124-admin-disclosure-body>article>.section-head h3{font-size:1rem}
+#view-q-admin .v2124-admin-main{min-width:0}
+#view-q-admin .v306-market,#view-q-admin .pq14-card{overflow-wrap:anywhere}
+#view-q-admin .v2124-admin-disclosure:has(.v307-duplicate-title)>summary{font-weight:600}
+#view-q-admin .v2124-admin-disclosure-body{min-width:0}
+#view-q-admin .v2124-admin-heading p{display:none}
+@media(max-width:600px){#view-q-admin .q28-hero{flex-direction:row!important}#view-q-admin .v2124-admin-mobile{position:sticky;top:0;z-index:4;background:var(--panel,#f3f0fa);padding:6px 0}#view-q-admin .v2124-admin-disclosure-body{padding:5px!important}}

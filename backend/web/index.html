@@ -58,6 +58,7 @@
   <link rel="stylesheet" href="/web/v21318_media.css?v=2.13.18">
   <link rel="stylesheet" href="/web/v300.css?v=3.0.5">
   <link rel="stylesheet" href="/web/v306.css?v=3.0.6">
+  <link rel="stylesheet" href="/web/v307_admin.css?v=3.0.7">
   <link rel="stylesheet" href="/web/v301.css?v=3.0.1">
 </head>
 <body>
@@ -502,6 +503,7 @@
       </section>
 
       <section id="view-q-admin" class="view">
+          <article id="v307Gate" class="card glass"><h2>Q Admin</h2><p id="v307GateText" role="status">Checking admin access…</p><button id="v307GateRetry" type="button" class="ghost">Retry</button></article>
 <article id="v306Admin" class="card glass"><h2>Q Predict Market Management Centre</h2><p class="micro">Recent markets across categories. Closing early stops new predictions; the original result-verification deadline remains unchanged.</p><button class="primary" id="v306Refresh" type="button">Load / refresh markets</button><div class="v306-filter"><input id="v306Search" placeholder="Search market ID or question"><select id="v306Status"><option value="">All statuses</option><option>LIVE</option><option>SUSPENDED</option><option>CLOSED</option><option>REVIEW</option><option>DRAFT</option><option>RESOLVED</option><option>VOID</option><option>ARCHIVED</option></select><select id="v306Category"><option value="">All categories</option></select></div><button class="ghost" type="button" hidden id="v306Bulk">Close selected (0)</button><p id="v306MarketStatus" role="status"></p><div id="v306Markets"></div></article>
 <article id="v306Calling" class="card glass"><h2>Calling policy · Master Admin</h2><button class="ghost" type="button" id="v306CallingLoad">Load current setting</button><label><input type="checkbox" id="v306PaidOnly"> Require active Q Starter Pack or higher for outgoing personal calls</label><button type="button" disabled class="primary" id="v306CallingSave">Save calling policy</button><p id="v306CallStatus" role="status"></p></article>
 
@@ -614,16 +616,16 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=3.0.6.1" defer></script>
-  <script src="/web/v28.js?v=3.0.0" defer></script>
-  <script src="/web/v29.js?v=2.10.7" defer></script>
+  <script src="/web/app.js?v=3.0.7" defer></script>
+  <script src="/web/v28.js?v=3.0.7" defer></script>
+  <script src="/web/v29.js?v=3.0.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>
   <script src="/web/v2105.js?v=2.10.7" defer></script>
   <script src="/web/v2106.js?v=2.10.7" defer></script>
-  <script src="/web/v21071_admin.js?v=2.10.7.1" defer></script>
-  <script src="/web/v21072_q_usage.js?v=2.10.7.2" defer></script>
+  <script src="/web/v21071_admin.js?v=3.0.7" defer></script>
+  <script src="/web/v21072_q_usage.js?v=3.0.7" defer></script>
   <script src="/web/v21073_wallets.js?v=2.10.7.3" defer></script>
-  <script src="/web/v21074_q_economy.js?v=2.10.7.4" defer></script>
+  <script src="/web/v21074_q_economy.js?v=3.0.7" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js" defer></script>
   <script src="/web/v21011.js?v=2.10.11" defer></script>
@@ -631,7 +633,7 @@
   <!-- V301: legacy height observer removed; compact viewport owns conversation geometry. -->
   <script src="/web/v2122_image_edit.js?v=2.13.18" defer></script>
   <script src="/web/v2123_support.js?v=2.12.3" defer></script>
-  <script src="/web/v2124_admin_layout.js?v=2.13.0" defer></script>
+  <script src="/web/v2124_admin_layout.js?v=3.0.7" defer></script>
   <script src="/web/v213_creators.js?v=3.0.4" defer></script>
   <script src="/web/v213_creators_admin.js?v=2.13.5.4" defer></script>
   <script src="/web/v2131_exclusives.js?v=2.13.5.6" defer></script>
@@ -645,19 +647,20 @@
   <script src="/web/v2137_notifications.js?v=2.13.7" defer></script>
   <script src="/web/v2138_messenger.js?v=2.13.8" defer></script>
   <!-- V21310_PREDICT_Q: updated Q Predict wallet replaces old flat Demo screen -->
-  <script src="/web/v21310_predict_q.js?v=3.0.4" defer></script>
+  <script src="/web/v21310_predict_q.js?v=3.0.7" defer></script>
   <script src="/web/v21310_nav_fix.js?v=2.13.10" defer></script>
   <!-- V21311_RELEASE -->
-  <script src="/web/v21311_upgrade.js?v=3.0.1" defer></script>
+  <script src="/web/v21311_upgrade.js?v=3.0.7" defer></script>
   <script src="/web/v21312_predict_q.js?v=2.13.16" defer></script>
   <script src="/web/v21313_predict_orders.js?v=2.13.13" defer></script>
-  <script src="/web/v21314_cricket.js?v=3.0.6" defer></script>
+  <script src="/web/v21314_cricket.js?v=3.0.7" defer></script>
   <script src="/web/v21317_calls.js?v=2.13.17" defer></script>
   <script src="/web/v21317_ui.js?v=3.0.0" defer></script>
   <script src="/web/v21318_media.js?v=2.13.18" defer></script>
   <script src="/web/v300.js?v=3.0.5" defer></script>
-  <script src="/web/v306.js?v=3.0.6" defer></script>
+  <script src="/web/v306.js?v=3.0.7" defer></script>
   <script src="/web/v301_admin.js?v=3.0.1" defer></script>
+  <script src="/web/v307_admin.js?v=3.0.7" defer></script>
 </body>
 </html>
 <!-- V21318_MEDIA_INSTALLED -->

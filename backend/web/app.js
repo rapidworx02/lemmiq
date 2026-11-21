@@ -213,6 +213,8 @@ function setView(name){
   if(name!=="chats"){++conversationEpoch300;$("globalQOrb")?.classList.remove("q2106-hide-orb");}
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
+  document.body.classList.toggle("v307-admin-active",name==="q-admin");
+  if(name!=="q-admin")window.v307LeaveAdmin?.();
   document.body.classList.toggle("v302-predict-active",name==="q-predict");
   const secondary=["trust","business","activity","money","me","q-admin"];
   const navName=name==="updates"?"chats":(name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
@@ -252,7 +254,7 @@ async function refreshView(name){
     if(name==="q-economy" && window.loadQEconomy) await window.loadQEconomy();
     if(name==="q-creators" && window.loadQCreators) await window.loadQCreators();
     if(name==="q-predict" && window.loadQPredict) await window.loadQPredict();
-    if(name==="q-admin" && window.loadQAdmin) { await window.loadQAdmin(); if(window.loadV29Admin) await window.loadV29Admin(); }
+    if(name==="q-admin" && window.loadQAdmin) await window.loadQAdmin();
   }catch(e){toast(e.message,true)}
 }
 function refreshCurrent(){
@@ -1293,7 +1295,7 @@ function prepareCallUi(user,stateText="Ringing…"){
   $("callPerson").textContent=user?.display_name||"LEMMIQ user";
   $("callAvatar").innerHTML=user?.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user?.display_name||"LEMMIQ"));
   $("callEyebrow").textContent=video?"LEMMIQ VIDEO":"LEMMIQ VOICE";
-  $("callFoot").textContent="LEMMIQ V3.0.6";
+  $("callFoot").textContent="LEMMIQ V3.0.7";
   $("callVideoStage").classList.toggle("hidden",!video);
   $("callAvatar").classList.toggle("hidden",video);
   $("cameraCallBtn").classList.toggle("hidden",!video);

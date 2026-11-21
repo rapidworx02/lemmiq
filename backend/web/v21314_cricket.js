@@ -22,7 +22,7 @@ function fields(){const template=selectedTemplate();const m=currentFixture();con
  else if($('pq14FormatText'))$('pq14FormatText').textContent='Manual fixture: enter both teams, start, series and official source';
 }
 function renderMarkets(){let el=$('pq14Markets');if(!el)return;
- el.innerHTML=(state.markets.length?state.markets.map(m=>`<article class="pq14-card"><b>#${m.id} · ${safe(m.status)} · ${safe(m.template)}</b><p>${safe(m.question)}</p><p class="pq14-muted">Closes ${safe(new Date(m.close_at).toLocaleString())} · ${m.reviewed?'Pre-approved':'Needs review'} · DEMO ONLY</p><div class="pq14-actions"><button class="ghost" data-v306-manage="${m.id}">Manage market</button>${m.status==='REVIEW'||m.status==='DRAFT'?`<button class="ghost" data-pq14-publish="${m.id}">Review & publish</button>`:''}${['LIVE','CLOSED','SUSPENDED'].includes(m.status)&&Date.parse(m.close_at)<=Date.now()?`<button class="ghost" data-pq14-resolve="${m.id}">Record official Demo result</button>`:''}</div></article>`).join(''):'<div class="pq14-muted">No new cricket performance markets drafted yet.</div>');
+ el.innerHTML=(state.markets.length?state.markets.map(m=>`<article class="pq14-card"><b>#${m.id} · ${safe(m.status)} · ${safe(m.template)}</b><p>${safe(m.question)}</p><p class="pq14-muted">Closes ${safe(new Date(m.close_at).toLocaleString())} · ${m.reviewed?'Pre-approved':'Needs review'} · DEMO ONLY</p><div class="pq14-actions"><button class="ghost" data-v306-manage="${m.id}">Manage market</button>${(['WRITE','FULL'].includes(window.v307PredictLevel?.())&&(m.status==='REVIEW'||m.status==='DRAFT'))?`<button class="ghost" data-pq14-publish="${m.id}">Review & publish</button>`:''}${window.v307PredictLevel?.()==='FULL'&&['LIVE','CLOSED','SUSPENDED'].includes(m.status)&&Date.parse(m.close_at)<=Date.now()?`<button class="ghost" data-pq14-resolve="${m.id}">Record official Demo result</button>`:''}</div></article>`).join(''):'<div class="pq14-muted">No new cricket performance markets drafted yet.</div>');
  el.querySelectorAll('[data-v306-manage]').forEach(b=>b.onclick=()=>window.v306OpenMarket?.(+b.dataset.v306Manage));
  el.querySelectorAll('[data-pq14-publish]').forEach(b=>b.onclick=()=>publish(Number(b.dataset.pq14Publish)));
  el.querySelectorAll('[data-pq14-resolve]').forEach(b=>b.onclick=()=>resolve(Number(b.dataset.pq14Resolve)));
@@ -69,12 +69,37 @@ async function resolve(id){const m=state.markets.find(x=>x.id===id);if(!m)return
  try{const r=await api('/admin/resolve-demo-stat',{method:'POST',body:JSON.stringify(data)});notice(`Demo result ${r.result} recorded for #${id}. ${r.settled_demo_markets} pooled markets settled.`);await listMarkets()}
  catch(e){notice(`Could not settle #${id}: ${e.message}`)}}
 async function listMarkets(){try{const r=await api('/admin/markets');state.markets=r.markets||[];renderMarkets()}catch(e){notice('Unable to load markets: '+e.message)}}
-async function reload(){try{const [c,f,m]=await Promise.all([api('/admin/catalog'),api('/admin/fixtures'),api('/admin/markets')]);state.templates=c.templates||[];state.fixtures=f.fixtures||[];state.markets=m.markets||[];render();if(f.error)notice(f.error);else if(!f.configured)notice('Licensed cricket feed not configured. Manual fixture entry is available; TEST auto-import requires LEMMIQ_CRICKET_FEED_URL and LEMMIQ_CRICKET_ALLOWED_HOSTS.')}
- catch(e){notice('Q Predict Admin access or data unavailable: '+e.message)}}
-async function mount(){const host=$('pqAdmin')||$('v29PredictAutomation');if(!host)return;if($('v21314CricketAdmin'))return;
- const box=document.createElement('section');box.id='v21314CricketAdmin';box.className='pq-admin';host.after(box);box.innerHTML='<h3>Cricket Performance Market Studio</h3><p>Checking admin access…</p>';
- try{await reload()}catch(e){box.textContent='Q Predict cricket admin unavailable: '+e.message}
+let reloadFlight=null,loadedToken=null;
+function statusNode(text){const host=$('v21314CricketAdmin');if(!host)return;let target=$('pq14Status');if(!target){target=document.createElement('p');target.id='pq14Status';target.setAttribute('role','status');host.append(target)}target.textContent=text}
+function retryShell(){const host=$('v21314CricketAdmin');if(!host)return;host.replaceChildren();const h=document.createElement('h3');h.textContent='Cricket Performance Market Studio';const p=document.createElement('p');p.id='pq14Status';p.setAttribute('role','status');p.textContent='Loading cricket catalog and markets…';const b=document.createElement('button');b.type='button';b.className='ghost';b.textContent='Retry / refresh cricket studio';b.onclick=()=>reload();host.append(h,p,b)}
+async function reload(){
+ const token=window.lemmiqState?.token;if(!token||!window.v307CanPredict?.())return;
+ if(reloadFlight&&loadedToken===token)return reloadFlight;
+ loadedToken=token;
+ const host=$('v21314CricketAdmin');if(!host)return;
+ if(!$('pq14Fixture'))retryShell();
+ const valid=()=>window.lemmiqState?.token===token&&window.v307CanPredict?.();
+ const bounded=(path,ms=12000)=>{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms);return api(path,{signal:ctrl.signal}).finally(()=>clearTimeout(t))};
+ const work=(async()=>{
+   // Catalog and market list do not depend on the external fixture provider.
+   const [c,m]=await Promise.allSettled([bounded('/admin/catalog'),bounded('/admin/markets')]);
+   if(!valid())return;
+   const problems=[];
+   if(c.status==='fulfilled'&&Array.isArray(c.value?.templates)){state.templates=c.value.templates}else{state.templates=[];problems.push('Catalog: '+(c.reason?.message||'invalid response'))}
+   if(m.status==='fulfilled'&&Array.isArray(m.value?.markets)){state.markets=m.value.markets}else{state.markets=[];problems.push('Markets: '+(m.reason?.message||'invalid response'))}
+   state.fixtures=[];render();
+   $('pq14Draft').disabled=!state.templates.length||!['WRITE','FULL'].includes(window.v307PredictLevel?.());$('pq14Import').disabled=true;
+   statusNode([...problems,'Loading optional fixtures…'].join(' · '));
+   try{const f=await bounded('/admin/fixtures');if(!valid())return;state.fixtures=Array.isArray(f?.fixtures)?f.fixtures:[];
+     // Update just the fixture picker, not the form or generated market cards.
+     const picker=$('pq14Fixture');if(picker){const old=picker.value;picker.replaceChildren(new Option('Manual fixture entry',''));for(const x of state.fixtures)picker.add(new Option(`${x.format} · ${x.team_a} vs ${x.team_b} (${x.series})`,x.id));if([...picker.options].some(o=>o.value===old))picker.value=old;fields()}
+     $('pq14Import').disabled=!state.templates.length||!state.fixtures.length||!['WRITE','FULL'].includes(window.v307PredictLevel?.());
+     if(f?.error||!f?.configured)problems.push(f?.error||'Licensed cricket feed not configured. Manual fixture entry remains available.');
+   }catch(e){if(valid())problems.push('Fixtures unavailable: '+(e.message||'request failed')+'. Manual entry remains available.');}
+   if(valid())statusNode(problems.join(' · ')||'Cricket studio ready.');
+ })().catch(e=>{if(valid()){retryShell();statusNode('Cricket Studio: '+(e.message||'request failed'))}});
+ reloadFlight=work;try{await work}finally{if(reloadFlight===work)reloadFlight=null}
 }
-function schedule(){if(mounted)return;mounted=true;setTimeout(()=>{mounted=false;mount()},180)}
-document.addEventListener('DOMContentLoaded',()=>{schedule();document.addEventListener('click',e=>{if(e.target.closest?.('[data-more-view="q-admin"], [data-view="q-predict"]'))schedule()});const observer=new MutationObserver(schedule);observer.observe(document.body,{childList:true,subtree:true})});
+function mount(){const dest=document.querySelector('#view-q-admin[data-v307-ready="delegated"]')||document.querySelector('[data-v2124-admin-panel="predict"]');if(!dest||!window.v307CanPredict?.())return;let box=$('v21314CricketAdmin');if(!box){box=document.createElement('section');box.id='v21314CricketAdmin';box.className='pq-admin';dest.append(box);retryShell()}else if(box.parentElement!==dest)dest.append(box);return reload()}
+window.v307LoadCricket=mount;
 })();

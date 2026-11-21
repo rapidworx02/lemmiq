@@ -26,7 +26,7 @@
 
   function delegatedHost(){
     const view=$("view-q-admin"),h=view?.querySelector(".q28-hero"); if(!view||!h)return null;
-    [...view.children].forEach(x=>{if(x!==h && x.id!=="rbacDelegated"){x.dataset.rbacHidden="1";x.style.display="none"}});
+    [...view.children].forEach(x=>{if(x!==h && !["rbacDelegated","v307Gate"].includes(x.id)){x.dataset.rbacHidden="1";x.style.display="none"}});
     let host=$("rbacDelegated");
     if(!host){host=document.createElement("div");host.id="rbacDelegated";host.className="rbac-shell";h.insertAdjacentElement("afterend",host)}
     host.innerHTML="";
@@ -201,6 +201,9 @@
   async function installMaster(){
     restoreLegacy();
     await legacyLoadQAdmin();
+    await installTeam307();
+  }
+  async function installTeam307(){
     const box=$("q28AdminTeamCard");if(!box)return;
     box.classList.remove("hidden");box.innerHTML=permissionEditor();
     $("rbacFind").onclick=findUser;$("rbacUser").onkeydown=e=>{if(e.key==="Enter")findUser()};
@@ -212,8 +215,8 @@
     try{
       access=await v28("/admin/access/me");
       if(access.role==="MASTER_ADMIN")await installMaster();else await loadDelegated();
-    }catch(e){toast(e.message||String(e),true);setView("more")}
+    }catch(e){toast(e.message||String(e),true);throw e}
   };
 
-  if(location.hash==="#q-admin"&&state?.token)setTimeout(()=>window.loadQAdmin(),0);
+  window.v307LoadTeam=async(verified)=>{access=verified||await v28("/admin/access/me");if(access.role!=="MASTER_ADMIN")throw new Error("Master Admin required");await installTeam307()};
 })();

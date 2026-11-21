@@ -14,6 +14,8 @@
     ['market','Q Market','Orders and disputes'],
     ['predict','Q Predict','Markets, drafts and settlements'],
     ['analytics','Reports & Activity','Usage, monitoring and audit history'],
+    ['communication','Communication','Official announcements and broadcasts'],
+    ['calling','Calling Controls','Voice and video policy'],
     ['settings','Settings & Security','Q settings, pricing and admin permissions']
   ];
   const NAME=Object.fromEntries(GROUPS.map(x=>[x[0],x[1]]));
@@ -32,6 +34,7 @@
       e.classList.toggle('active',active);
       e.setAttribute('aria-current',active?'page':'false');
     });
+    document.dispatchEvent(new CustomEvent('lemmiq:admin-section',{detail:group}));
     const dropdown=byId('v2124AdminMobileMenu');if(dropdown)dropdown.value=group;
     const h=byId('v2124ActiveHeading');if(h)h.textContent=NAME[group];
   }
@@ -64,7 +67,7 @@
   function panel(group){return document.querySelector(`[data-v2124-admin-panel="${group}"]`)}
   // Identify by stable element IDs, not the order of cards (which changes with feature modules).
   const CLASSIFY=[
-    ['q28AdminOverview','overview'],['v29OperationsStats','overview'],
+    ['v306Admin','predict'],['v21314CricketAdmin','predict'],['v306Calling','calling'],['v301Communication','communication'],['v301SupportAdmin','users'],['v213CreatorAdminCard','creators'],['q28AdminOverview','overview'],['v29OperationsStats','overview'],
     ['q28AdminUsers','users'],
     ['q21074AdminEconomyCard','economy'],['q28PackageMasterRules','economy'],
     ['q28AdminTreasury','economy'],['q28AdminLedger','economy'],
@@ -89,6 +92,7 @@
   function wrap(node){
     if(!node || node.id==='v2124AdminShell' || node.classList.contains('q28-hero') || node.id==='rbacDelegated')return;
     const g=kind(node),dest=panel(g);if(!dest)return;
+    if(['v306Admin','v21314CricketAdmin','v306Calling','v301Communication','v301SupportAdmin'].includes(node.id)){dest.append(node);return;}
     if(node.id==='q28AdminOverview'){
       // Overview indicators are always visible.
       dest.insertBefore(node,dest.children[1]||null);
@@ -118,7 +122,7 @@
     const view=host();if(!view)return;
     // Some existing cards are grouped two per row. Separate the cards without recreating them.
     for(const item of [...view.children]){
-      if(item.id==='v2124AdminShell'||item.classList.contains('q28-hero')||item.id==='rbacDelegated')continue;
+      if(['v307Gate','v2124AdminShell','rbacDelegated'].includes(item.id)||item.classList.contains('q28-hero'))continue;
       if(item.classList.contains('grid')){
         for(const child of [...item.children])wrap(child);
         if(!item.children.length)item.remove();
@@ -217,23 +221,16 @@
     else if(input)input.focus();
   }
   window.lemmiqAdminOpenRecovery=openRecovery;
-  async function install(){
-    if(installing)return;installing=true;
-    try{
-      const root=host();if(!root||!root.classList.contains('active'))return;
-      const access=await api('/v28/admin/access/me');
-      isMaster=access.role==='MASTER_ADMIN';
-      if(!isMaster){byId('v2124AdminShell')?.setAttribute('hidden','');return}
-      const shell=makeShell();if(!shell)return;
-      shell.removeAttribute('hidden');organiseCards();buildRecovery();selectGroup(current);
-    }catch(e){if(typeof toast==='function')toast('Admin layout unavailable: '+(e.message||e),true)}
-    finally{installing=false}
-  }
-  const previous=window.loadQAdmin;
-  if(typeof previous==='function')window.loadQAdmin=async function(){await previous();await install()};
-  // Works when revisiting a browser tab and when earlier script loaded the admin already.
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{
-    if(host()?.classList.contains('active'))setTimeout(install,250);
-  });
-  else if(host()?.classList.contains('active'))setTimeout(install,250);
+  window.v307MountLayout=function(access){
+    isMaster=access?.role==='MASTER_ADMIN';if(!isMaster)throw new Error('Master Admin required');
+    const shell=makeShell();if(!shell)throw new Error('Admin layout unavailable');
+    shell.hidden=false;shell.style.display='';host()?.querySelector('#rbacDelegated')?.remove();for(const n of host().querySelectorAll('[data-rbac-hidden="1"]')){n.style.display='';delete n.dataset.rbacHidden}organiseCards();buildRecovery();
+    for(const id of ['q28AdminUsers','q28WalletMatrix','q28AdminPayments','q28PackageMasterRules','q28AdminTreasury','q28AdminLedger','q28RefStarter','q28AdminAudit','q28AdminMarketOrders','q28AdminPrice']){const card=byId(id)?.closest('article');if(card)card.inert=true;}
+    selectGroup(current);
+    const hero=host()?.querySelector('.q28-hero');if(hero){hero.querySelector('h2').textContent='Q Admin';hero.querySelector('.eyebrow').textContent='LEMMIQ · MANAGEMENT CONSOLE';}
+    byId('q28AdminRole').textContent='MASTER ADMIN';
+  };
+  window.v307Organise=organiseCards;
+  window.v307CurrentGroup=()=>current;
+  window.v307SelectGroup=selectGroup;
 })();

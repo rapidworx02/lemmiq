@@ -7,21 +7,23 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v3061";
+const CACHE = "lemmiq-v307";
 const SHELL = [
   "/web/v2136_creator_ux.js?v=3.0.4",
   "/web/v2134_professional.js?v=3.0.4",
   "/web/v213_creators.css?v=3.0.4",
   "/web/v213_creators.js?v=3.0.4",
   "/web/",
-  "/web/app.js?v=3.0.6.1",
+  "/web/app.js?v=3.0.7",
+  "/web/v307_admin.js?v=3.0.7",
+  "/web/v307_admin.css?v=3.0.7",
   "/web/v306.css?v=3.0.6",
-  "/web/v306.js?v=3.0.6",
+  "/web/v306.js?v=3.0.7",
   "/web/v21310_predict_q.css?v=3.0.4",
-  "/web/v21310_predict_q.js?v=3.0.4",
+  "/web/v21310_predict_q.js?v=3.0.7",
   "/web/v301.css?v=3.0.1",
   "/web/v301_admin.js?v=3.0.1",
-  "/web/v21311_upgrade.js?v=3.0.1",
+  "/web/v21311_upgrade.js?v=3.0.7",
   "/web/v300.css?v=3.0.5",
   "/web/v300.js?v=3.0.5",
   "/web/v21318_media.css?v=2.13.18",

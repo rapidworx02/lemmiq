@@ -270,5 +270,11 @@
 
   installQrEnlarge();
   if(location.hash==="#q-economy"&&state?.token)setTimeout(load21074Economy,180);
-  if(location.hash==="#q-admin"&&state?.token)setTimeout(load21074Admin,220);
+  window.v307LoadEconomy=async function(group,access){
+    adminAccess=access;installQrEnlarge();ensureAdminCards();
+    if(group==='economy')await loadAdminEconomyControls();
+    if(group==='payments')await loadAdminWithdrawals();
+    if(group==='settings')await loadFeaturePricing();
+    window.v307Organise?.();
+  };
 })();

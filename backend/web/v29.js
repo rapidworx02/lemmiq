@@ -72,12 +72,15 @@
   }
 
   function stat(label,value){return `<div class="q28-stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`}
-  async function loadV29Admin(){
-    try{
-      const period=$("v29AnalyticsPeriod")?.value||"7d";
-      const [po,ops,mon,sim,pcfg]=await Promise.all([
-        pApi(`/predict/admin/overview?period=${encodeURIComponent(period)}`),pApi(`/admin/operations?period=${encodeURIComponent(period)}`),pApi(`/admin/monetisation?period=${encodeURIComponent(period)}`),pApi("/admin/q-simulation"),pApi("/predict/admin/config")
-      ]);
+  async function loadV29Admin(group){
+    if(typeof group!=='string')group=document.getElementById('view-q-admin')?.dataset.v307Ready==='master'?window.v307AdminGroup():'all';
+    const period=$("v29AnalyticsPeriod")?.value||"7d",t=state.token;
+    if(group==='overview'||group==='all'){
+      const ops=await pApi(`/admin/operations?period=${encodeURIComponent(period)}`);if(t!==state.token)return;
+      $("v29OperationsStats").innerHTML=stat("New users",ops.new_users)+stat("New packages",ops.new_packages)+stat("Approved USDT",`US$${fmt(ops.approved_usdt)}`)+stat("Q ledger events",ops.q_ledger_events)+stat("Q Market orders",ops.q_market_orders)+stat("Referrals",ops.new_referrals);
+    }
+    if(group==='predict'||group==='all'){
+      const [po,pcfg]=await Promise.all([pApi(`/predict/admin/overview?period=${encodeURIComponent(period)}`),pApi("/predict/admin/config")]);if(t!==state.token)return;
       $("v29PredictAdminStats").innerHTML=stat("Live",po.counts?.LIVE||0)+stat("Waiting approval",po.counts?.REVIEW||0)+stat("Predictors",po.active_predictors||0)+stat("Volume",`${fmt(po.volume_pc)} PC`)+stat("Test treasury",`${fmt(po.test_treasury_pc)} PC`);
       $("v29PredictAutomation").innerHTML=[
         ["discovery_enabled","Trend discovery",pcfg.discovery_enabled],
@@ -86,11 +89,13 @@
         ["auto_settlement","Auto settlement",pcfg.auto_settlement]
       ].map(([k,l,v])=>`<label class="v29-auto-toggle"><input type="checkbox" data-v29-config="${k}" ${v?"checked":""}><span>${l}</span></label>`).join("")+`<span class="v29-mode-banner">REAL Q: ${pcfg.real_q_enabled?"ON":"OFF"}</span>`;
       qsa("[data-v29-config]").forEach(el=>el.onchange=async()=>{try{const body={};body[el.dataset.v29Config]=el.checked;await pApi("/predict/admin/config",{method:"PUT",body:JSON.stringify(body)});toast("Q Predict automation updated")}catch(e){el.checked=!el.checked;toast(e.message,true)}});
-      $("v29OperationsStats").innerHTML=stat("New users",ops.new_users)+stat("New packages",ops.new_packages)+stat("Approved USDT",`US$${fmt(ops.approved_usdt)}`)+stat("Q ledger events",ops.q_ledger_events)+stat("Q Market orders",ops.q_market_orders)+stat("Referrals",ops.new_referrals);
+      await loadReview(false);
+    }
+    if(group==='analytics'||group==='all'){
+      const [mon,sim]=await Promise.all([pApi(`/admin/monetisation?period=${encodeURIComponent(period)}`),pApi("/admin/q-simulation")]);if(t!==state.token)return;
       $("v29MonetisationStats").innerHTML=`<div class="v29-analysis-kpis"><b>${mon.requests||0}</b><span>AI actions tracked</span><b>US$${fmt(mon.estimated_ai_cost_usd)}</b><span>Estimated provider cost</span><b>${fmt(mon.simulated_q_fees)} Q</b><span>Would-be Q fees</span></div><div class="v29-feature-lines">${(mon.features||[]).map(x=>`<div><span>${esc(x.feature)}</span><b>${x.requests} uses · ${fmt(x.simulated_q)} Q</b></div>`).join("")}</div>`;
       const c=sim.current||{};$("v29QSimulation").innerHTML=`<div class="v29-price-compare"><div><small>Actual</small><strong>US$${Number(c.actual_price_usd||.05).toFixed(4)}</strong><span>Fixed</span></div><div><small>Simulated</small><strong>US$${Number(c.simulated_price_usd||.05).toFixed(4)}</strong><span>${Number(c.applied_change_percent||0)>=0?"+":""}${fmt(c.applied_change_percent)}%</span></div></div><p class="micro">Demand score ${fmt(c.demand_score)} · supply score ${fmt(c.supply_score)} · ±5% weekly simulation cap.</p>`;
-      await loadReview(false);
-    }catch(e){console.warn("V2.9 admin analytics",e)}
+    }
   }
   window.loadV29Admin=loadV29Admin;
 
