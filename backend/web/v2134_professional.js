@@ -44,9 +44,9 @@
    }catch(e){root.innerHTML='<div class="v2134-error">'+esc(e.message)+'</div>'}finally{busy=false}
  }
  function head(title,subtitle=''){
-   return `<div class="v2134-head"><div><span class="eyebrow">LEMMIQ · SEPARATE PROFESSIONAL IDENTITY</span><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><button type="button" class="ghost" data-v2134="personal">Personal Chats</button></div>`;
+   return `<div class="v2134-head"><div><span class="eyebrow">LEMMIQ · SEPARATE PROFESSIONAL IDENTITY</span><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><button type="button" class="ghost" data-v2134="personal">← Creators</button></div>`;
  }
- function tabs(){return `<nav class="v2134-tabs" aria-label="Professional navigation">${[['inbox','Creator Chats'],['requests','Requests'],['discover','Discover'],['identity','My Professional Profile']].map(([k,v])=>`<button type="button" data-v2134-tab="${k}" class="${tab===k?'active':''}">${v}</button>`).join('')}</nav>`}
+ function tabs(){return `<nav class="v2134-tabs" aria-label="Professional navigation">${[['inbox','Chats'],['requests','Requests'],['identity','Professional settings']].map(([k,v])=>`<button type="button" data-v2134-tab="${k}" class="${tab===k?'active':''}">${v}</button>`).join('')}</nav>`}
  function renderInbox(rows){
    host().innerHTML=head('Creator Inbox','Separate from your personal LEMMIQ conversations.')+tabs()+
     `<div class="v2134-stack">${rows.map(c=>`<button class="v2134-thread-card" type="button" data-v2134-thread="${esc(c.thread_id)}">${cardAvatar(c.creator)}<span><strong>${c.role==='FAN'?profileLabel(c.creator):'Fan · '+esc(c.fan?.display_name||'LEMMIQ user')}</strong><small>${terms(c.pass)}</small></span><b>Open ›</b></button>`).join('')||'<p class="v2134-empty">No professional conversations yet. Discover a creator or accept a paid request.</p>'}</div>`;
@@ -121,7 +121,7 @@
    }
    if(b.dataset.v21341==='manager')return window.LEMMIQCreatorGalleryV21341?.openManager();
    if(b.dataset.v2134Tab){tab=b.dataset.v2134Tab;selectedThread=null;return refresh()}
-   if(b.dataset.v2134==='personal')return setView('chats');
+   if(b.dataset.v2134==='personal')return setView('q-creators');
    if(b.dataset.v2134==='back'){selectedThread=null;tab='inbox';return refresh()}
    if(b.dataset.v2134==='search'){query=by('v2134Search')?.value.trim()||'';return refresh()}
     if(b.dataset.v2134==='finish'){
@@ -182,14 +182,11 @@
      }
    },true);
    const observer=new MutationObserver(()=>{
-     if(root.querySelector('.v213-tabs [data-mode="studio"].active')&&!by('v2134StudioIdentityLink')){
+     if(root.querySelector('.v304-studio-nav [data-mode="studio"].active')&&!by('v2134StudioIdentityLink')){
        const toolbar=document.createElement('div');toolbar.id='v2134StudioIdentityLink';toolbar.className='v2134-studio-link';
        toolbar.innerHTML='<strong>Professional identity is separate from your personal username.</strong><button class="primary" type="button" id="v2134OpenIdentity">Set professional username, photo & chat rules</button>';
        const main=root.querySelector('.v213-main');if(main)main.prepend(toolbar);
        by('v2134OpenIdentity').onclick=()=>open('identity');
-     }
-     if(!by('v2134InboxShortcut')&&root.querySelector('.v213-tabs')){
-       const link=document.createElement('button');link.id='v2134InboxShortcut';link.className='ghost';link.textContent='✦ Professional Inbox';link.onclick=()=>open('inbox');root.querySelector('.v213-tabs').append(link);
      }
    });observer.observe(root,{childList:true,subtree:false});
  }
@@ -199,3 +196,4 @@
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
 // V300_INSTALLED
+// V304_INSTALLED

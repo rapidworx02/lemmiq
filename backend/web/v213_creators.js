@@ -19,9 +19,10 @@
   const feedback=(msg,error=false)=>{const t=$('v213Status');if(t){t.textContent=msg;t.classList.toggle('error',error)}else if(typeof toast==='function')toast(msg,error)};
   function cleanMedia(){state.media.forEach(u=>URL.revokeObjectURL(u));state.media.clear()}
   const labels={PUBLIC:'Public',FOLLOWERS:'Followers only',SUBSCRIBERS:'Subscribers only',PPV:'Pay to unlock'};
-  const header=()=>`<div class="v213-hero"><div><span class="eyebrow">ONE LEMMIQ Q ECONOMY</span><h2>Q Creators</h2><p>Discover professional creators, support their work and connect using Q.</p></div><div class="v213-hero-right"><span>Q Creators Beta</span><small>Creator payments ${state.config?.payments_enabled?'enabled':'not yet enabled'}</small></div></div>
-   <nav class="v213-tabs" aria-label="Q Creators navigation">${[['discover','Discover'],['following','Following'],['studio','Creator Studio'],['requests','Requests'],['earnings','My Earnings']].map(([k,v])=>`<button type="button" data-mode="${k}" class="${state.mode===k?'active':''}">${v}</button>`).join('')}</nav>
-   <p class="v213-notice" id="v213Status" role="status" aria-live="polite">Approved creators publish instantly. Admins can review content afterward. Explicit content and USDT cash-out are unavailable.</p>`;
+  const header=()=>`<div class="v213-hero v304-creator-head"><div><h2>Q Creators</h2><p>Discover · Follow · Subscribe</p></div><button type="button" class="ghost" data-mode="studio" aria-label="Creator Studio">${state.mine?.profile?'Creator Studio':'Become a Creator'}</button></div>
+   <nav class="v213-tabs" aria-label="Q Creators navigation">${[['discover','Discover'],['following','Following']].map(([k,v])=>`<button type="button" data-mode="${k}" class="${state.mode===k?'active':''}">${v}</button>`).join('')}<button type="button" data-action="professional-inbox">Chats</button></nav>
+   ${['studio','earnings','requests'].includes(state.mode)?`<nav class="v304-studio-nav"><button type="button" class="${state.mode==='studio'?'active':''}" data-mode="studio">Profile & posts</button><button type="button" data-mode="earnings">Earnings</button><button type="button" data-action="gallery304">My Gallery</button></nav>`:''}
+   <p class="v213-notice" id="v213Status" role="status" aria-live="polite">Creator payments ${state.config?.payments_enabled?'enabled':'not enabled'}. Professional identity stays separate.</p>`;
   const avatar=(name,cls='',url='')=>url?`<img class="v213-avatar ${cls}" src="${esc(url)}" alt="${esc(name)}" loading="lazy">`:`<span class="v213-avatar ${cls}">${esc((name||'Q').split(/\s+/).map(x=>x[0]).slice(0,2).join('').toUpperCase())}</span>`;
   function card(c){return `<button type="button" class="v213-profile-card" data-profile="${c.id}"><span class="v213-profile-cover">${avatar(c.display_name,'',c.avatar_url)}</span><strong>${esc(c.display_name)}</strong><small>@${esc(c.username)} · ${esc(c.category)}</small><span class="v213-card-bio">${esc(c.bio||'New LEMMIQ creator')}</span><span class="v213-card-foot"><b>${c.monthly_q?num(c.monthly_q)+' Q/month':'Free subscription'}</b><small>${c.followers} followers</small></span></button>`}
   function discover(){return `<div class="v213-toolbar"><input type="search" id="v213Search" placeholder="Find creators by name or @username" value="${esc(state.filter)}"><select id="v213Category"><option value="">All categories</option>${['FASHION','LIFESTYLE','FITNESS','MUSIC','ART','EDUCATION','GAMING','GLAMOUR','OTHER'].map(k=>`<option ${state.category===k?'selected':''}>${k}</option>`).join('')}</select><button type="button" class="ghost" data-action="search">Search</button></div><div class="v213-grid">${state.users.map(card).join('')||'<div class="v213-empty">No creators found. Approved profiles will appear here.</div>'}</div>`}
@@ -115,9 +116,12 @@
       if(b.dataset.profile){state.selected=Number(b.dataset.profile);await reload();return}
       if(b.dataset.service){serviceModal(b.dataset.service);return}
       if(b.dataset.request){await requestAction(Number(b.dataset.request),b.dataset.step);return}
+      if(b.dataset.action==='professional-inbox'){window.openCreatorProfessionalInbox?.('inbox');return}
+      if(b.dataset.action==='gallery304'){window.LEMMIQCreatorGalleryV21341?.openManager();return}
       if(b.dataset.action)await action(b);
     });
     app.addEventListener('submit',ev=>{if(!ev.target.matches('form[data-form]'))return;ev.preventDefault();submitForm(ev.target)});
   });
   window.loadQCreators=reload;
 })();
+// V304_INSTALLED

@@ -50,3 +50,17 @@ body:has(#view-q-predict.active) #globalQOrb{display:none!important}
 #v21310PredictRoot>#v300Trading:not([hidden]){display:block!important;padding:0}
 #v21310PredictRoot>.v303-build{display:block;text-align:right;color:var(--muted);font-size:10px;margin-top:14px}
 /* V303_INSTALLED */
+
+/* V304: coherent wallet → market hierarchy */
+#view-q-predict .pq304-mode-label{font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 3px}
+#view-q-predict .pq-hero .eyebrow{font-size:10px}#view-q-predict .pq-hero h2{font-size:18px}
+#view-q-predict .pq304-heading{font-size:21px;margin:20px 0 10px}
+#view-q-predict .pq304-search{display:flex;gap:7px;align-items:center}#view-q-predict .pq304-search input{flex:1;min-width:0}
+#view-q-predict .pq-filter{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:9px 0}
+#view-q-predict .pq-filter label{min-width:0;font-size:12px}#view-q-predict .pq-filter select{width:100%;min-width:0}
+#view-q-predict .pq304-count{color:var(--muted);font-size:12px}
+#view-q-predict .pq-market{box-shadow:none;background:var(--panel);padding:13px;min-width:0;border-radius:14px}
+#view-q-predict .pq-market h4{font-size:15px;line-height:1.4;margin:7px 0}
+#view-q-predict .pq304-market-meta{display:flex;justify-content:space-between;align-items:center;color:var(--muted);font-size:11px}
+#view-q-predict .pq304-market-meta span{color:var(--muted);font-weight:700}#view-q-predict .pq-market button{min-height:40px;margin-top:3px}
+/* V304_INSTALLED */

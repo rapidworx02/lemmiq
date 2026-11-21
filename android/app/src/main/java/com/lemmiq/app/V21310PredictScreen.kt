@@ -61,6 +61,8 @@ fun V21310PredictScreen(){
     var error by remember{mutableStateOf("")}
     var category by remember{mutableStateOf("ALL")}
     var sportsSub by remember{mutableStateOf("ALL")}
+    var search304 by remember{mutableStateOf("")}
+    var newest304 by remember{mutableStateOf(false)}
     var selected by remember{mutableStateOf<JSONObject?>(null)}
     var stakeAmount by remember{mutableStateOf("10")}
     var buyOpen by remember{mutableStateOf(false)}
@@ -114,32 +116,38 @@ fun V21310PredictScreen(){
         if(a==null) emptyList() else (0 until a.length()).mapNotNull{a.optJSONObject(it)}
     }
     val filtered=markets.filter{m->
+        (search304.isBlank() || (m.optString("question")+" "+m.optString("category")).contains(search304.trim(),ignoreCase=true)) &&
         (category=="ALL"||m.optString("category")==category) &&
         (category!="SPORTS"||sportsSub=="ALL"||demoMode||m.optString("subcategory")==sportsSub)
     }
+    val ordered304=if(newest304)filtered.sortedByDescending{it.optInt("id")} else filtered.sortedBy{it.optString("close_at")}
     val permitted=home?.optBoolean("payments_enabled",false)==true
 
     LazyColumn(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentPadding=PaddingValues(12.dp,12.dp,12.dp,120.dp),verticalArrangement=Arrangement.spacedBy(11.dp)){
+        item{Text("Q Predict",fontSize=22.sp,fontWeight=FontWeight.Bold)}
         item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
             FilterChip(!tradingPreview300,{tradingPreview300=false},label={Text("Predict")},modifier=Modifier.weight(1f))
             FilterChip(tradingPreview300,{tradingPreview300=true;selected=null;buyOpen=false;showHistory=false},label={Text("AI Trading Pools",fontSize=11.sp)},modifier=Modifier.weight(1f))
         }}
         if(tradingPreview300){item{V300TradingPreview(config300?.optDouble("reference_usdt_per_q",0.0)?:0.0,config300?.optDouble("available_q",Double.NaN)?:Double.NaN)}}else{
+        item{Column(verticalArrangement=Arrangement.spacedBy(2.dp)){
+            Text("Wallet mode",fontSize=12.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                FilterChip(demoMode,{demoMode=true},label={Text("Demo")},modifier=Modifier.weight(1f))
+                FilterChip(!demoMode,{demoMode=false},label={Text("Q Wallet")},modifier=Modifier.weight(1f))
+            }
+        }}
         item{
             Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF29215F)),shape=RoundedCornerShape(21.dp)){
                 Column(Modifier.fillMaxWidth().padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)){
                     Text(if(demoMode)"PRACTICE · NO CASH VALUE" else "DEDICATED Q PREDICT WALLET",color=Color(0xFFDCD5FF),fontSize=10.sp,fontWeight=FontWeight.Bold)
                     Text(if(demoMode)"Demo predictions" else "Q Predict Wallet",color=Color.White,fontWeight=FontWeight.Black,fontSize=20.sp)
-                    Text(if(demoMode)"${pqNumber(source?.optDouble("available",0.0)?:0.0)} Demo USDT" else "${pqNumber(source?.optDouble("available_q",0.0)?:0.0)} Q",
+                    Text(if(source==null)"—" else if(demoMode)"${pqNumber(source.optDouble("available",0.0))} Demo USDT" else "${pqNumber(source.optDouble("available_q",0.0))} Q",
                         color=Color.White,fontWeight=FontWeight.Black,fontSize=22.sp)
-                    Text(if(demoMode)"Virtual credits, no cash value" else "Locked: ${pqNumber(source?.optDouble("locked_q",0.0)?:0.0)} Q · Main Q Economy wallet is separate",
+                    Text(if(demoMode)"Locked: ${source?.let{pqNumber(it.optDouble("locked",0.0))}?:"—"} Demo USDT · No cash value" else "Locked: ${pqNumber(source?.optDouble("locked_q",0.0)?:0.0)} Q · Main Q Economy wallet is separate",
                         color=Color(0xFFEAE4FF),fontSize=11.sp)
                     if(!demoMode)Text("Buy Q +5% · Sell Q −5%",color=Color(0xFFDFD8FF),fontSize=11.sp)
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                        OutlinedButton(onClick={demoMode=true}){Text("Demo",color=Color.White)}
-                        OutlinedButton(onClick={demoMode=false}){Text("Q Wallet",color=Color.White)}
-                    }
                 }
             }
         }
@@ -158,7 +166,13 @@ fun V21310PredictScreen(){
             }
         }
         if(!demoMode)item{V21311PredictExtras(onWalletChanged={refresh()})}
-        item{Text("Live prediction markets",fontSize=20.sp,fontWeight=FontWeight.Black)}
+        item{Text("Markets",fontSize=20.sp,fontWeight=FontWeight.Bold)}
+        item{OutlinedTextField(search304,{search304=it},modifier=Modifier.fillMaxWidth(),singleLine=true,placeholder={Text("Search prediction markets")})}
+        item{Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            FilterChip(!newest304,{newest304=false},label={Text("Closing soon",fontSize=11.sp)})
+            FilterChip(newest304,{newest304=true},label={Text("Newest listed",fontSize=11.sp)})
+        }}
+        item{Text("${ordered304.size} available markets · ${if(demoMode)"Demo USDT" else "Q Predict Q"}",fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)}
         item{
             Column(verticalArrangement=Arrangement.spacedBy(6.dp)){
                 androidx.compose.foundation.lazy.LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){
@@ -176,12 +190,13 @@ fun V21310PredictScreen(){
             }
         }
         if(filtered.isEmpty())item{Card{Text("No eligible live markets in this category.",Modifier.padding(15.dp))}}
-        items(filtered.take(30),key={it.optInt("id")}){m->
+        items(ordered304,key={it.optInt("id")}){m->
             Card(Modifier.fillMaxWidth().clickable{selected=m},shape=RoundedCornerShape(18.dp)){
                 Column(Modifier.padding(15.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    Text(m.optString("category")+" · "+m.optString("subcategory"),fontSize=10.sp,color=Color(0xFF6C4DFF))
+                    Text(listOf(m.optString("category"),m.optString("subcategory")).filter{it.isNotBlank()}.joinToString(" · "),fontSize=10.sp,color=MaterialTheme.colorScheme.primary)
                     Text(m.optString("question"),fontWeight=FontWeight.Bold,fontSize=15.sp)
-                    OutlinedButton(onClick={selected=m}){Text("Predict YES / NO")}
+                    Text("Closes: "+m.optString("close_at").replace("T"," "),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick={selected=m}){Text("Open market →")}
                 }
             }
         }
@@ -283,3 +298,4 @@ fun V21310PredictScreen(){
 // V300_INSTALLED
 // V301_INSTALLED
 // V302_INSTALLED
+// V304_INSTALLED

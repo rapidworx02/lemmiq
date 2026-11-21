@@ -174,7 +174,7 @@ function setView(name){
   target.classList.add("active");
   document.body.classList.toggle("v302-predict-active",name==="q-predict");
   const secondary=["trust","business","activity","money","me","q-admin"];
-  const navName=name==="updates"?"chats":(name==="professional-inbox"?"chats":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
+  const navName=name==="updates"?"chats":(name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],
@@ -1801,7 +1801,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.3").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.4").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
@@ -1833,3 +1833,4 @@ window.checkMessage=checkMessage;
 // V301_INSTALLED
 // V302_INSTALLED
 // V303_INSTALLED
+// V304_INSTALLED

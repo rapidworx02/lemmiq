@@ -57,3 +57,14 @@ body.v300-conversation .suggestion-actions button{min-height:36px;padding:5px 10
 #messageList .msg:not(.v318-photo-msg)>.message-menu{position:absolute;inset-inline-end:5px;top:5px;width:23px;min-width:23px;padding:1px;opacity:.85}
 #modal button[aria-label="Close"],#modal .modal-close,#modal #modalClose{color:var(--text,#25243a)!important}
 /* V303_INSTALLED */
+
+/* V304: wallet dashboard; preserve all existing payment controls. */
+body:has(#view-q-economy.active) #globalQOrb,body:has(#view-q-creators.active) #globalQOrb,body:has(#view-professional-inbox.active) #globalQOrb{display:none!important}
+#view-q-economy #q28Tab-creators{display:none!important}#view-q-economy .q28-hero{padding:14px!important;border-radius:16px!important;gap:9px!important;margin:0 0 8px}
+#view-q-economy .q28-hero h2{font-size:20px;margin:3px 0}#view-q-economy .q28-hero p{font-size:12px;margin:3px 0}
+#view-q-economy .q28-balance{padding:10px!important;min-width:0}#view-q-economy #q28Balance{font-size:26px!important}
+#view-q-economy .q28-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:10px 0}
+#view-q-economy .q28-tabs button{min-width:0;min-height:44px;white-space:normal;font-size:12px;padding:8px!important}
+#view-q-economy #q28Tab-wallet .grid.two{grid-template-columns:1fr}#view-q-economy #q28Tab-wallet .card{padding:12px;border-radius:14px}
+#view-q-economy .v2136-q-switcher,#view-q-predict .v2136-q-switcher,#v2134MoreInbox{display:none!important}
+/* V304_INSTALLED */

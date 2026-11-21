@@ -141,7 +141,7 @@ private val ProMuted=Color(0xFF77798F)
 
 /** One entry point for all user-facing professional chats, creator discovery, and identity settings. */
 @Composable
-fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
+fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0,initialSearch:String=""){
     val ctx=androidx.compose.ui.platform.LocalContext.current
     val api=remember(vm.store){ProfessionalApiV2134(ctx.applicationContext,vm.store)}
     val scope=rememberCoroutineScope()
@@ -152,7 +152,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
     var threads by remember { mutableStateOf<List<ProChatV2134>>(emptyList()) }
     var selected by remember { mutableStateOf<String?>(null) }
     var chat by remember { mutableStateOf<ProChatV2134?>(null) }
-    var search by remember { mutableStateOf("") }
+    var search by remember { mutableStateOf(initialSearch) }
     var draft by remember { mutableStateOf("") }
     var handle by remember { mutableStateOf("") }
     var stage by remember { mutableStateOf("") }
@@ -210,8 +210,8 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                 OutlinedButton(onClick={showGalleryPicker=true},modifier=Modifier.weight(1f),enabled=identity.creator_status=="APPROVED") { Text("My Gallery",fontSize=12.sp) }
             }
             androidx.compose.foundation.lazy.LazyRow(Modifier.padding(7.dp),horizontalArrangement=Arrangement.spacedBy(5.dp)){
-                items(listOf("Creator Chats","Requests","Discover","My Professional")){name->
-                    val i=listOf("Creator Chats","Requests","Discover","My Professional").indexOf(name)
+                items(listOf("Creator Chats","Requests","Search paid chats","Professional settings")){name->
+                    val i=listOf("Creator Chats","Requests","Search paid chats","Professional settings").indexOf(name)
                     FilterChip(selected=tab==i,onClick={tab=i},label={Text(name,fontSize=10.sp)})
                 }
             }
@@ -340,7 +340,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
                     Button({reload()},modifier=Modifier.padding(start=8.dp)){Text("Search")}
                 }
                 LazyColumn(Modifier.weight(1f),contentPadding=PaddingValues(10.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
-                    items(profiles,key={it.public_id}){c->Card{Column(Modifier.padding(14.dp)){
+                    items(profiles,key={it.public_id}){c->Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp)){
                         Row(verticalAlignment=Alignment.CenterVertically){
                             val photo=c.avatar_url
                             if(photo!=null)AsyncImage(model=BuildConfig.API_BASE_URL.trimEnd('/')+photo,
@@ -392,3 +392,4 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
         dismissButton={TextButton({confirmOp=null}){Text("Cancel")}})}
 }
 // V300_INSTALLED
+// V304_INSTALLED

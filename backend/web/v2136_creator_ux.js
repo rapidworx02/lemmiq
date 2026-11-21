@@ -9,7 +9,7 @@
     if(location.hash!=='#'+name)history.pushState({view:name},'', '#'+name);
   }
   function qSwitcher(){
-    for(const id of ['agent','q-economy','q-predict']){
+    for(const id of ['agent']){
       const view=$('view-'+id);if(!view||view.querySelector('.v2136-q-switcher'))continue;
       const row=document.createElement('nav');row.className='v2136-q-switcher';
       row.setAttribute('aria-label','Q workspace navigation');
@@ -21,16 +21,7 @@
       view.prepend(row);
     }
   }
-  function creatorReady(){
-    const host=$('v213CreatorsApp');if(!host||host.querySelector('.v2136-creator-shortcuts'))return;
-    const hero=host.querySelector('.v213-hero');if(!hero)return;
-    const row=document.createElement('nav');row.className='v2136-creator-shortcuts';
-    row.setAttribute('aria-label','Creator actions');
-    row.innerHTML=`<button type="button" data-v2136-creator="studio">✦ Creator Studio</button>
-      <button type="button" data-v2136-creator="gallery">▣ Manage gallery</button>
-      <button type="button" data-v2136-creator="inbox">💬 Creator inbox</button>`;
-    hero.after(row);
-  }
+  function creatorReady(){ /* V304: creator home owns all visible shortcuts. */ }
   window.v2136CreatorReady=creatorReady;
   document.addEventListener('click',e=>{
     const route=e.target.closest('[data-v2136-route]');
@@ -50,3 +41,4 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',qSwitcher,{once:true});
   else qSwitcher();
 })();
+// V304_INSTALLED

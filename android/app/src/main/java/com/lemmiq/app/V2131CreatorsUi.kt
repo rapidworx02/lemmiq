@@ -74,7 +74,7 @@ private fun CreatorConfirm(title: String, detail: String, confirmText: String = 
 
 /** Entry point installed under More and the Me/Profile shortcut. Native Compose, not a WebView. */
 @Composable
-fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
+fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel, openProfessional: ((Int,String)->Unit)? = null) {
     val context = LocalContext.current
     val client = remember(vm.store) { CreatorApiV2131(context.applicationContext, vm.store) }
     val scope = rememberCoroutineScope()
@@ -104,26 +104,30 @@ fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
         finally { busy = false }
     }
 
-    Column(Modifier.fillMaxSize().background(CreatorBg)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (selectedId != null) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton({ selectedId = null; refresh() }) { Text("‹ Q Creators") }
                 Spacer(Modifier.weight(1f))
                 Text("Profile", fontWeight = FontWeight.SemiBold)
             }
-            CreatorProfileDetails(client, selectedId!!, config, onError = { error = it }, onUpdated = ::refresh)
+            CreatorProfileDetails(client, selectedId!!, config, onError = { error = it }, onUpdated = ::refresh, onPaidChat = openProfessional?.let{ go -> { handle:String -> go(2,handle) } })
         } else {
-            Column(Modifier.fillMaxWidth().background(Color.White).padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text("Q Creators", fontSize = 26.sp, fontWeight = FontWeight.Black)
-                Text("Discover · Follow · Subscribe · Create", color = CreatorMuted, fontSize = 11.sp)
-                Spacer(Modifier.height(10.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                    items(listOf("Discover", "Following", "Creator Studio", "Requests")) { title ->
-                        val index = listOf("Discover", "Following", "Creator Studio", "Requests").indexOf(title)
-                        FilterChip(selected = tab == index, onClick = { tab = index },
-                            label = { Text(title, fontSize = 11.sp) })
-                    }
+            Column(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp)){
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                    Text("Q Creators",fontSize=22.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+                    TextButton({tab=2}){Text("Creator Studio",fontSize=12.sp)}
                 }
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)){
+                    FilterChip(tab==0,{tab=0},label={Text("Discover",fontSize=11.sp)},modifier=Modifier.weight(1f))
+                    FilterChip(tab==1,{tab=1},label={Text("Following",fontSize=11.sp)},modifier=Modifier.weight(1f))
+                    if(openProfessional!=null)OutlinedButton({openProfessional(0,"")},modifier=Modifier.weight(1f),contentPadding=PaddingValues(4.dp)){Text("Chats",fontSize=11.sp)}
+                    else FilterChip(tab==3,{tab=3},label={Text("Requests",fontSize=11.sp)},modifier=Modifier.weight(1f))
+                }
+                if(tab==2){Row(horizontalArrangement=Arrangement.spacedBy(4.dp)){
+                    if(openProfessional!=null)TextButton({openProfessional(3,"")}){Text("Professional settings",fontSize=11.sp)}
+                    TextButton({tab=3}){Text("Service requests",fontSize=11.sp)}
+                }}
             }
             if (tab == 0 || tab == 1) {
                 OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp),
@@ -136,19 +140,19 @@ fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             if (tab == 0 || tab == 1) {
-                LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp)) {
-                    if (profiles.isEmpty() && !busy) item { CreatorEmpty("No creators found", "Approved professional profiles will appear here.") }
-                    items(profiles, key = { it.id }) { profile ->
-                        Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp).clickable { selectedId = profile.id }, shape = RoundedCornerShape(18.dp)) {
-                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                CreatorAvatar(profile)
-                                Spacer(Modifier.width(12.dp))
-                                Column(Modifier.weight(1f)) {
-                                    Text(profile.display_name, fontWeight = FontWeight.Bold, maxLines = 1)
-                                    Text("@${profile.username} · ${profile.category.lowercase()}", color = CreatorMuted, fontSize = 11.sp)
-                                    Text("${profile.followers} followers · ${if (profile.monthly_q == 0.0) "Free" else "${qText(profile.monthly_q)} Q / 30 days"}", fontSize = 11.sp)
-                                }
-                                Text("›", fontSize = 24.sp, color = CreatorPurple)
+                androidx.compose.foundation.lazy.grid.LazyVerticalGrid(columns=androidx.compose.foundation.lazy.grid.GridCells.Fixed(2),modifier=Modifier.fillMaxSize(),contentPadding=PaddingValues(10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                    if(profiles.isEmpty()&&!busy)item(span={androidx.compose.foundation.lazy.grid.GridItemSpan(2)}){CreatorEmpty("No creators found","Approved professional profiles will appear here.")}
+                    items(profiles.size,key={profiles[it].id}){index->
+                        val profile=profiles[index]
+                        Card(Modifier.fillMaxWidth().clickable{selectedId=profile.id},shape=RoundedCornerShape(14.dp)){
+                            Column(Modifier.fillMaxWidth().padding(10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(5.dp)){
+                                CreatorAvatar(profile,76)
+                                Text(profile.display_name,fontWeight=FontWeight.Bold,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                Text("@${profile.username}",fontSize=11.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
+                                Text(profile.category.lowercase(),fontSize=11.sp,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("${profile.followers} followers",fontSize=11.sp)
+                                Text(if(profile.monthly_q==0.0)"Free subscription" else "${qText(profile.monthly_q)} Q / 30d",fontSize=11.sp,color=MaterialTheme.colorScheme.primary)
+                                Text("View profile ›",fontSize=12.sp,color=MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -180,7 +184,7 @@ fun V2131CreatorsAndroidScreen(vm: LemmiqViewModel) {
 
 @Composable
 private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, config: CreatorConfigNative,
-                                  onError: (String) -> Unit, onUpdated: () -> Unit) {
+                                  onError: (String) -> Unit, onUpdated: () -> Unit, onPaidChat: ((String)->Unit)? = null) {
     val scope = rememberCoroutineScope()
     var page by remember(creatorId) { mutableStateOf<CreatorPageNative?>(null) }
     var gallery by remember(creatorId) { mutableStateOf<List<CreatorGalleryNative>>(emptyList()) }
@@ -198,8 +202,11 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(creatorId, refresh) {
-        try { page = client.profile(creatorId); gallery = client.gallery(creatorId) }
+        try { page = client.profile(creatorId) }
         catch (e: Exception) { onError(e.message ?: "Unable to open creator") }
+    }
+    LaunchedEffect(creatorId, refresh, tab) {
+        if(tab==1) try { gallery=client.gallery(creatorId) } catch(e:kotlinx.coroutines.CancellationException){throw e} catch(e:Exception){onError(e.message?:"Unable to load gallery")}
     }
     val p = page?.profile
     if (p == null) { CircularProgressIndicator(Modifier.padding(22.dp)); return }
@@ -244,7 +251,7 @@ private fun CreatorProfileDetails(client: CreatorApiV2131, creatorId: Int, confi
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             // V2134_LEGACY_CHAT_DISABLED: paid chat uses separate professional screen
-                            if (p.chat_q > 0) Text("Paid Chat: open Creator Inbox → Discover", fontSize = 11.sp, color = CreatorMuted)
+                            if (p.chat_q > 0) { if(onPaidChat!=null)TextButton({onPaidChat(p.username)}){Text("Request chat · ${qText(p.chat_q)} Q",fontSize=11.sp)} else Text("Paid Chat: open Creator Inbox → Discover",fontSize=11.sp,color=CreatorMuted) }
                             if (p.voice_q > 0) TextButton({ requestKind = "VOICE" }) { Text("Voice ${qText(p.voice_q)} Q", fontSize = 11.sp) }
                             if (p.video_q > 0) TextButton({ requestKind = "VIDEO" }) { Text("Video ${qText(p.video_q)} Q", fontSize = 11.sp) }
                         }
@@ -838,3 +845,17 @@ fun V2131SendPpvSheet(vm: LemmiqViewModel, chatId: Int, onClose: () -> Unit, onS
             }
         })
 }
+
+@Composable
+fun V304CreatorsHome(vm:LemmiqViewModel){
+    var professional by remember{mutableStateOf<Int?>(null)}
+    var search by remember{mutableStateOf("")}
+    val target=professional
+    if(target==null) V2131CreatorsAndroidScreen(vm,openProfessional={tab,handle->search=handle;professional=tab})
+    else Column(Modifier.fillMaxSize()){
+        TextButton({professional=null}){Text("‹ Q Creators")}
+        Box(Modifier.weight(1f)){V2134ProfessionalHub(vm,target,search)}
+    }
+    androidx.activity.compose.BackHandler(enabled=professional!=null){professional=null}
+}
+// V304_INSTALLED

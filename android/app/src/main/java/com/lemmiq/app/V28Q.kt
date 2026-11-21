@@ -48,17 +48,14 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
     var disputeOrder by remember{mutableStateOf<QMarketOrderDto?>(null)}
     LaunchedEffect(tab){vm.refreshQEconomySection300(tab)}
 
-    Column(Modifier.fillMaxSize().background(Q28Bg)){
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)){
         val w=vm.qWallet
         Surface(color=Color(0xFF15142A),modifier=Modifier.fillMaxWidth()){
-            Column(Modifier.padding(18.dp)){
+            Column(Modifier.padding(13.dp)){
                 Text("LEMMIQ Q",color=Color(0xFFC9BFFF),fontSize=11.sp,fontWeight=FontWeight.Bold)
                 Text("Q Economy",color=Color.White,fontSize=22.sp,fontWeight=FontWeight.Black)
-                TextButton(onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("q_creators")}) {
-                    Text("✨ Q Creators · Discover",color=Color.White,fontSize=12.sp)
-                }
                 Spacer(Modifier.height(8.dp))
-                Text("${q28Q(w?.balance_q?:0.0)} Q",color=Color.White,fontSize=25.sp,fontWeight=FontWeight.Black)
+                Text(if(w==null)"— Q" else "${q28Q(w.balance_q)} Q",color=Color.White,fontSize=25.sp,fontWeight=FontWeight.Black)
                 Text("≈ ${q28Usd(w?.balance_usd_reference?:0.0)} reference · 1 Q ≈ ${q28Usd(w?.q_reference_usd?:0.05)}",color=Color(0xFFC4C1D2),fontSize=11.sp)
                 Text(
                     if(vm.qWithdrawalConfig.enabled)"Q → USDT withdrawal is available" else "Q → USDT withdrawal is currently OFF",
@@ -66,10 +63,13 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 )
             }
         }
-        LazyRow(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),contentPadding=PaddingValues(end=8.dp)){
-            items(listOf("Wallet","Packages","Market","Refer","Activity","Creators")){label->
-                val i=listOf("Wallet","Packages","Market","Refer","Activity","Creators").indexOf(label)
-                FilterChip(selected=tab==i,onClick={tab=i},label={Text(label,fontSize=11.sp,maxLines=1)},modifier=Modifier.widthIn(min=92.dp))
+        Column(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)){
+            val sections=listOf("Wallet","Packages","Q Market","Refer & Earn","Activity")
+            sections.withIndex().chunked(3).forEach{row->
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+                    row.forEach{entry->FilterChip(tab==entry.index,{tab=entry.index},label={Text(entry.value,fontSize=11.sp)},modifier=Modifier.weight(1f))}
+                    repeat(3-row.size){Spacer(Modifier.weight(1f))}
+                }
             }
         }
         if(vm.qEconomyBusy)LinearProgressIndicator(Modifier.fillMaxWidth(),color=Q28Purple)
@@ -83,7 +83,7 @@ fun V28QEconomyScreen(vm:LemmiqViewModel){
                 2->Q28MarketTab(vm){disputeOrder=it}
                 3->Q28ReferralTab(vm)
                 4->Q28ActivityTab(vm)
-                else->V2131CreatorsAndroidScreen(vm)
+                else->Q28WalletTab(vm)
             }
         }
     }
@@ -145,9 +145,9 @@ private fun Q28WalletTab(vm:LemmiqViewModel){
     }
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         item{
-            Card(shape=RoundedCornerShape(18.dp)){
-                Column(Modifier.padding(16.dp)){
-                    Text("Basic Q mining",fontWeight=FontWeight.Bold,fontSize=18.sp)
+            Card(Modifier.fillMaxWidth(),shape=RoundedCornerShape(14.dp)){
+                Column(Modifier.padding(12.dp)){
+                    Text("Daily Q reward",fontWeight=FontWeight.Bold,fontSize=16.sp)
                     Text(if(w?.basic_claimed_today==true)"Today's basic Q is claimed." else "Claim up to ${q28Q(w?.basic_daily_q?:0.0)} Q today.",color=Q28Muted,fontSize=12.sp)
                     Spacer(Modifier.height(10.dp))
                     Button(onClick={vm.qClaimDaily()},enabled=w?.basic_claimed_today!=true&&!vm.qEconomyBusy){Text(if(w?.basic_claimed_today==true)"Claimed" else "Claim daily Q")}
@@ -722,3 +722,4 @@ private fun Q28ReferralTab(vm:LemmiqViewModel){
     }
 }
 // V300_INSTALLED
+// V304_INSTALLED

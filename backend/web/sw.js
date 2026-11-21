@@ -7,16 +7,20 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v303";
+const CACHE = "lemmiq-v304";
 const SHELL = [
+  "/web/v2136_creator_ux.js?v=3.0.4",
+  "/web/v2134_professional.js?v=3.0.4",
+  "/web/v213_creators.css?v=3.0.4",
+  "/web/v213_creators.js?v=3.0.4",
   "/web/",
-  "/web/app.js?v=3.0.3",
-  "/web/v21310_predict_q.css?v=3.0.3",
-  "/web/v21310_predict_q.js?v=3.0.3",
+  "/web/app.js?v=3.0.4",
+  "/web/v21310_predict_q.css?v=3.0.4",
+  "/web/v21310_predict_q.js?v=3.0.4",
   "/web/v301.css?v=3.0.1",
   "/web/v301_admin.js?v=3.0.1",
   "/web/v21311_upgrade.js?v=3.0.1",
-  "/web/v300.css?v=3.0.3",
+  "/web/v300.css?v=3.0.4",
   "/web/v300.js?v=3.0.3",
   "/web/v21318_media.css?v=2.13.18",
   "/web/v21318_media.js?v=2.13.18",
@@ -68,3 +72,4 @@ self.addEventListener("notificationclick",event=>{
 // V301_INSTALLED
 // V302_INSTALLED
 // V303_INSTALLED
+// V304_INSTALLED

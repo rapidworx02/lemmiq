@@ -310,7 +310,7 @@ private fun Home(vm:LemmiqViewModel){
             Column(horizontalAlignment=Alignment.End,verticalArrangement=Arrangement.spacedBy(8.dp)){
                 if(tab==0&&!chatsUpdatesOpen317&&!showMore&&!qFullScreen)SmallFloatingActionButton({newChat=true},containerColor=Soft,contentColor=Purple){Text("+",fontSize=23.sp)}
                 // V21342_HIDE_Q_OVER_CREATOR: no floating assistant over any More/Professional chat composer.
-                if(!qFullScreen && !showMore && tab!=1 && tab!=3 && tab!=4 && !(tab==2 && qPredictOpen) && !chatsUpdatesOpen317 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
+                if(!qFullScreen && !showMore && tab!=1 && tab!=2 && tab!=3 && tab!=4 && !chatsUpdatesOpen317 && vm.active==null && vm.activeGroup==null)FloatingActionButton(
                     {qSheet=true},
                     containerColor=Purple.copy(alpha=.68f),
                     contentColor=Color.White,
@@ -350,17 +350,8 @@ private fun Home(vm:LemmiqViewModel){
                         if(prompt.isNotBlank())vm.askAgent(prompt)
                     },onQThread={qThreadOpen=true;qFullScreen=false;vm.refreshQThread(markRead=true)},
                     onUpdates317={chatsUpdatesOpen317=true})
-                    1->V2134ProfessionalHub(vm,2)
-                    2->Column(Modifier.fillMaxSize()) {
-                        Row(Modifier.fillMaxWidth().padding(6.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                            FilterChip(!qPredictOpen,{qPredictOpen=false},label={Text("Q Wallet",fontSize=11.sp)})
-                            FilterChip(qPredictOpen,{qPredictOpen=true},label={Text("Q Predict",fontSize=11.sp)})
-                            OutlinedButton(onClick={qFullScreen=true},contentPadding=PaddingValues(horizontal=10.dp)) { Text("Ask Q",fontSize=11.sp) }
-                        }
-                        Box(Modifier.weight(1f)) {
-                            V28QEconomyScreen(vm)
-                        }
-                    }
+                    1->V304CreatorsHome(vm)
+                    2->V28QEconomyScreen(vm)
                     3->V21310PredictScreen()
                     4->V241CallsScreen(vm)
                     else->V24Inbox(vm,onNewGroup={newGroup=true},onAskQ={prompt->
@@ -2175,3 +2166,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
 // V301_INSTALLED
 // V302_INSTALLED
 // V303_INSTALLED
+// V304_INSTALLED
