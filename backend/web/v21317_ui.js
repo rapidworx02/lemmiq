@@ -15,7 +15,8 @@
     document.querySelectorAll('[data-home317-target]').forEach(b=>b.classList.toggle('active',b.dataset.home317Target===target));
   }
   function openTab(target){
-    if(typeof window.setView==='function')window.setView(target);
+    if(target==='q-creators'&&typeof window.openCreatorProfessionalInbox==='function')window.openCreatorProfessionalInbox('inbox');
+    else if(typeof window.setView==='function')window.setView(target);
     activeTabs(target);
   }
   async function catchup(){
@@ -55,3 +56,4 @@
     });
   });
 })();
+// V300_INSTALLED

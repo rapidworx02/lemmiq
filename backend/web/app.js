@@ -90,10 +90,12 @@ function authHeaders(extra={}) {
   return {...extra, ...(state.token ? {"Authorization":`Bearer ${state.token}`} : {})};
 }
 async function api(path, opts={}){
+  const requestToken=state.token;
   const headers = authHeaders(opts.headers || {});
   if (opts.body && !(opts.body instanceof FormData) && !headers["Content-Type"]) headers["Content-Type"]="application/json";
   const r = await fetch(path,{...opts,headers});
-  if (r.status===401){ logout(); throw new Error("Session expired"); }
+  if(requestToken!==state.token)throw new Error("Session changed");
+  if (r.status===401 && requestToken){ logout(); throw new Error("Session expired"); }
   let body=null;
   const ct=r.headers.get("content-type")||"";
   if(ct.includes("application/json")) body=await r.json(); else body=await r.text();
@@ -105,6 +107,7 @@ async function api(path, opts={}){
       : (raw && typeof raw === 'object' ? (raw.msg || raw.message || JSON.stringify(raw)) : String(raw));
     throw new Error(message || `HTTP ${r.status}`);
   }
+  if(requestToken!==state.token)throw new Error("Session changed");
   return body;
 }
 function saveSession(data){
@@ -120,6 +123,12 @@ function logout(){
   state.token="";state.user=null;
   if(state.socket) try{state.socket.close()}catch{}
   $("appView").classList.add("hidden");$("authView").classList.remove("hidden");
+  ++window.__lemmiqWsSerial;clearTimeout(window.__lemmiqWsReconnect);clearTimeout(window.__lemmiqChatListRefresh);clearInterval(window.__wsPing);
+  if(state.statusBlobUrl)URL.revokeObjectURL(state.statusBlobUrl);
+  if(state.visionBlobUrl)URL.revokeObjectURL(state.visionBlobUrl);
+  Object.assign(state,{activeChat:null,activeGroup:null,chats:[],groups:[],messages:[],groupMessages:[],chatCalls:[],statuses:[],vision:[],qHome:null,qThread:{unread_count:0,items:[]},qCoordination:{inbox:[],outbox:[]},trustHistory:[],replyTo:null,chatListLoadedAt:0});
+  // Reinitialise every module's private in-memory account state, not only app.js.
+  history.replaceState({view:'chats'},'',location.pathname+location.search+'#chats');location.reload();
 }
 function showApp(){
   $("authView").classList.add("hidden");$("appView").classList.remove("hidden");
@@ -141,7 +150,9 @@ function showApp(){
   else refreshCurrent();
   if(window.refreshV28Access) window.refreshV28Access();
 }
+let conversationEpoch300=0;
 function chatsHome(pushHistory=false){
+  ++conversationEpoch300;
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
   $("globalQOrb")?.classList.remove("q2106-hide-orb");
   const layout=document.querySelector(".chat-layout");if(layout)layout.classList.remove("open-chat");
@@ -158,11 +169,11 @@ function chatsHome(pushHistory=false){
 
 function setView(name){
   qsa(".view").forEach(v=>v.classList.remove("active"));
-  if(name!=="chats")$("globalQOrb")?.classList.remove("q2106-hide-orb");
+  if(name!=="chats"){++conversationEpoch300;$("globalQOrb")?.classList.remove("q2106-hide-orb");}
   const target=$(`view-${name}`);if(!target)return;
   target.classList.add("active");
   const secondary=["trust","business","activity","money","me","q-admin"];
-  const navName=name==="updates"?"chats":(name==="professional-inbox"?"q-creators":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
+  const navName=name==="updates"?"chats":(name==="professional-inbox"?"chats":(secondary.includes(name)?"more":(name==="agent"?"q-economy":name)));
   qsa("#nav button").forEach(b=>b.classList.toggle("active",b.dataset.view===navName));
   const meta={
     chats:["Chats","Search conversations or ask Q."],
@@ -258,7 +269,7 @@ async function connectSocket(){
       }
       if(p.type==="message"){
         if(state.activeChat&&p.data?.chat_id===state.activeChat.id&&p.data?.id&&!state.messages.some(m=>m.id===p.data.id)){
-          state.messages.push(p.data);renderMessages(true);
+          const host=$("messageList"),near=host.scrollHeight-host.scrollTop-host.clientHeight<130;state.messages.push(p.data);renderMessages(near);
         }
         scheduleChatListRefresh();
       }else if(p.type==="message_update"){
@@ -268,7 +279,7 @@ async function connectSocket(){
         scheduleChatListRefresh();
       }else if(p.type==="group_message"){
         if(state.activeGroup&&p.group_id===state.activeGroup.id&&p.data?.id&&!state.groupMessages.some(m=>m.id===p.data.id)){
-          state.groupMessages.push(p.data);renderGroupMessages();
+          const host=$("groupMessageList"),near=host.scrollHeight-host.scrollTop-host.clientHeight<130;state.groupMessages.push(p.data);renderGroupMessages(near);
         }
         scheduleChatListRefresh();
       }else if(["q_coordination_request","q_coordination_response","q_coordination_closed"].includes(p.type)){
@@ -344,9 +355,11 @@ function renderChats(){
   el.innerHTML=qRow+normalRows || `<div class="empty-state"><p>No matching conversations.</p></div>`;
 }
 async function openQThread(){
+  const epoch=++conversationEpoch300,token=state.token;
   state.activeChat=null;state.activeGroup=null;state.replyTo=null;
   $("globalQOrb")?.classList.add("q2106-hide-orb");
   await loadQThread();
+  if(epoch!==conversationEpoch300||token!==state.token)return;
   $("emptyChat").classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeQThread").classList.remove("hidden");
   document.querySelector(".chat-layout")?.classList.add("open-chat");
   renderQThread();
@@ -376,16 +389,21 @@ async function cancelQThread(key){
   catch(e){toast(e.message,true)}
 }
 async function openChat(cid,mark=true){
+  const epoch=++conversationEpoch300,token=state.token;
   let chat=state.chats.find(x=>x.id===cid);
   if(!chat){await loadChats();chat=state.chats.find(x=>x.id===cid)}
-  if(!chat)return;
-  state.activeGroup=null;state.activeChat=chat;state.replyTo=null;
+  if(!chat||epoch!==conversationEpoch300||token!==state.token)return;
+  state.activeGroup=null;state.activeChat=chat;state.replyTo=null;state.messages=[];state.chatCalls=[];
+  $("activeChat").classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeQThread").classList.add("hidden");$("emptyChat").classList.remove("hidden");
+  $("messageList").replaceChildren();$("groupMessageList").replaceChildren();
   $("globalQOrb")?.classList.add("q2106-hide-orb");
   const [messages,calls]=await Promise.all([
     api(`/v21315/chats/${cid}/messages?limit=${state.messagePageSize}`),
     api(`/v24/chats/${cid}/calls`).catch(()=>[])
   ]);
-  state.messages=messages;state.chatHasMore=messages.length>=state.messagePageSize;state.chatCalls=calls;
+  if(epoch!==conversationEpoch300||token!==state.token||state.activeChat?.id!==cid)return;
+  const received=new Map(messages.map(m=>[m.id,m]));for(const m of state.messages)if(m.chat_id===cid)received.set(m.id,m);
+  state.messages=[...received.values()].sort((a,b)=>a.id-b.id);state.chatHasMore=messages.length>=state.messagePageSize;state.chatCalls=calls;
   if(mark)api(`/chats/${cid}/read`,{method:"POST"}).catch(()=>{});
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
   $("chatName").textContent=chat.other_user.display_name;
@@ -473,8 +491,10 @@ function openMediaLightbox(src,name="Photo"){
 }
 async function loadOlderMessages(){
   if(!state.activeChat||!state.chatHasMore||!state.messages.length)return;
+  const epoch=conversationEpoch300,token=state.token,cid=state.activeChat.id;
   const host=$("messageList"),beforeHeight=host?.scrollHeight||0,before=state.messages[0].id;
   const rows=await api(`/v21315/chats/${state.activeChat.id}/messages?limit=${state.messagePageSize}&before=${before}`);
+  if(epoch!==conversationEpoch300||token!==state.token||state.activeChat?.id!==cid)return;
   state.chatHasMore=rows.length>=state.messagePageSize;
   const known=new Set(state.messages.map(x=>x.id));
   state.messages=[...rows.filter(x=>!known.has(x.id)),...state.messages];
@@ -482,6 +502,8 @@ async function loadOlderMessages(){
   requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
 }
 window.loadOlderMessages=loadOlderMessages;
+function formatChatText300(text){return escapeHtml(text||"").replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>").replace(/\n/g,"<br>")}
+function fileCard300(mid,a,kind){const name=a.name||a.kind||"Attachment",size=Number(a.size_bytes)||0,type=a.mime_type==='application/pdf'?'PDF':a.kind||'FILE';return `<button type="button" class="ghost v300-file-card" data-v300-file="${Number(mid)}" data-kind="${kind}" data-name="${escapeHtml(name)}"><span>📎</span><span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(type)}${size>0?' · '+Math.max(1,Math.round(size/1024)).toLocaleString()+' KB':''}</small></span></button>`}
 function renderMessages(scrollToBottom=true){
   const me=state.user?.id,items=[];
   (state.messages||[]).forEach(m=>items.push({type:"message",at:m.created_at,m}));
@@ -503,13 +525,13 @@ function renderMessages(scrollToBottom=true){
     if(a?.kind==="CONTACT")attach=`<div class="answer-box">👤 <strong>${escapeHtml(a.contact_name)}</strong><br><small>${escapeHtml(a.contact_phone)}</small></div>`;
     else if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},false,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button><button class="mini" onclick="voiceAI(${m.id})">Q</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
     else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,false);
-    else if(a?.media_id)attach=`<button class="mini" onclick="downloadMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
+    else if(a?.media_id)attach=fileCard300(m.id,a,"direct");
     const quote=m.reply_to?`<div class="reply-quote">${escapeHtml(m.reply_to.text||"")}</div>`:"";
     const reactions=(m.reactions||[]).map(r=>`<button class="reaction-pill" onclick="reactMessage(${m.id},'${escapeHtml(r.emoji)}')">${escapeHtml(r.emoji)} ${r.count}</button>`).join("");
     html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}" data-mid="${m.id}">
       <button class="mini msg-action-trigger message-menu" onclick="openMessageMenu(${m.id})">⋯</button>
       ${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${m.ai_generated&&!photo?`<div class="micro">✨ AI generated</div>`:""}${quote}${photo?attach:""}
-      ${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${(window.v2131RenderChatOffer?.(m.text,mine))||escapeHtml(m.text).replace(/\n/g,"<br>")}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>`:""}
+      ${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${(window.v2131RenderChatOffer?.(m.text,mine))||formatChatText300(m.text)}${m.edited_at?`<span class="edited-tag"> edited</span>`:""}</div>`:""}
       ${photo?"":attach}${reactions?`<div class="reaction-strip">${reactions}</div>`:""}
       ${!mine&&!m.deleted_for_everyone&&!photo?`<div class="msg-actions"><button class="mini" onclick="checkMessage(${m.id})">🛡 Fact / Scam Check</button></div>`:""}
       <div class="meta"><span>${timeOnly(m.created_at)}</span>${mine?`<span>${m.read_at?"✓✓":"✓"}</span>`:""}</div>
@@ -616,12 +638,12 @@ window.downloadMedia=downloadMedia;
 
 async function uploadAttachment(file){
   if(!state.activeChat||!file)return;
+  const cid=state.activeChat.id,token=state.token;
   const fd=new FormData();fd.append("file",file);
   try{
     toast("Uploading…");
-    const sent=await api(`/chats/${state.activeChat.id}/attachments`,{method:"POST",body:fd});
-    if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);
-    renderMessages(true);scheduleChatListRefresh();toast("Sent");
+    const sent=await api(`/chats/${cid}/attachments`,{method:"POST",body:fd});
+    if(token===state.token&&state.activeChat?.id===cid){if(sent?.id&&!state.messages.some(x=>x.id===sent.id))state.messages.push(sent);renderMessages(true)}scheduleChatListRefresh();toast("Sent");
   }catch(e){toast(e.message,true)}
 }
 async function showNewChat(){
@@ -945,13 +967,14 @@ async function reactMessage(id,emoji){try{await api(`/v24/messages/${id}/reactio
 async function openMessageMenu(id){
   const m=state.messages.find(x=>x.id===id);if(!m)return;const mine=m.sender_id===state.user?.id;
   openModal(`<h3>Message actions</h3><div class="modal-actions">
-    ${!m.deleted_for_everyone?`<button id="maCopy" class="ghost">📋 Copy message</button>`:""}<button id="maReply" class="ghost">↩ Reply</button><button id="maReact" class="ghost">❤️ React</button><button id="maForward" class="ghost">↗ Forward</button>
+    ${!m.deleted_for_everyone?`<button id="maCopy" class="ghost">📋 Copy message</button>`:""}<button id="maReply" class="ghost">↩ Reply</button><button id="maReact" class="ghost">❤️ React</button>${!m.deleted_for_everyone?`<button id="maTrust" class="ghost">Fact / Scam Check</button>`:""}<button id="maForward" class="ghost">↗ Forward</button>
     ${mine&&!m.deleted_for_everyone?`<button id="maEdit" class="ghost">✏ Edit</button><button id="maDeleteAll" class="danger">🗑 Delete for everyone</button>`:""}
     <button id="maDeleteMe" class="danger">Delete for me</button></div>`);
   if($("maCopy"))$("maCopy").onclick=async()=>{
     try{await navigator.clipboard.writeText(m.text||"");closeModal();toast("Message copied to clipboard")}
     catch(e){toast("Clipboard permission unavailable",true)}
   };
+  if($("maTrust"))$("maTrust").onclick=()=>{closeModal();checkMessage(id)};
   $("maReply").onclick=()=>{closeModal();setReplyPreview(m)};
   $("maReact").onclick=()=>{closeModal();openModal(`<h3>React</h3><div class="reaction-picker">${["👍","❤️","😂","😮","😢","🙏"].map(x=>`<button class="ghost" data-react="${x}">${x}</button>`).join("")}</div>`);qsa("[data-react]").forEach(b=>b.onclick=async()=>{await reactMessage(id,b.dataset.react);closeModal()})};
   $("maForward").onclick=()=>{closeModal();openForwardDialog(m)};
@@ -1006,13 +1029,18 @@ async function showNewGroup(){
   $("ngCreate").onclick=async()=>{const name=$("ngName").value.trim();if(!name||!chosen.size)return toast("Add a group name and at least one member",true);const g=await api("/v24/groups",{method:"POST",body:JSON.stringify({name,member_ids:[...chosen.keys()]})});closeModal();await loadChats();await openGroup(g.id)};
 }
 async function openGroup(gid,pushHistory=true){
-  state.activeChat=null;state.replyTo=null;
+  const epoch=++conversationEpoch300,token=state.token;
+  state.activeChat=null;state.replyTo=null;state.activeGroup=null;state.groupMessages=[];
+  $("messageList").replaceChildren();$("groupMessageList").replaceChildren();
   $("globalQOrb")?.classList.add("q2106-hide-orb");
   const g=await api(`/v24/groups/${gid}`);
+  if(epoch!==conversationEpoch300||token!==state.token)return;
   state.activeGroup=g;
-  state.groupMessages=await api(`/v24/groups/${gid}/messages?limit=${state.messagePageSize}`);
-  state.groupHasMore=state.groupMessages.length>=state.messagePageSize;
-  await api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
+  const rows=await api(`/v24/groups/${gid}/messages?limit=${state.messagePageSize}`);
+  if(epoch!==conversationEpoch300||token!==state.token||state.activeGroup?.id!==gid)return;
+  const received=new Map(rows.map(m=>[m.id,m]));for(const m of state.groupMessages)received.set(m.id,m);
+  state.groupMessages=[...received.values()].sort((a,b)=>a.id-b.id);state.groupHasMore=rows.length>=state.messagePageSize;
+  api(`/v24/groups/${gid}/read`,{method:"POST"}).catch(()=>{});
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeChat").classList.add("hidden");$("activeGroup").classList.remove("hidden");
   $("groupName").textContent=g.name;$("groupMeta").textContent=`${g.member_count} members · Q ${g.ai_mode}`;
   $("groupAvatar").innerHTML=g.photo_url?`<img src="${escapeHtml(g.photo_url)}" alt="">`:escapeHtml(initials(g.name));
@@ -1020,38 +1048,41 @@ async function openGroup(gid,pushHistory=true){
   document.querySelector(".chat-layout").classList.add("open-chat");
   if(pushHistory&&location.hash!==`#group-${gid}`)history.pushState({view:"chats",groupId:gid},"",`#group-${gid}`);
 }
-function renderGroupMessages(){
+function renderGroupMessages(scrollToBottom=true){
   let day="",html="";const me=state.user?.id;
   for(const m of state.groupMessages){
     const d=friendlyDay(m.created_at);if(d!==day){html+=`<div class="date-separator"><span>${escapeHtml(d)}</span></div>`;day=d}
     const mine=m.sender_id===me,a=m.attachment,photo=Boolean(a?.media_id&&isImageAttachment(a));let attach="";
     if(a?.kind==="VOICE")attach=`<div class="voice-note"><button class="mini" onclick="loadVoice(${m.id},true,this)">▶ ${Math.round((a.duration_ms||0)/1000)}s</button></div>${a.transcript?`<div class="micro">Transcript: ${escapeHtml(a.transcript)}</div>`:""}`;
     else if(a?.media_id&&isImageAttachment(a))attach=mediaPreviewHtml(m.id,a,true);
-    else if(a?.media_id)attach=`<button class="mini" onclick="downloadGroupMedia(${m.id},'${escapeHtml((a.name||"file").replace(/'/g,""))}')">📎 ${escapeHtml(a.name||a.kind)}</button>`;
+    else if(a?.media_id)attach=fileCard300(m.id,a,"group");
     html+=`<div class="msg ${mine?"mine":"theirs"}${photo?" v318-photo-msg":""}"><div class="micro">${escapeHtml(m.sender?.display_name||"Member")}</div>${m.forwarded?`<div class="v318-forwarded">↗ Forwarded</div>`:""}${photo?attach:""}${(!photo||m.text)?`<div class="${photo?"v318-caption":""}">${escapeHtml(m.text)}</div>`:""}${photo?"":attach}<div class="meta"><span>${timeOnly(m.created_at)}</span></div></div>`;
   }
   if(state.groupHasMore)html=`<div class="load-older-wrap"><button class="ghost load-older-btn" onclick="loadOlderGroupMessages()">↑ Load older messages</button></div>`+html;
-  $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
+  $("groupMessageList").innerHTML=html;hydrateMediaPreviews("groupMessageList");if(scrollToBottom)setTimeout(()=>$("groupMessageList").scrollTop=$("groupMessageList").scrollHeight,20);
 }
 async function loadOlderGroupMessages(){
   if(!state.activeGroup||!state.groupHasMore||!state.groupMessages.length)return;
+  const epoch=conversationEpoch300,token=state.token,gid=state.activeGroup.id;
   const host=$("groupMessageList"),beforeHeight=host?.scrollHeight||0,before=state.groupMessages[0].id;
   const rows=await api(`/v24/groups/${state.activeGroup.id}/messages?limit=${state.messagePageSize}&before_id=${before}`);
+  if(epoch!==conversationEpoch300||token!==state.token||state.activeGroup?.id!==gid)return;
   state.groupHasMore=rows.length>=state.messagePageSize;
   const known=new Set(state.groupMessages.map(x=>x.id));
   state.groupMessages=[...rows.filter(x=>!known.has(x.id)),...state.groupMessages];
-  renderGroupMessages();
+  renderGroupMessages(false);
   requestAnimationFrame(()=>{if(host)host.scrollTop=Math.max(0,host.scrollHeight-beforeHeight)});
 }
 window.loadOlderGroupMessages=loadOlderGroupMessages;
 async function sendGroupMessage(){
   const text=$("groupMessageInput").value.trim();if(!text||!state.activeGroup)return;
+  const gid=state.activeGroup.id,token=state.token;
   $("groupMessageInput").value="";
   try{
-    const sent=await api(`/v24/groups/${state.activeGroup.id}/messages`,{method:"POST",body:JSON.stringify({text})});
-    if(sent?.id&&!state.groupMessages.some(x=>x.id===sent.id))state.groupMessages.push(sent);
-    renderGroupMessages();scheduleChatListRefresh();
-  }catch(e){toast(e.message,true)}
+    const sent=await api(`/v24/groups/${gid}/messages`,{method:"POST",body:JSON.stringify({text})});
+    if(token===state.token&&state.activeGroup?.id===gid){if(sent?.id&&!state.groupMessages.some(x=>x.id===sent.id))state.groupMessages.push(sent);renderGroupMessages();}
+    scheduleChatListRefresh();
+  }catch(e){if(token===state.token&&state.activeGroup?.id===gid&&!$("groupMessageInput").value)$("groupMessageInput").value=text;toast(e.message,true)}
 }
 async function groupSuggestReply(){
   if(!state.activeGroup)return;const r=await api(`/v24/groups/${state.activeGroup.id}/suggest`,{method:"POST"});const el=$("groupSuggestionCard");
@@ -1711,7 +1742,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 
   $("sendBtn").onclick=sendMessage;$("suggestBtn").onclick=suggestReply;$("assistBarBtn").onclick=suggestReply;
   $("messageInput").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage()}});
-  $("messageInput").addEventListener("input",()=>{clearTimeout(window.__draftTimer);window.__draftTimer=setTimeout(()=>saveDraft($("messageInput").value),500)});
+  $("messageInput").addEventListener("input",()=>{clearTimeout(window.__draftTimer);const cid=state.activeChat?.id,token=state.token,draft=$("messageInput").value;window.__draftTimer=setTimeout(()=>{if(token===state.token&&state.activeChat?.id===cid)saveDraft(draft)},500)});
   $("fileInput").onchange=e=>{uploadAttachment(e.target.files[0]);e.target.value=""};
   $("voiceBtn").onclick=()=>toggleVoice("direct");$("callBtn").onclick=startVoiceCall;$("videoCallBtn").onclick=startVideoCall;$("chatSearchBtn").onclick=openChatSearch;$("chatMoreBtn").onclick=openChatMore;
   $("chatAiBtn").onclick=personalChatSettings;$("summaryBtn").onclick=chatSummary;$("businessChatBtn").onclick=businessChatSettings;
@@ -1751,7 +1782,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   $("closeModal").onclick=closeModal;$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal()});
   $("installBtn").onclick=installHelp;$("installBtn2").onclick=installHelp;$("androidDownloadBtn").onclick=installAndroidApp;$("androidBtnTop").onclick=installAndroidApp;
   window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();state.installPrompt=e;$("installBtn").classList.remove("hidden")});
-  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=2.13.18").catch(()=>{});
+  if("serviceWorker" in navigator)navigator.serviceWorker.register("/web/sw.js?v=3.0.0").catch(()=>{});
 
   window.addEventListener("popstate",async e=>{
     const s=e.state||{};
@@ -1779,3 +1810,4 @@ window.setView=setView;
 window.askAgent=askAgent;
 window.checkMessage=checkMessage;
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

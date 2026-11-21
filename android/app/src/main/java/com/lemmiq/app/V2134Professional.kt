@@ -187,7 +187,7 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
     // Requests and active creator messages refresh while visible on Android.
     LaunchedEffect(tab,selected,showLegacy){
         while(!showLegacy && (tab==1 || selected!=null)){
-            kotlinx.coroutines.delay(9000)
+            kotlinx.coroutines.delay(25000)
             if(selected==null || draft.isBlank())refresh++
         }
     }
@@ -391,3 +391,4 @@ fun V2134ProfessionalHub(vm:LemmiqViewModel,initialTab:Int=0){
         text={Text(question)},confirmButton={Button(onClick={confirmOp=null;action()}){Text("Confirm")}},
         dismissButton={TextButton({confirmOp=null}){Text("Cancel")}})}
 }
+// V300_INSTALLED

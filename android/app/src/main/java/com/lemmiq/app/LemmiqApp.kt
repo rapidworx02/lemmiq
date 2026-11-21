@@ -275,7 +275,7 @@ private fun Home(vm:LemmiqViewModel){
     Scaffold(
         containerColor=Bg,
         bottomBar={
-            NavigationBar{
+            if(!qFullScreen&&!qThreadOpen&&morePage==null)NavigationBar{
                 nav.forEachIndexed{i,x->
                     NavigationBarItem(
                         selected=!qFullScreen && if(i==5) showMore else (!showMore && tab==i),
@@ -320,7 +320,7 @@ private fun Home(vm:LemmiqViewModel){
     ){pad->
         Box(Modifier.padding(pad)){
             when{
-                qThreadOpen->V2106QThread(vm){qThreadOpen=false;vm.refreshQThread(markRead=true)}
+                qThreadOpen->V2106QThread(vm,onBack={qThreadOpen=false;vm.refreshQThread(markRead=true)},onAsk={prompt->qThreadOpen=false;qFullScreen=true;vm.qMode="ASK";vm.askAgent(prompt)})
                 qFullScreen->Column(Modifier.fillMaxSize()){
                     Surface(shadowElevation=1.dp){Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){TextButton({qFullScreen=false}){Text("‹ Back")};Text("Q · Personal Assistant",fontWeight=FontWeight.Bold)}}
                     Box(Modifier.weight(1f)){ChatAgent(vm)}
@@ -356,8 +356,7 @@ private fun Home(vm:LemmiqViewModel){
                             OutlinedButton(onClick={qFullScreen=true},contentPadding=PaddingValues(horizontal=10.dp)) { Text("Ask Q",fontSize=11.sp) }
                         }
                         Box(Modifier.weight(1f)) {
-                            if(qPredictOpen)V21310PredictScreen()
-                            else V28QEconomyScreen(vm)
+                            V28QEconomyScreen(vm)
                         }
                     }
                     3->V21310PredictScreen()
@@ -406,13 +405,13 @@ private fun V241CallsScreen(vm:LemmiqViewModel){
 @Composable
 private fun V241MoreMenu(onOpen:(String)->Unit){
     val menuItems=listOf(
-        Triple("⭕","Updates","24-hour status stories and moments") to "updates",
+        Triple("🙂","Me / Profile","Photo, account and sign out") to "me", // V3 profile-first
         Triple("🔔","Notifications","Unread alerts and recent LEMMIQ activity") to "notifications",
         Triple("🛡","Trust / Fact Check","Saved checks and scam/fact verification") to "trust",
         Triple("💼","Business Agent","Business knowledge and customer replies") to "business",
         Triple("◈","Activity","Detected notification intelligence") to "activity",
         Triple("💳","Money","Review detected payment insights") to "money",
-        Triple("🙂","Me / Profile","Photo, account and sign out") to "me",
+        // Profile is shown first.
         Triple("⚙","Settings","Notifications, app version and controls") to "settings",
         Triple("🔒","Privacy & Security","Profile, last-seen and status privacy") to "privacy"
     )
@@ -421,8 +420,8 @@ private fun V241MoreMenu(onOpen:(String)->Unit){
         items(menuItems){entry->
             val info=entry.first
             Card(
-                Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=6.dp).clickable{onOpen(entry.second)},
-                shape=RoundedCornerShape(20.dp)
+                Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=3.dp).clickable{onOpen(entry.second)},
+                shape=RoundedCornerShape(12.dp)
             ){
                 Row(Modifier.fillMaxWidth().padding(16.dp),verticalAlignment=Alignment.CenterVertically){
                     Text(info.first,fontSize=26.sp)
@@ -578,7 +577,7 @@ private fun Chat(vm:LemmiqViewModel){
         when(x){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->""}
     }?:""
     LaunchedEffect(c.id,newestTimelineId){
-        if(timeline.isNotEmpty())runCatching{messageListState.scrollToItem(timeline.lastIndex)}
+        if(timeline.isNotEmpty()&&(messageListState.layoutInfo.totalItemsCount<=1||messageListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let{it>=messageListState.layoutInfo.totalItemsCount-3}==true))runCatching{messageListState.scrollToItem(timeline.size)}
     }
     Scaffold(
         containerColor=Bg,
@@ -588,7 +587,7 @@ private fun Chat(vm:LemmiqViewModel){
                 shadowElevation=1.dp
             ){
                 Row(Modifier.fillMaxWidth().padding(horizontal=8.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically){
-                    Text("‹",fontSize=36.sp,modifier=Modifier.clickable{vm.close()}.padding(8.dp))
+                    Text("‹",fontSize=28.sp,modifier=Modifier.clickable{vm.close()}.padding(6.dp))
                     V24Avatar(c.other_user);Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)){
                         Text(c.other_user.display_name,fontWeight=FontWeight.Bold)
@@ -610,11 +609,9 @@ private fun Chat(vm:LemmiqViewModel){
                             })
                         }
                     }.padding(7.dp))
-                    Text("🔎",fontSize=17.sp,modifier=Modifier.clickable{showSearch=true}.padding(7.dp))
+                    // Search moved into conversation menu in V3.0.
                     Text("⋮",fontSize=22.sp,modifier=Modifier.clickable{showMore=true}.padding(7.dp))
-                    if(c.ai_mode!="OFF")Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=22.sp,modifier=Modifier.clickable{vm.suggest()}.padding(8.dp))
-                    if(vm.businessProfile.enabled)Text("💼",fontSize=18.sp,modifier=Modifier.clickable{businessSettings=true}.padding(6.dp))
-                    Text("⚙",fontSize=19.sp,modifier=Modifier.clickable{settings=true}.padding(8.dp))
+                    Text("Q",color=Purple,fontWeight=FontWeight.Black,fontSize=20.sp,modifier=Modifier.clickable{showMore=true}.padding(6.dp))
                 }
             }
         },
@@ -729,8 +726,8 @@ private fun Chat(vm:LemmiqViewModel){
                     Text(vm.activeBusinessSetting.mode,fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
                 }
             }
-            if(c.ai_mode!="OFF"){
-                Row(Modifier.fillMaxWidth().padding(12.dp,7.dp),verticalAlignment=Alignment.CenterVertically){
+            if(c.ai_mode=="AUTO"){
+                Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
                     FilledTonalButton({vm.suggest()},enabled=!vm.busy){Text("✨ Suggest reply")}
                     Spacer(Modifier.width(6.dp))
                     TextButton({vm.summarizeActiveChat()}){Text("🧠 Summary")}
@@ -777,6 +774,10 @@ private fun Chat(vm:LemmiqViewModel){
     if(showMore){
         AlertDialog(onDismissRequest={showMore=false},title={Text(c.other_user.display_name)},
             text={Column{
+                TextButton({showMore=false;showSearch=true}){Text("Search messages")}
+                TextButton({showMore=false;settings=true}){Text("Chat AI settings")}
+                if(c.ai_mode!="OFF"){TextButton({showMore=false;vm.suggest()}){Text("Suggest reply")};TextButton({showMore=false;vm.summarizeActiveChat()}){Text("Summarise conversation")}}
+                if(vm.businessProfile.enabled)TextButton({showMore=false;businessSettings=true}){Text("Business tools")}
                 TextButton({vm.togglePin();showMore=false}){Text(if(c.pinned)"Unpin chat" else "📌 Pin chat")}
                 TextButton({vm.toggleFavourite();showMore=false}){Text(if(c.favourite)"Remove favourite" else "⭐ Favourite")}
                 TextButton({vm.toggleArchive();showMore=false}){Text(if(c.archived)"Unarchive" else "Archive")}
@@ -1011,7 +1012,8 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                         }
 
                         a.media_id!=null -> {
-                            Text("📄 ${a.name.orEmpty()}",color=if(mine)Color.White else Ink,fontSize=12.sp)
+                            Text("📄 ${a.name.orEmpty()}",color=if(mine)Color.White else Ink,fontSize=13.sp,fontWeight=FontWeight.Medium)
+                            Text("${if(a.mime_type=="application/pdf")"PDF" else a.kind} · ${((a.size_bytes?:0L)+1023L)/1024L} KB",color=if(mine)Color(0xFFE0D9FF) else Muted,fontSize=10.sp)
                             TextButton(onClick={scope.launch{
                                 mediaError=null
                                 try{
@@ -2166,3 +2168,4 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
     )
 }
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

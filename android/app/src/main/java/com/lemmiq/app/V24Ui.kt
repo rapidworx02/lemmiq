@@ -103,7 +103,7 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
         Column(Modifier.padding(horizontal=18.dp,vertical=12.dp)){
             Text("lemmiq",fontSize=28.sp,fontWeight=FontWeight.Black)
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
-                FilterChip(selected=true,onClick={},label={Text("Personal Chats")})
+                FilterChip(selected=true,onClick={},label={Text("Personal",fontSize=11.sp)})
                 FilterChip(selected=false,onClick={LemmiqLaunchRouterV2103.route.value=LemmiqLaunchRouteV2103("creator_inbox")},label={Text("✦ Creators")})
                 FilterChip(selected=false,onClick=onUpdates317,label={Text("Updates")})
             }
@@ -176,7 +176,8 @@ fun V24Inbox(vm:LemmiqViewModel,onNewGroup:()->Unit,onAskQ:(String)->Unit,onQThr
 }
 
 @Composable
-fun V2106QThread(vm:LemmiqViewModel,onBack:()->Unit){
+fun V2106QThread(vm:LemmiqViewModel,onAsk:(String)->Unit={},onBack:()->Unit){
+    var qDraft300 by remember{mutableStateOf("")}
     LaunchedEffect(Unit){vm.refreshQThread(markRead=true)}
     Scaffold(
         containerColor=V24Bg,
@@ -186,6 +187,10 @@ fun V2106QThread(vm:LemmiqViewModel,onBack:()->Unit){
                 Box(Modifier.size(44.dp).clip(CircleShape).background(V24Purple),contentAlignment=Alignment.Center){Text("Q",color=Color.White,fontWeight=FontWeight.Black,fontSize=20.sp)}
                 Spacer(Modifier.width(10.dp));Column{Text("Q · LEMMIQ Assistant",fontWeight=FontWeight.Bold);Text("Requests, results and Q-to-Q updates",fontSize=10.sp,color=V24Muted)}
             }
+        }}
+        ,bottomBar={Row(Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            OutlinedTextField(qDraft300,{qDraft300=it.take(1600)},Modifier.weight(1f),singleLine=true,placeholder={Text("Ask Q about your chats")})
+            Button({val q=qDraft300.trim();if(q.isNotBlank()){qDraft300="";onAsk(q)}},enabled=qDraft300.isNotBlank()){Text("Send")}
         }}
     ){pad->
         LazyColumn(Modifier.fillMaxSize().padding(pad),contentPadding=PaddingValues(14.dp,12.dp,14.dp,100.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
@@ -460,11 +465,7 @@ fun V24Updates(vm:LemmiqViewModel,embedded317:Boolean=false,onPersonal317:()->Un
                 }else Text("Updates",fontSize=30.sp,fontWeight=FontWeight.Black)
                 Text("Status · disappears after 24 hours",fontSize=11.sp,color=V24Muted)
                 Text("Status",fontSize=21.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=if(embedded317)8.dp else 18.dp,bottom=10.dp))
-                LazyRow(horizontalArrangement=Arrangement.spacedBy(10.dp)){
-                    item{V27AddStatusCard(vm){creator=true}}
-                    if(mine.isNotEmpty())item{V27StatusCard(mine.first(),vm,true){vm.viewStatus(mine.first().id){opened=it}}}
-                    items(recent,key={it.user.id}){s->V27StatusCard(s,vm,false){vm.viewStatus(s.id){opened=it}}}
-                }
+                // V300: show owned statuses once in the list below.
                 Row(Modifier.fillMaxWidth().padding(top=12.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)){
                     OutlinedButton(onClick={creator=true},modifier=Modifier.weight(1f)){Text("✎ Text status")}
                     Button(onClick={mediaPicker.launch("*/*")},modifier=Modifier.weight(1f)){Text("📷 Photo / video")}
@@ -499,7 +500,7 @@ fun V24Updates(vm:LemmiqViewModel,embedded317:Boolean=false,onPersonal317:()->Un
                 }
             }
         }
-        if(mine.isNotEmpty() && !embedded317){
+        if(mine.isNotEmpty()){
             item{Text("My status",fontSize=18.sp,fontWeight=FontWeight.Bold,modifier=Modifier.padding(horizontal=18.dp,vertical=6.dp))}
             items(mine,key={"mine_"+it.id}){s->
                 Row(
@@ -789,3 +790,4 @@ fun v24FriendlyDay(iso:String):String=runCatching{
     }
 }.getOrElse{""}
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

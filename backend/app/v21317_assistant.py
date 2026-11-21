@@ -100,10 +100,18 @@ def create_digest_if_due(db: Session, uid: int, now: datetime | None = None) -> 
     return True
 
 
+_scan_cursor_v300 = 0
+
 def scheduled_scan() -> int:
-    # Limited scan for the current beta. No AI or push; messages appear only in the Q inbox.
+    global _scan_cursor_v300
+    # Bounded rotating batch; deployment remains single worker.
     with SessionLocal() as db:
-        ids = db.scalars(select(User.id).order_by(User.id).limit(500)).all()
+        ids = db.scalars(select(User.id).where(User.id > _scan_cursor_v300).order_by(User.id).limit(500)).all()
+        if not ids:
+            _scan_cursor_v300 = 0
+            ids = db.scalars(select(User.id).order_by(User.id).limit(500)).all()
+        if ids:
+            _scan_cursor_v300 = int(ids[-1]) if len(ids) == 500 else 0
         sent = 0
         for uid in ids:
             try:
@@ -208,3 +216,4 @@ def register_v21317_assistant(app, current_user, get_db):
                 await task
             except asyncio.CancelledError:
                 pass
+# V300_INSTALLED

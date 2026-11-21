@@ -7,13 +7,15 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v21318-media";
+const CACHE = "lemmiq-v300";
 const SHELL = [
   "/web/",
-  "/web/app.js?v=2.13.18",
+  "/web/app.js?v=3.0.0",
+  "/web/v300.css?v=3.0.0",
+  "/web/v300.js?v=3.0.0",
   "/web/v21318_media.css?v=2.13.18",
   "/web/v21318_media.js?v=2.13.18",
-  "/web/v21317_ui.js?v=2.13.17",
+  "/web/v21317_ui.js?v=3.0.0",
   "/web/v21317_calls.js?v=2.13.17",
   "/web/v21317_ui.css?v=2.13.17",
   "/web/styles.css?v=2.10.7",
@@ -21,10 +23,11 @@ const SHELL = [
 ];
 
 self.addEventListener("install",event=>{event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).catch(()=>{}));self.skipWaiting()});
-self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
+self.addEventListener("activate",event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith("lemmiq-")&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
 
 self.addEventListener("fetch",event=>{
-  const req=event.request;if(req.method!=="GET")return;const url=new URL(req.url);
+  const req=event.request;if(req.method!=="GET"||req.headers.has("Authorization"))return;const url=new URL(req.url);
+  if(url.origin!==self.location.origin||!url.pathname.startsWith("/web/"))return;
   const apiPrefixes=["/chats","/agent","/business","/trust","/insights","/media","/users","/login","/register","/download","/push","/v24","/v26","/v27","/v28","/v29","/v210","/v2104","/v2105","/v2106","/v21072","/v21074","/v213","/v2131","/v2132","/v2134","/app-config"];
   if(apiPrefixes.some(x=>url.pathname.startsWith(x)))return;
   const isHtml=url.pathname==="/web/"||url.pathname.endsWith("/index.html");
@@ -56,3 +59,4 @@ self.addEventListener("notificationclick",event=>{
   event.waitUntil(self.clients.matchAll({type:"window",includeUncontrolled:true}).then(list=>{for(const c of list){if("focus" in c){c.navigate(url);return c.focus()}}return self.clients.openWindow?self.clients.openWindow(url):undefined}));
 });
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

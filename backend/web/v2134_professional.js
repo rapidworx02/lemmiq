@@ -18,12 +18,7 @@
    if(by('view-professional-inbox'))return;
    const v=document.createElement('section');v.id='view-professional-inbox';v.className='view';v.innerHTML='<div id="v2134Page"></div>';
    (by('view-q-creators')||by('view-more'))?.after(v);
-   const chats=by('view-chats');if(chats&&!by('v2134PersonalTabs')){
-     const bar=document.createElement('div');bar.id='v2134PersonalTabs';bar.className='v2134-tabs';
-     bar.innerHTML='<button class="primary" type="button" disabled>💬 Personal Chats</button><button class="ghost" id="v2134GoInbox" type="button">✦ Creator Chats</button>';
-     chats.prepend(bar);
-     by('v2134GoInbox').onclick=()=>open();
-   }
+   // V300: one chat navigation bar.
    const more=by('view-more')?.querySelector('.more-grid');if(more&&!by('v2134MoreInbox')){
      const b=document.createElement('button');b.id='v2134MoreInbox';b.className='more-card';
      b.innerHTML='<span>✦</span><strong>Creator Inbox</strong><small>Professional chat identity and paid fan messages</small>';
@@ -199,7 +194,8 @@
    });observer.observe(root,{childList:true,subtree:false});
  }
  function setup(){shell();extendLegacyCreators();document.addEventListener('click',click);document.addEventListener('submit',submit);
-   poll=setInterval(()=>{if(by('view-professional-inbox')?.classList.contains('active')&&(selectedThread||tab==='requests')&&!document.activeElement?.closest('form'))refresh()},10000);
+   poll=setInterval(()=>{if(by('view-professional-inbox')?.classList.contains('active')&&(selectedThread||tab==='requests')&&document.visibilityState==='visible'&&!document.activeElement?.closest('form'))refresh()},25000);
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
+// V300_INSTALLED

@@ -348,6 +348,19 @@ def _settle(db,m,pool,r):
 def register_v21310_predict_q(app,current_user,get_db):
     router=APIRouter(prefix='/v21310/predict',tags=['Q Predict independent Q wallet / gated real USDT'])
 
+    @router.get('/ui-config')
+    def ui_config_v300(u:User=Depends(current_user),db:Session=Depends(get_db)):
+        # Read-only, no wallet creation or trading data. Existing admin rules remain authoritative.
+        try:
+            _admin(db,u)
+            master=True
+        except HTTPException as e:
+            if e.status_code!=403:raise
+            master=False
+        try:price=value(_reference(db))
+        except HTTPException:price=None
+        return {'reference_usdt_per_q':price,'master_admin':master}
+
     @router.get('/home')
     def home(u:User=Depends(current_user),db:Session=Depends(get_db)):
         w=_wallet(db,u.id)
@@ -532,3 +545,4 @@ def register_v21310_predict_q(app,current_user,get_db):
         raise HTTPException(423,'Q Predict Q redemption is not activated; treasury reserve, jurisdiction and withdrawal safeguards are required')
 
     app.include_router(router)
+# V300_INSTALLED

@@ -53,6 +53,7 @@ private suspend fun pqCall(ctx:Context,path:String,body:JSONObject?=null,method:
 fun V21310PredictScreen(){
     val ctx=LocalContext.current
     val scope=rememberCoroutineScope()
+    var tradingPreview300 by remember{mutableStateOf(false)}
     var demoMode by remember{mutableStateOf(true)}
     var home by remember{mutableStateOf<JSONObject?>(null)}
     var demo by remember{mutableStateOf<JSONObject?>(null)}
@@ -71,16 +72,21 @@ fun V21310PredictScreen(){
     var hash by remember{mutableStateOf("")}
     var showHistory by remember{mutableStateOf(false)}
     var admin by remember{mutableStateOf<JSONObject?>(null)}
+    var config300 by remember{mutableStateOf<JSONObject?>(null)}
+    var refreshSeq300 by remember{mutableIntStateOf(0)}
 
-    fun refresh(){scope.launch {
-        busy=true;error=""
-        try{
-            home=pqCall(ctx,"/v21310/predict/home")
-            demo=pqCall(ctx,"/v2138/predict/home")
-            admin=runCatching{pqCall(ctx,"/v21310/predict/admin")}.getOrNull()
-        }catch(e:Exception){error=e.message?:"Unable to load wallet"}
-        finally{busy=false}
-    }}
+    fun refresh(){
+        val selectedDemo=demoMode;val seq=++refreshSeq300
+        scope.launch{
+            busy=true;error=""
+            try{
+                val result=pqCall(ctx,if(selectedDemo)"/v2138/predict/home" else "/v21310/predict/home")
+                if(seq!=refreshSeq300)return@launch
+                if(selectedDemo)demo=result else home=result
+            }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(seq==refreshSeq300)error=e.message?:"Unable to load wallet"}
+            finally{if(seq==refreshSeq300)busy=false}
+        }
+    }
     fun sendStake(id:Int,side:String){scope.launch{
         busy=true
         try{
@@ -94,7 +100,14 @@ fun V21310PredictScreen(){
         }catch(e:Exception){error=e.message?:"Prediction failed"}
         finally{busy=false}
     }}
-    LaunchedEffect(Unit){refresh()}
+    LaunchedEffect(Unit){
+        config300=runCatching{pqCall(ctx,"/v21310/predict/ui-config")}.getOrNull()
+        if(config300?.optBoolean("master_admin")==true)admin=runCatching{pqCall(ctx,"/v21310/predict/admin")}.getOrNull()
+    }
+    LaunchedEffect(demoMode,tradingPreview300){
+        if(tradingPreview300){++refreshSeq300;busy=false;config300=null;config300=runCatching{pqCall(ctx,"/v21310/predict/ui-config")}.getOrNull()}
+        else refresh()
+    }
     val source=if(demoMode)demo else home
     val markets=remember(source){
         val a=source?.optJSONArray("markets")
@@ -108,6 +121,11 @@ fun V21310PredictScreen(){
 
     LazyColumn(Modifier.fillMaxSize().background(Color(0xFFF7F7FB)),
         contentPadding=PaddingValues(12.dp,12.dp,12.dp,120.dp),verticalArrangement=Arrangement.spacedBy(11.dp)){
+        item{Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            FilterChip(!tradingPreview300,{tradingPreview300=false},label={Text("Predict")},modifier=Modifier.weight(1f))
+            FilterChip(tradingPreview300,{tradingPreview300=true;selected=null;buyOpen=false;showHistory=false},label={Text("AI Trading Pools",fontSize=11.sp)},modifier=Modifier.weight(1f))
+        }}
+        if(tradingPreview300){item{V300TradingPreview(config300?.optDouble("reference_usdt_per_q",0.0)?:0.0)}}else{
         item{
             Card(colors=CardDefaults.cardColors(containerColor=Color(0xFF29215F)),shape=RoundedCornerShape(21.dp)){
                 Column(Modifier.fillMaxWidth().padding(19.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -177,6 +195,7 @@ fun V21310PredictScreen(){
                 Text("Configure and review dedicated TRC20/BEP20 receiving wallets in PWA → Q Admin.",fontSize=11.sp)
             }}
         }
+        } // Predict mode only; trading preview has no financial controls.
     }
     selected?.let{m->
         AlertDialog(onDismissRequest={selected=null},title={Text("Q Predict")},
@@ -261,3 +280,4 @@ fun V21310PredictScreen(){
             }},confirmButton={TextButton({showHistory=false}){Text("Close")}})
     }
 }
+// V300_INSTALLED

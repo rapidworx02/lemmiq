@@ -24,6 +24,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelChildren
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -167,7 +168,9 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
     fun register(u:String,n:String,p:String,referralCode:String="")=viewModelScope.launch{action{auth(api.register(u.trim().lowercase(),n.trim(),p,referralCode.trim()))}}
     fun login(u:String,p:String)=viewModelScope.launch{action{auth(api.login(u.trim().lowercase(),p))}}
+    private var conversationGeneration300=0
     fun logout(){
+        ++conversationGeneration300; ++wsSerial; viewModelScope.coroutineContext.cancelChildren(); messages=emptyList();activeCalls=emptyList();replyTo=null;insideSearchResults=emptyList()
         // Revoke this device token before clearing credentials, best-effort.
         val credential=store.token
         val token=runCatching{FirebaseMessaging.getInstance().token}.getOrNull()
@@ -204,15 +207,24 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         runCatching{api.search(q)}.onSuccess{users=it.filter{x->x.id!=store.userId}}.onFailure{error=it.message}
     }
     fun start(uid:Int)=viewModelScope.launch{action{
-        val c=api.direct(uid);active=c;messages=api.messages(c.id);canLoadOlderDirectMessages=messages.size>=60;api.read(c.id);refreshChats()
+        val gen=++conversationGeneration300;val token=store.token
+        val c=api.direct(uid)
+        if(authenticated&&token==store.token&&gen==conversationGeneration300)open(c)
     }}
     fun open(c:ChatDto)=viewModelScope.launch{
-        activeGroup=null;groupMessages=emptyList();active=c;replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList()
-        runCatching{messages=api.messages(c.id);canLoadOlderDirectMessages=messages.size>=60;activeCalls=api.chatCalls(c.id);api.read(c.id);PushControl.cancelChat(appCtx,c.id)}
-        runCatching{api.businessChat(c.id)}.onSuccess{bundle->activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
-        refreshChats()
+        val gen=++conversationGeneration300;val token=store.token
+        activeGroup=null;groupMessages=emptyList();active=c;messages=emptyList();activeCalls=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();activeBusinessSetting=BusinessChatSettingDto();activeBusinessMemory=BusinessMemoryDto();groupBusy=false;canLoadOlderDirectMessages=false
+        fun valid()=authenticated&&token==store.token&&gen==conversationGeneration300&&active?.id==c.id
+        try{
+            val page=api.messages(c.id);if(!valid())return@launch
+            messages=(page+messages.filter{it.chat_id==c.id}).distinctBy{it.id}.sortedBy{it.id};canLoadOlderDirectMessages=page.size>=60
+            api.read(c.id);if(!valid())return@launch;PushControl.cancelChat(appCtx,c.id)
+            val calls=runCatching{api.chatCalls(c.id)}.getOrDefault(emptyList());if(valid())activeCalls=calls
+            val bundle=runCatching{api.businessChat(c.id)}.getOrNull();if(valid()&&bundle!=null){activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}
+        if(valid())refreshChats()
     }
-    fun close(){active=null;activeGroup=null;canLoadOlderDirectMessages=false;messages=emptyList();groupMessages=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
+    fun close(){++conversationGeneration300;active=null;activeGroup=null;canLoadOlderDirectMessages=false;messages=emptyList();groupMessages=emptyList();activeCalls=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
     fun loadOlderDirectMessages()=viewModelScope.launch{
         val chat=active?:return@launch
         val earliest=messages.firstOrNull()?.id?:return@launch
@@ -233,8 +245,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
             val target=replyTo
             if(target!=null)api.replyMessage(c.id,text.trim(),target.id) else api.send(c.id,text.trim())
         }.onSuccess{m->
-            if(messages.none{it.id==m.id})messages=messages+m
-            replyTo=null;suggestion=null
+            if(active?.id==c.id&&authenticated){if(messages.none{it.id==m.id})messages=messages+m;replyTo=null;suggestion=null}
             runCatching{api.updateChatPreferences(c.id,mapOf("draft_text" to ""))}
             refreshChats()
         }.onFailure{error=it.message}
@@ -505,6 +516,20 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         finally{insightWorking=false}
     }
 
+    fun refreshQEconomySection300(tab:Int)=viewModelScope.launch{
+        val token=store.token
+        qEconomyBusy=true;error=null
+        try{
+            val wallet=api.qWallet();if(!authenticated||token!=store.token)return@launch;qWallet=wallet
+            when(tab){
+                0->{qLedger=api.qLedger();qEarningCycles=runCatching{api.qEarningCycles()}.getOrDefault(qEarningCycles);qWeeklyActive=runCatching{api.qWeeklyActive()}.getOrDefault(qWeeklyActive);qWithdrawalConfig=runCatching{api.qWithdrawalConfig()}.getOrDefault(qWithdrawalConfig);qWithdrawals=runCatching{api.qWithdrawals()}.getOrDefault(qWithdrawals);qRebuyOptions=runCatching{api.qRebuyOptions()}.getOrDefault(qRebuyOptions);qRebuyOrders=runCatching{api.qRebuyOrders()}.getOrDefault(qRebuyOrders);qFeatureCatalog=runCatching{api.qFeatureCatalog()}.getOrDefault(qFeatureCatalog)}
+                1->{qPaymentOrders=api.qPaymentOrders();qEarningCycles=runCatching{api.qEarningCycles()}.getOrDefault(qEarningCycles);qRebuyOptions=runCatching{api.qRebuyOptions()}.getOrDefault(qRebuyOptions);qRebuyOrders=runCatching{api.qRebuyOrders()}.getOrDefault(qRebuyOrders)}
+                2->{qMarketListings=api.qMarketListings();qMyListings=api.qMyListings();qMarketOrders=api.qMarketOrders()}
+                3->{qReferrals=api.qReferrals()}
+                4->{qLedger=api.qLedger();qFeatureCatalog=runCatching{api.qFeatureCatalog()}.getOrDefault(qFeatureCatalog)}
+            }
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(token==store.token)error=e.message}finally{if(token==store.token)qEconomyBusy=false}
+    }
     fun refreshQEconomy()=viewModelScope.launch{
         qEconomyBusy=true;error=null
         try{
@@ -959,15 +984,18 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         catch(e:Exception){error=e.message}finally{groupBusy=false}
     }
     fun openGroup(g:GroupDto)=viewModelScope.launch{
-        active=null;messages=emptyList();activeGroup=g;groupSuggestion=null;groupSummary=null;groupAnswer=null
+        val gen=++conversationGeneration300; val token=store.token
+        active=null;messages=emptyList();activeGroup=g;groupMessages=emptyList();groupSuggestion=null;groupSummary=null;groupAnswer=null
+        fun valid()=authenticated&&token==store.token&&gen==conversationGeneration300&&activeGroup?.id==g.id
         groupBusy=true;error=null
-        try{activeGroup=api.group(g.id);groupMessages=api.groupMessages(g.id);api.readGroup(g.id)}
-        catch(e:Exception){error=e.message}finally{groupBusy=false}
-        refreshGroups()
+        try{val updated=api.group(g.id);if(!valid())return@launch;activeGroup=updated
+            val page=api.groupMessages(g.id);if(!valid())return@launch;groupMessages=(page+groupMessages).distinctBy{it.id}.sortedBy{it.id};api.readGroup(g.id)
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}finally{if(valid())groupBusy=false}
+        if(valid())refreshGroups()
     }
     fun sendGroup(text:String)=viewModelScope.launch{
         val g=activeGroup?:return@launch;if(text.isBlank())return@launch
-        runCatching{api.sendGroup(g.id,text.trim())}.onSuccess{m->if(groupMessages.none{it.id==m.id})groupMessages=groupMessages+m;refreshGroups()}.onFailure{error=it.message}
+        runCatching{api.sendGroup(g.id,text.trim())}.onSuccess{m->if(activeGroup?.id==g.id&&authenticated&&groupMessages.none{it.id==m.id})groupMessages=groupMessages+m;refreshGroups()}.onFailure{error=it.message}
     }
     fun suggestGroup()=viewModelScope.launch{
         val g=activeGroup?:return@launch;groupBusy=true
@@ -1276,6 +1304,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                 if(serial==wsSerial)viewModelScope.launch{socketStatus="offline";scheduleSocketReconnect(serial)}
             }
             override fun onMessage(webSocket:WebSocket,text:String){
+                if(serial!=wsSerial||!authenticated)return
                 val map=runCatching{gson.fromJson(text,Map::class.java)}.getOrNull()?:return
                 if(map["type"]?.toString()=="message"){
                     val m=gson.fromJson(gson.toJson(map["data"]),MessageDto::class.java)
@@ -1335,3 +1364,4 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
 }
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

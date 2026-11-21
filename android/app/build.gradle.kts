@@ -59,8 +59,8 @@ android {
         applicationId="com.lemmiq.app"
         minSdk=26
         targetSdk=37
-        versionCode=89
-        versionName="2.13.18"
+        versionCode=90
+        versionName="3.0.0"
         buildConfigField("String", "API_BASE_URL", "\"${lemmiqApiBaseUrl}\"")
         buildConfigField("boolean", "FCM_CONFIGURED", lemmiqFirebaseConfigured.toString())
     }
@@ -126,3 +126,4 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
 // V21318_MEDIA_INSTALLED
+// V300_INSTALLED

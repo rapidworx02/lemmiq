@@ -57,7 +57,7 @@ fun V21317CallsScreen(vm:LemmiqViewModel,onOpenChat:(Int)->Unit){
 
     Column(Modifier.fillMaxSize().background(Color(0xFFF8F7FC))){
         Row(Modifier.fillMaxWidth().padding(start=19.dp,end=12.dp,top=12.dp,bottom=5.dp),verticalAlignment=Alignment.CenterVertically){
-            Text("Calls",fontSize=29.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
+            Text("Calls",fontSize=23.sp,fontWeight=FontWeight.Bold,modifier=Modifier.weight(1f))
             TextButton(onClick={recovery=true}){Text("⋮",fontSize=23.sp,color=muted)}
         }
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),horizontalArrangement=Arrangement.spacedBy(7.dp)){
@@ -147,3 +147,4 @@ fun V21317CallsScreen(vm:LemmiqViewModel,onOpenChat:(Int)->Unit){
             V2132CallRecoveryPanel(vm)
         }},confirmButton={TextButton(onClick={recovery=false}){Text("Close")}})
 }
+// V300_INSTALLED

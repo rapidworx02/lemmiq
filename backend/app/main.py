@@ -27,7 +27,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="2.13.18")
+app = FastAPI(title="LEMMIQ Server", version="3.0.0")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -1080,7 +1080,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "2.13.18",
+        "version": "3.0.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1221,3 +1221,4 @@ def web_root():
 if WEB_DIR.exists():
     app.mount("/web", StaticFiles(directory=str(WEB_DIR), html=True), name="lemmiq-web")
 # V21318_MEDIA_INSTALLED
+# V300_INSTALLED

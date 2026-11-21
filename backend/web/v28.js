@@ -139,7 +139,17 @@
       renderWallet();renderLedger();renderReferrals();renderPayments();renderMarket();
     }catch(e){toast(e.message,true)}
   }
-  window.loadQEconomy=loadQEconomy;
+  async function loadQEconomySection300(){
+    const tab=document.querySelector('[data-q28-tab].active')?.dataset.q28Tab||'wallet';
+    try{
+      v28.wallet=await qApi('/wallet');renderWallet();
+      if(tab==='wallet'||tab==='activity'){v28.ledger=await qApi('/wallet/ledger');renderLedger()}
+      if(tab==='refer'){v28.referrals=await qApi('/referrals');renderReferrals()}
+      if(tab==='packages'){v28.payments=await qApi('/payments/orders');renderPayments()}
+      if(tab==='market'){[v28.listings,v28.myListings,v28.orders]=await Promise.all([qApi(`/market/listings?q=${encodeURIComponent($("q28MarketSearch")?.value||"")}`),qApi('/market/my-listings'),qApi('/market/orders')]);renderMarket()}
+    }catch(e){toast(e.message,true)}
+  }
+  window.loadQEconomy=loadQEconomySection300;
 
   async function refreshV28Access(){
     if(!state?.token)return;
@@ -571,6 +581,7 @@
     qsa("[data-q28-tab]").forEach(b=>b.onclick=()=>{
       qsa("[data-q28-tab]").forEach(x=>x.classList.toggle("active",x===b));
       qsa(".q28-tab").forEach(x=>x.classList.toggle("active",x.id===`q28Tab-${b.dataset.q28Tab}`));
+      loadQEconomySection300();
     });
     $("q28ClaimDaily")?.addEventListener("click",async()=>{try{await qApi("/wallet/claim-daily",{method:"POST",body:"{}"});toast("Daily Q claimed");await loadQEconomy()}catch(e){toast(e.message,true)}});
     $("q28SendBtn")?.addEventListener("click",async()=>{
@@ -624,3 +635,4 @@
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",bind);else bind();
 })();
+// V300_INSTALLED
