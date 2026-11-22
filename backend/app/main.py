@@ -27,7 +27,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="3.0.7")
+app = FastAPI(title="LEMMIQ Server", version="3.0.8")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -914,6 +914,7 @@ BUSINESS_CATEGORIES = {"FAQ","SERVICE","PRICING","POLICY","HOURS","AREA","OTHER"
 BUSINESS_MODES = {"OFF","ASSIST","AUTO"}
 
 class BusinessProfileIn(BaseModel):
+    updated_at: str | None = Field(default=None, max_length=80)
     enabled: bool = False
     business_name: str = Field(default="", max_length=120)
     business_type: str = Field(default="", max_length=100)
@@ -956,8 +957,15 @@ def get_business_profile(u:User=Depends(current_user),db:Session=Depends(get_db)
 @app.put("/business/profile")
 def put_business_profile(body:BusinessProfileIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
     p=profile_for(db,u.id)
+    p=db.scalar(select(BusinessProfile).where(BusinessProfile.user_id==u.id).with_for_update().execution_options(populate_existing=True))
+    if body.updated_at and body.updated_at!=profile_json(p)["updated_at"]:
+        raise HTTPException(409,"Business profile changed. Reload it before saving.")
+    fields=getattr(body,"model_fields_set",None)
+    if fields is None:fields=body.__fields_set__
+    if ("business_name" in fields and not body.business_name.strip()) or (not (body.business_name.strip() if "business_name" in fields else (p.business_name or '').strip()) and (body.enabled if "enabled" in fields else p.enabled)):
+        raise HTTPException(422,"A business name is required; existing profile was not changed")
     for field in ("enabled","business_name","business_type","description","website","phone","email","hours","service_area","tone","currency","auto_threshold"):
-        setattr(p,field,getattr(body,field))
+        if field in fields:setattr(p,field,getattr(body,field))
     p.updated_at=datetime.now(timezone.utc);db.commit();db.refresh(p)
     return profile_json(p)
 
@@ -973,6 +981,32 @@ def add_business_knowledge(body:BusinessKnowledgeIn,u:User=Depends(current_user)
     k=BusinessKnowledge(user_id=u.id,category=cat,title=body.title.strip(),content=body.content.strip(),
         source=body.source.strip() or "Manual",approved=body.approved,active=body.active,updated_at=datetime.now(timezone.utc))
     db.add(k);db.commit();db.refresh(k);return knowledge_json(k)
+
+# V308 owner-scoped management. No schema or existing record migration.
+@app.put("/business/knowledge/{kid}")
+def update_business_knowledge308(kid:int,body:BusinessKnowledgeIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    k=db.scalar(select(BusinessKnowledge).where(BusinessKnowledge.id==kid,BusinessKnowledge.user_id==u.id).with_for_update())
+    if not k:raise HTTPException(404,"Knowledge item not found")
+    cat=body.category.upper()
+    if cat not in BUSINESS_CATEGORIES or not body.title.strip() or not body.content.strip():raise HTTPException(422,"Valid category, title and content required")
+    k.category=cat;k.title=body.title.strip();k.content=body.content.strip();k.approved=body.approved;k.active=body.active
+    k.updated_at=datetime.now(timezone.utc);db.commit();db.refresh(k);return knowledge_json(k)
+
+@app.get("/business/customers")
+def business_customers308(u:User=Depends(current_user),db:Session=Depends(get_db)):
+    rows=db.execute(select(BusinessChatSetting,Chat).join(Chat,Chat.id==BusinessChatSetting.chat_id).where(BusinessChatSetting.user_id==u.id,((Chat.user1_id==u.id)|(Chat.user2_id==u.id)),BusinessChatSetting.enabled.is_(True)).order_by(BusinessChatSetting.updated_at.desc()).limit(250)).all()
+    out=[]
+    for s,c in rows:
+        other=db.get(User,c.user2_id if c.user1_id==u.id else c.user1_id)
+        if other:out.append(dict(chat_id=c.id,display_name=other.display_name,username=other.username,mode=s.mode,enabled=s.enabled,customer_label=s.customer_label))
+    return out
+
+@app.get("/business/chats/{cid}/status")
+def business_chat_status308(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    p=db.get(BusinessProfile,u.id)
+    b=db.get(BusinessChatSetting,{"user_id":u.id,"chat_id":cid})
+    return {"profile_enabled":bool(p and p.enabled and (p.business_name or "").strip()),"enabled":bool(b and b.enabled),"mode":b.mode if b else "OFF"}
 
 @app.delete("/business/knowledge/{kid}")
 def delete_business_knowledge(kid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -1016,6 +1050,8 @@ def business_suggest(cid:int,u:User=Depends(current_user),db:Session=Depends(get
     ensure_member(db,cid,u.id)
     s=chat_setting_for(db,u.id,cid)
     if not s.enabled or s.mode=="OFF": raise HTTPException(409,"Enable Business Agent for this customer chat first")
+    p=profile_for(db,u.id)
+    if not p.enabled or not (p.business_name or "").strip():raise HTTPException(409,"Set up and enable Business Agent in More → Business Agent first")
     rows=db.scalars(select(Message).where(Message.chat_id==cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
     incoming=next((x.text for x in reversed(rows) if x.sender_id!=u.id),None)
     if not incoming: raise HTTPException(400,"No incoming customer message")
@@ -1025,7 +1061,7 @@ def business_suggest(cid:int,u:User=Depends(current_user),db:Session=Depends(get
     except Exception:
         _q_feature_finish(db,billing,False);db.commit()
         raise
-    _q_feature_finish(db,billing,True)
+    _q_feature_finish(db,billing,bool(str(result.get("reply") or "").strip()))
     try:
         from .v29 import track_shadow_event
         track_shadow_event(db, u.id, "BUSINESS_AGENT", note=f"chat:{cid}")
@@ -1080,7 +1116,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "3.0.7",
+        "version": "3.0.8",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",

@@ -59,6 +59,7 @@
   <link rel="stylesheet" href="/web/v300.css?v=3.0.5">
   <link rel="stylesheet" href="/web/v306.css?v=3.0.6">
   <link rel="stylesheet" href="/web/v307_admin.css?v=3.0.7">
+  <link rel="stylesheet" href="/web/v308_business.css?v=3.0.8">
   <link rel="stylesheet" href="/web/v301.css?v=3.0.1">
 </head>
 <body>
@@ -278,16 +279,17 @@
       </section>
 
       <section id="view-business" class="view">
+        <div class="card glass"><div class="section-head"><div><h3>Business Agent</h3><p id="bizState308" role="status">Profile not loaded</p></div><button class="ghost" id="bizReload308">Reload profile</button></div><p id="bizProfileStatus308" class="micro" role="status"></p><nav class="biz-tabs308" aria-label="Business Agent sections"><button type="button" data-biz-tab="profile" aria-pressed="true">Profile</button><button type="button" data-biz-tab="knowledge" aria-pressed="false">Knowledge</button><button type="button" data-biz-tab="customers" aria-pressed="false">Customer chats</button><button type="button" data-biz-tab="ai" aria-pressed="false">AI settings</button></nav></div>
         <div class="business-grid">
-          <article class="card glass">
+          <article class="card glass" data-biz-panel="profile">
             <div class="section-head"><div><span class="eyebrow">BUSINESS BETA</span><h3>Business profile</h3></div>
-              <label class="switch"><input id="bizEnabled" type="checkbox"><span></span></label>
+              <label class="biz-toggle308">Enable Business Agent <input id="bizEnabled" type="checkbox" disabled></label>
             </div>
             <div class="form-grid">
               <label>Business name<input id="bizName"></label>
               <label>Business type<input id="bizType"></label>
-              <label>Reply tone<select id="bizTone"><option>Professional</option><option>Friendly</option><option>Premium</option><option>Casual</option><option>Sales-focused</option></select></label>
-              <label>Auto threshold<input id="bizThreshold" type="number" min="70" max="100" value="90"></label>
+              
+              
               <label class="wide">Description<textarea id="bizDescription"></textarea></label>
               <label class="wide">Opening hours<textarea id="bizHours"></textarea></label>
               <label class="wide">Service area<textarea id="bizArea"></textarea></label>
@@ -299,7 +301,9 @@
             <button id="saveBizBtn" class="primary">Save Business Agent</button>
           </article>
 
-          <article class="card glass">
+          <article class="card glass" data-biz-panel="ai" hidden><h3>AI settings</h3><div class="form-grid"><label>Reply tone<select id="bizTone"><option>Professional</option><option>Friendly</option><option>Premium</option><option>Casual</option><option>Sales-focused</option></select></label><label>Auto threshold<input id="bizThreshold" type="number" min="70" max="100" value="90"></label></div><p class="micro">AUTO sends only grounded, low-risk responses. Test in ASSIST first.</p><button id="bizSaveAI308" class="primary" disabled>Save AI settings</button></article>
+          <article class="card glass" data-biz-panel="customers" hidden><h3>Linked customer chats</h3><div id="bizCustomers308"></div></article>
+          <article class="card glass" data-biz-panel="knowledge" hidden>
             <div class="section-head">
               <div><span class="eyebrow">KNOWLEDGE</span><h3>Approved business knowledge</h3></div>
               <label class="upload">Upload document<input id="bizDocInput" type="file" accept=".pdf,.docx,.txt,.md,.csv" hidden></label>
@@ -310,7 +314,7 @@
               <textarea id="kbContent" placeholder="Approved information the agent may use"></textarea>
               <button id="addKbBtn" class="primary">Add knowledge</button>
             </div>
-            <div id="knowledgeList" class="knowledge-list"></div>
+            <label>Search knowledge<input type="search" id="bizSearch308" placeholder="Title, category or text"></label><p id="bizKnowledgeStatus308" role="status" class="micro"></p><div id="knowledgeList" class="knowledge-list"></div>
           </article>
         </div>
       </section>
@@ -616,7 +620,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.umd.min.js"></script>
-  <script src="/web/app.js?v=3.0.7" defer></script>
+  <script src="/web/app.js?v=3.0.8" defer></script>
   <script src="/web/v28.js?v=3.0.7" defer></script>
   <script src="/web/v29.js?v=3.0.7" defer></script>
   <script src="/web/v2104.js?v=2.10.7" defer></script>

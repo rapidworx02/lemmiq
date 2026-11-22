@@ -457,6 +457,7 @@ async function openChat(cid,mark=true){
   $("emptyChat").classList.add("hidden");$("activeQThread")?.classList.add("hidden");$("activeGroup").classList.add("hidden");$("activeChat").classList.remove("hidden");
   $("chatName").textContent=chat.other_user.display_name;
   $("chatMeta").textContent=`@${chat.other_user.username} · ${chat.category} · AI ${chat.ai_mode}`;
+  refreshBusinessBadge308(chat.id);
   $("chatAvatar").innerHTML=chat.other_user.avatar_url?`<img src="${escapeHtml(chat.other_user.avatar_url)}" alt="">`:escapeHtml(initials(chat.other_user.display_name));
   discardSuggestion();
   $("assistBar").classList.toggle("hidden",chat.ai_mode!=="ASSIST");
@@ -769,41 +770,37 @@ async function chatSummary(){
   }catch(e){$("modalContent").innerHTML=`<h3>Summary failed</h3><p>${escapeHtml(e.message)}</p>`}
 }
 
-async function loadBusiness(){
-  const [p,k]=await Promise.all([api("/business/profile"),api("/business/knowledge")]);
-  $("bizEnabled").checked=!!p.enabled;$("bizName").value=p.business_name||"";$("bizType").value=p.business_type||"";
-  $("bizDescription").value=p.description||"";$("bizWebsite").value=p.website||"";$("bizPhone").value=p.phone||"";
-  $("bizEmail").value=p.email||"";$("bizHours").value=p.hours||"";$("bizArea").value=p.service_area||"";
-  $("bizTone").value=p.tone||"Professional";$("bizCurrency").value=p.currency||"AUD";$("bizThreshold").value=p.auto_threshold||90;
-  renderKnowledge(k);
-}
-function renderKnowledge(rows){
-  $("knowledgeList").innerHTML=rows.length?rows.map(k=>`<div class="kb"><div class="kb-head"><div><span class="tag">${escapeHtml(k.category)}</span><strong> ${escapeHtml(k.title)}</strong></div><button class="mini" onclick="deleteKb(${k.id})">Delete</button></div><p>${escapeHtml(k.content)}</p><small class="micro">${escapeHtml(k.source||"Manual")}</small></div>`).join(""):"<p class='micro'>No approved knowledge yet.</p>";
-}
-async function saveBusiness(){
-  const body={
-    enabled:$("bizEnabled").checked,business_name:$("bizName").value,business_type:$("bizType").value,
-    description:$("bizDescription").value,website:$("bizWebsite").value,phone:$("bizPhone").value,email:$("bizEmail").value,
-    hours:$("bizHours").value,service_area:$("bizArea").value,tone:$("bizTone").value,currency:$("bizCurrency").value,
-    auto_threshold:Number($("bizThreshold").value||90)
-  };
-  try{await api("/business/profile",{method:"PUT",body:JSON.stringify(body)});toast("Business Agent saved")}
-  catch(e){toast(e.message,true)}
-}
+// V308 Business Agent: separate profile and knowledge requests; keep dirty form intact.
+const bizFields308={business_name:'bizName',business_type:'bizType',description:'bizDescription',website:'bizWebsite',phone:'bizPhone',email:'bizEmail',hours:'bizHours',service_area:'bizArea',tone:'bizTone',currency:'bizCurrency',auto_threshold:'bizThreshold'};
+let bizProfile308=null,bizDirty308=false,bizSaving308=false,bizSeq308=0,bizRows308=[],bizTab308='profile';
+function bizNotice308(id,msg){const el=$(id);if(el)el.textContent=String(msg||'');}
+function bizEnable308(ready){for(const id of ['bizEnabled',...Object.values(bizFields308),'saveBizBtn','bizSaveAI308'])if($(id))$(id).disabled=!ready;}
+function bizStatus308(){bizNotice308('bizState308',bizProfile308?(bizProfile308.enabled?'Enabled':'Disabled')+(bizProfile308.updated_at?' Â· Saved '+new Date(bizProfile308.updated_at).toLocaleString():''):'Profile not loaded');}
+function bizRead308(){const body={enabled:$("bizEnabled").checked,updated_at:bizProfile308?.updated_at||null};for(const [key,id] of Object.entries(bizFields308))body[key]=key==='auto_threshold'?Number($(id).value):$(id).value.trim();return body;}
+function bizApply308(p){if(!p||typeof p.enabled!=='boolean'||typeof p.business_name!=='string')throw Error('Invalid business profile response');bizProfile308=p;$("bizEnabled").checked=p.enabled;for(const [key,id] of Object.entries(bizFields308))$(id).value=p[key]??(key==='auto_threshold'?90:'');bizDirty308=false;bizStatus308();}
+async function loadBizProfile308(force=false){if(bizSaving308)return;if(bizDirty308&&!force)return;const seq=++bizSeq308,t=state.token;bizEnable308(false);bizNotice308('bizProfileStatus308','Loading saved business profileâ€¦');try{const p=await api('/business/profile');if(seq!==bizSeq308||t!==state.token)return;bizApply308(p);bizEnable308(true);bizNotice308('bizProfileStatus308',p.business_name?'Saved profile loaded.':'No business name is currently stored for this account. Existing knowledge is preserved.');}catch(e){if(seq!==bizSeq308||t!==state.token)return;bizProfile308=null;bizStatus308();bizNotice308('bizProfileStatus308',e.message+' â€” retry before editing.');}}
+async function loadBizKnowledge308(){try{const t=state.token;const rows=await api('/business/knowledge');if(t!==state.token)return;if(!Array.isArray(rows))throw Error('Invalid knowledge response');bizRows308=rows;renderKnowledge(rows);bizNotice308('bizKnowledgeStatus308',`${rows.length} saved knowledge items loaded.`);}catch(e){bizNotice308('bizKnowledgeStatus308',e.message);}}
+async function loadBusiness(){setupBusiness308();await loadBizProfile308();if(bizTab308==='knowledge')await loadBizKnowledge308();if(bizTab308==='customers')await loadBizCustomers308();}
+function renderKnowledge(rows){const q=($('bizSearch308')?.value||'').trim().toLowerCase();const filtered=rows.filter(k=>!q||[k.title,k.category,k.content].some(x=>String(x||'').toLowerCase().includes(q)));$('knowledgeList').innerHTML=filtered.length?filtered.map(k=>`<details class="kb biz-kb308"><summary><span class="tag">${escapeHtml(k.category)}</span> <strong>${escapeHtml(k.title)}</strong><small>${k.approved&&k.active?'Approved Â· Active':'Not used for replies'} Â· ${escapeHtml(k.source||'Manual')}</small></summary><p>${escapeHtml(k.content)}</p><div class="biz-actions308"><button class="ghost" type="button" data-biz-edit="${Number(k.id)}">Edit / approval</button><button class="ghost" type="button" data-biz-delete="${Number(k.id)}">Delete</button></div></details>`).join(''):'<p class="micro">No matching knowledge items.</p>'; $('knowledgeList').querySelectorAll('[data-biz-edit]').forEach(b=>b.onclick=()=>editBizKnowledge308(+b.dataset.bizEdit));$('knowledgeList').querySelectorAll('[data-biz-delete]').forEach(b=>b.onclick=()=>deleteKb(+b.dataset.bizDelete));}
+async function saveBusiness(){if(!bizProfile308||bizSaving308)return;const body=bizRead308();if(!body.business_name){bizNotice308('bizProfileStatus308','Enter a business name before saving.');return}if(!Number.isInteger(body.auto_threshold)||body.auto_threshold<70||body.auto_threshold>100){bizNotice308('bizProfileStatus308','AUTO threshold must be a whole number from 70 to 100.');return}bizSaving308=true;bizEnable308(false);const t=state.token;bizNotice308('bizProfileStatus308','Saving profileâ€¦');try{const saved=await api('/business/profile',{method:'PUT',body:JSON.stringify(body)});const check=await api('/business/profile');if(t!==state.token)return;for(const key of ['enabled',...Object.keys(bizFields308)])if(check[key]!==saved[key])throw Error('Saved profile changed before verification. Reload and review.');bizApply308(check);bizNotice308('bizProfileStatus308','Saved and verified from server.');toast('Business profile saved and verified');}catch(e){if(t!==state.token)return;bizNotice308('bizProfileStatus308',e.message+' â€” your form has been retained.');toast(e.message,true);}finally{bizSaving308=false;if(t===state.token)bizEnable308(!!bizProfile308);}}
+async function editBizKnowledge308(id){const k=bizRows308.find(x=>x.id===id);if(!k)return;openModal(`<h3>Edit knowledge</h3><label>Title<input id="bizEditTitle308" maxlength="120" value="${escapeHtml(k.title)}"></label><label>Category<select id="bizEditCategory308">${['FAQ','SERVICE','PRICING','POLICY','HOURS','AREA','OTHER'].map(c=>`<option ${c===k.category?'selected':''}>${c}</option>`).join('')}</select></label><label>Content<textarea id="bizEditContent308" maxlength="60000" rows="9">${escapeHtml(k.content)}</textarea></label><label class="biz-toggle308"><input type="checkbox" id="bizEditApproved308" ${k.approved?'checked':''}> Approved for replies</label><label class="biz-toggle308"><input type="checkbox" id="bizEditActive308" ${k.active?'checked':''}> Active</label><button id="bizEditSave308" class="primary">Save knowledge</button>`);$('bizEditSave308').onclick=async()=>{const b=$('bizEditSave308');b.disabled=true;try{await api(`/business/knowledge/${id}`,{method:'PUT',body:JSON.stringify({title:$('bizEditTitle308').value.trim(),category:$('bizEditCategory308').value,content:$('bizEditContent308').value.trim(),approved:$('bizEditApproved308').checked,active:$('bizEditActive308').checked})});closeModal();await loadBizKnowledge308();}catch(e){toast(e.message,true);b.disabled=false}};}
+async function loadBizCustomers308(){const h=$('bizCustomers308');if(!h)return;h.textContent='Loading linked customer chatsâ€¦';try{const t=state.token,rows=await api('/business/customers');if(t!==state.token)return;h.innerHTML=rows.map(c=>`<div class="kb"><strong>${escapeHtml(c.display_name)}</strong><small>@${escapeHtml(c.username)} Â· ${escapeHtml(c.mode)} Â· ${c.enabled?'Enabled':'Disabled'}</small><button class="ghost" type="button" data-biz-chat="${Number(c.chat_id)}">Open chat</button></div>`).join('')||'<p>No linked chats. Open a conversation â†’ Business Agent to link it.</p>';h.querySelectorAll('[data-biz-chat]').forEach(b=>b.onclick=async()=>{setView('chats');await openChat(+b.dataset.bizChat)});}catch(e){h.textContent=e.message;}}
+function setupBusiness308(){const host=$('view-business');if(host.dataset.bizReady308)return;host.dataset.bizReady308='1';bizEnable308(false);host.querySelectorAll('[data-biz-tab]').forEach(b=>b.onclick=()=>{bizTab308=b.dataset.bizTab;host.querySelectorAll('[data-biz-tab]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));host.querySelectorAll('[data-biz-panel]').forEach(x=>x.hidden=x.dataset.bizPanel!==bizTab308);if(bizTab308==='knowledge')loadBizKnowledge308();if(bizTab308==='customers')loadBizCustomers308();});for(const id of ['bizEnabled',...Object.values(bizFields308)])$(id).addEventListener('input',()=>{bizDirty308=true;bizNotice308('bizProfileStatus308','Unsaved changes');});$('bizSearch308').oninput=()=>renderKnowledge(bizRows308);$('bizReload308').onclick=()=>{if(!bizDirty308||confirm('Discard unsaved profile edits and reload?'))loadBizProfile308(true)};$('bizSaveAI308').onclick=saveBusiness;}
+
 async function addKnowledge(){
   const body={category:$("kbCategory").value,title:$("kbTitle").value.trim(),content:$("kbContent").value.trim(),source:"Web dashboard",approved:true,active:true};
   if(!body.title||!body.content)return toast("Add a title and content",true);
-  try{await api("/business/knowledge",{method:"POST",body:JSON.stringify(body)});$("kbTitle").value="";$("kbContent").value="";await loadBusiness();toast("Knowledge added")}
+  try{await api("/business/knowledge",{method:"POST",body:JSON.stringify(body)});$("kbTitle").value="";$("kbContent").value="";await loadBizKnowledge308();toast("Knowledge added")}
   catch(e){toast(e.message,true)}
 }
 async function deleteKb(id){
   if(!confirm("Delete this knowledge item?"))return;
-  try{await api(`/business/knowledge/${id}`,{method:"DELETE"});await loadBusiness()}catch(e){toast(e.message,true)}
+  try{await api(`/business/knowledge/${id}`,{method:"DELETE"});await loadBizKnowledge308()}catch(e){toast(e.message,true)}
 }
 window.deleteKb=deleteKb;
 async function uploadBizDoc(file){
   if(!file)return;const fd=new FormData();fd.append("file",file);
-  try{toast("Reading business document…");await api("/business/knowledge/upload",{method:"POST",body:fd});await loadBusiness();toast("Document added to knowledge")}
+  try{toast("Reading business document…");await api("/business/knowledge/upload",{method:"POST",body:fd});await loadBizKnowledge308();toast("Document added to knowledge")}
   catch(e){toast(e.message,true)}
 }
 
@@ -856,41 +853,22 @@ async function personalChatSettings(){
 }
 
 async function businessChatSettings(){
-  if(!state.activeChat)return;
-  let data;
-  try{data=await api(`/business/chats/${state.activeChat.id}`)}catch(e){return toast(e.message,true)}
-  const s=data.setting,m=data.memory;
-  openModal(`<h3>💼 Business Agent — ${escapeHtml(state.activeChat.other_user.display_name)}</h3>
-    <label class="switch-row">Enable Business Agent <input id="bcEnabled" type="checkbox" ${s.enabled?"checked":""}></label>
-    <label>Mode<select id="bcMode"><option ${s.mode==="OFF"?"selected":""}>OFF</option><option ${s.mode==="ASSIST"?"selected":""}>ASSIST</option><option ${s.mode==="AUTO"?"selected":""}>AUTO</option></select></label>
-    <label>Customer label<input id="bcLabel" value="${escapeHtml(s.customer_label||"")}"></label>
-    <label>Customer notes<textarea id="bcNotes">${escapeHtml(m.notes||"")}</textarea></label>
-    <label>Tags<input id="bcTags" value="${escapeHtml(m.tags||"")}"></label>
-    <div class="suggestion-actions"><button id="bcSave" class="primary">Save</button><button id="bcSuggest" class="ghost">Generate business reply</button></div>
-    <p class="micro">AUTO still follows the Business Agent's confidence threshold and high-risk safeguards.</p>`);
-  $("bcSave").onclick=async()=>{
-    try{
-      await api(`/business/chats/${state.activeChat.id}`,{method:"PUT",body:JSON.stringify({enabled:$("bcEnabled").checked,mode:$("bcMode").value,customer_label:$("bcLabel").value})});
-      await api(`/business/chats/${state.activeChat.id}/memory`,{method:"PUT",body:JSON.stringify({notes:$("bcNotes").value,tags:$("bcTags").value})});
-      toast("Business chat settings saved");closeModal();
-    }catch(e){toast(e.message,true)}
-  };
-  $("bcSuggest").onclick=async()=>{
-    try{const r=await api(`/business/chats/${state.activeChat.id}/suggest`,{method:"POST"});closeModal();showBusinessSuggestion(r)}
-    catch(e){toast(e.message,true)}
-  };
+ const c=state.activeChat;if(!c)return;const cid=c.id,t=state.token;let data,p;
+ try{[data,p]=await Promise.all([api(`/business/chats/${cid}`),api('/business/profile')]);}catch(e){return toast(e.message,true)}
+ const valid=()=>state.token===t&&state.activeChat?.id===cid;if(!valid())return;
+ const s=data.setting,m=data.memory,ready=!!p.enabled&&!!p.business_name;
+ openModal(`<h3>ðŸ’¼ Business Agent â€” ${escapeHtml(c.other_user.display_name)}</h3><p class="micro">Business profile: ${ready?'Enabled':'Setup required'}</p>${ready?'':'<button class="primary" id="bcSetup308">Set up Business Agent</button>'}<label class="biz-toggle308">Enable for this chat <input id="bcEnabled" type="checkbox" ${s.enabled?'checked':''}></label><label>Mode<select id="bcMode">${['OFF','ASSIST','AUTO'].map(x=>`<option ${s.mode===x?'selected':''}>${x}</option>`).join('')}</select></label><label>Customer label<input id="bcLabel" value="${escapeHtml(s.customer_label||'')}"></label><label>Customer notes<textarea id="bcNotes">${escapeHtml(m.notes||'')}</textarea></label><label>Tags<input id="bcTags" value="${escapeHtml(m.tags||'')}"></label><div class="suggestion-actions"><button id="bcSave" class="primary">Save</button><button id="bcSuggest" class="ghost" ${ready?'':'disabled'}>Generate business reply</button></div><p class="micro">ASSIST lets you review replies. AUTO requires sufficient grounding and passes safety checks.</p>`);
+ if($('bcSetup308'))$('bcSetup308').onclick=()=>{closeModal();setView('business')};
+ async function persist(){if(!valid())throw Error('Conversation changed');const enabled=$('bcEnabled').checked,mode=$('bcMode').value;if(enabled&&mode!=='OFF'&&!ready)throw Error('Enable and save the main Business Agent profile first.');await api(`/business/chats/${cid}`,{method:'PUT',body:JSON.stringify({enabled,mode,customer_label:$('bcLabel').value})});if(!valid())throw Error('Conversation changed');await api(`/business/chats/${cid}/memory`,{method:'PUT',body:JSON.stringify({notes:$('bcNotes').value,tags:$('bcTags').value})});if(valid())refreshBusinessBadge308(cid);}
+ async function run(generate){const b=$('bcSave'),d=$('bcSuggest');b.disabled=d.disabled=true;try{await persist();if(!valid())return;if(generate){const r=await api(`/business/chats/${cid}/suggest`,{method:'POST'});if(valid()){closeModal();showBusinessSuggestion(r)}}else{toast('Business chat settings saved');closeModal()}}catch(e){toast(e.message,true);b.disabled=false;d.disabled=!ready;}}
+ $('bcSave').onclick=()=>run(false);$('bcSuggest').onclick=()=>run(true);
 }
+async function refreshBusinessBadge308(cid){const t=state.token;const meta=$('chatMeta');if(!meta)return;try{const b=await api(`/business/chats/${cid}/status`);if(t!==state.token||state.activeChat?.id!==cid)return;const c=state.activeChat;meta.textContent=`@${c.other_user.username} Â· ${c.category} Â· AI ${c.ai_mode}`+(b.profile_enabled&&b.enabled&&b.mode!=='OFF'?` Â· Business ${b.mode}`:'');}catch{}}
 function showBusinessSuggestion(r){
-  const src=(r.sources||[]).map(x=>x.title).join(", ");
-  const reply=r.reply||"";
-  const el=$("suggestionCard");el.classList.remove("hidden");
-  el.innerHTML=`<strong>💼 Business Agent · ${Number(r.confidence||0)}% grounded</strong>
-  <p class="suggestion-text"></p><p class="micro">${escapeHtml(r.reason||"")}${src?`<br>Sources: ${escapeHtml(src)}`:""}</p>
-  <div class="suggestion-actions"><button class="ghost" data-action="discard">Discard</button><button class="ghost" data-action="edit">Edit</button><button class="primary" data-action="send">Send</button></div>`;
-  el.querySelector(".suggestion-text").textContent=reply;
-  el.querySelector('[data-action="discard"]').addEventListener("click",discardSuggestion);
-  el.querySelector('[data-action="edit"]').addEventListener("click",()=>{$("messageInput").value=reply;discardSuggestion();$("messageInput").focus();saveDraft(reply)});
-  el.querySelector('[data-action="send"]').addEventListener("click",async()=>{discardSuggestion();try{await api(`/chats/${state.activeChat.id}/messages`,{method:"POST",body:JSON.stringify({text:reply})});await openChat(state.activeChat.id,false)}catch(e){toast(e.message,true)}});
+ const reply=String(r.reply||'').trim(),el=$('suggestionCard'),cid=state.activeChat?.id,t=state.token;el.classList.remove('hidden');
+ if(!reply){el.innerHTML=`<strong>Business Agent needs attention</strong><p>${escapeHtml(r.reason||'No reply generated.')}</p><button class="ghost" id="bizReplySetup308">Business settings</button><button class="ghost" id="bizReplyDismiss308">Dismiss</button>`;$('bizReplySetup308').onclick=()=>{discardSuggestion();businessChatSettings()};$('bizReplyDismiss308').onclick=discardSuggestion;return;}
+ const src=(r.sources||[]).map(x=>x.title).join(', ');el.innerHTML=`<strong>ðŸ’¼ Business Agent Â· ${Number(r.confidence||0)}% grounded${r.requires_review?' Â· Review required':''}</strong><p class="suggestion-text"></p><p class="micro">${escapeHtml(r.reason||'')}${src?`<br>Sources: ${escapeHtml(src)}`:''}</p><div class="suggestion-actions"><button class="ghost" data-action="discard">Discard</button><button class="ghost" data-action="edit">Edit</button><button class="primary" data-action="send">Send</button></div>`;
+ el.querySelector('.suggestion-text').textContent=reply;const valid=()=>state.token===t&&state.activeChat?.id===cid;el.querySelector('[data-action="discard"]').onclick=discardSuggestion;el.querySelector('[data-action="edit"]').onclick=()=>{if(!valid())return;$('messageInput').value=reply;discardSuggestion();$('messageInput').focus();saveDraft(reply)};el.querySelector('[data-action="send"]').onclick=async()=>{if(!valid())return;if(r.requires_review&&!confirm('Confirm you reviewed this business reply before sending.'))return;discardSuggestion();try{await api(`/chats/${cid}/messages`,{method:'POST',body:JSON.stringify({text:reply})});if(valid())await openChat(cid,false)}catch(e){toast(e.message,true)}};
 }
 
 
@@ -1295,7 +1273,7 @@ function prepareCallUi(user,stateText="Ringing…"){
   $("callPerson").textContent=user?.display_name||"LEMMIQ user";
   $("callAvatar").innerHTML=user?.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user?.display_name||"LEMMIQ"));
   $("callEyebrow").textContent=video?"LEMMIQ VIDEO":"LEMMIQ VOICE";
-  $("callFoot").textContent="LEMMIQ V3.0.7";
+  $("callFoot").textContent="LEMMIQ V3.0.8";
   $("callVideoStage").classList.toggle("hidden",!video);
   $("callAvatar").classList.toggle("hidden",video);
   $("cameraCallBtn").classList.toggle("hidden",!video);
