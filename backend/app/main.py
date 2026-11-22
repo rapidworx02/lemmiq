@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from .database import Base, engine, SessionLocal
+from .business309 import selected309, decision309, history309
 from .migrations import apply_compat_migrations
 from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
     BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote, TrustHistory,
@@ -27,7 +28,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="3.0.8")
+app = FastAPI(title="LEMMIQ Server", version="3.0.9")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -195,7 +196,7 @@ def chat_json(db: Session, c: Chat, uid: int):
     unread = db.scalar(select(func.count()).select_from(Message).where(
         Message.chat_id == c.id, Message.sender_id != uid, Message.read_at.is_(None), ~Message.id.in_(hidden_ids)
     )) or 0
-    return {"id": c.id, "other_user": user_json(other), "category": s.category, "ai_mode": s.ai_mode, "tone": s.tone,
+    return {"id": c.id, "other_user": user_json(other), "category": s.category, "ai_mode": "OFF" if selected309(db,uid,c.id) else s.ai_mode, "tone": s.tone,
             "last_message": last_text, "updated_at": c.updated_at.isoformat(), "unread": int(unread),
             "pinned": pref.pinned, "archived": pref.archived, "favourite": pref.favourite,
             "muted_until": pref.muted_until.isoformat() if pref.muted_until else None, "draft_text": pref.draft_text}
@@ -373,43 +374,75 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
     data = msg_json(m, db)
     await push(oid, {"type":"message","data":data}); await push(u.id, {"type":"message","data":data})
     background.add_task(push_service.notify, push_tokens(db, oid), u.display_name, cid, m.text, unread_count_for_user(db, oid))
-    # Business Agent AUTO takes priority over the personal Auto agent when enabled for this chat.
+    # Business selection is exclusive, including while the profile is paused or the mode is OFF.
     bs = db.get(BusinessChatSetting, {"user_id": oid, "chat_id": cid})
     bp = db.get(BusinessProfile, oid)
-    business_handled = False
-    if bs and bp and bp.enabled and bs.enabled and bs.mode == "AUTO" and not sensitive(body.text):
+    business_selected = bool(bs and bs.enabled)
+    if business_selected:
+        reservation = None
         try:
-            _billing = _q_feature_begin(db, oid, "AUTO_MESSAGE", f"business-auto chat:{cid}")
-            try:
-                br = business_reply(db, oid, cid, body.text)
-            except Exception:
-                _q_feature_finish(db, _billing, False); db.commit()
-                raise
-            if br.get("reply") and int(br.get("confidence", 0)) >= int(bp.auto_threshold or 90) and not br.get("requires_review", True):
-                if db.get(AutoReplyReceipt, m.id):
+            status, reason, confidence = 'OFF', 'Business reply mode is OFF', 0
+            if not bp or not bp.enabled or not (bp.business_name or '').strip():
+                status, reason = 'PROFILE_DISABLED', 'Enable and save the business profile'
+            elif bs.mode == 'ASSIST':
+                status, reason = 'AWAITING_REVIEW', 'ASSIST is enabled; generate a reply for review'
+            elif bs.mode == 'AUTO':
+                if sensitive(body.text):
+                    status, reason = 'AWAITING_REVIEW', 'Sensitive enquiry requires owner review'
+                elif db.get(AutoReplyReceipt, m.id):
                     return data
-                auto = Message(chat_id=cid, sender_id=oid, text=br["reply"], ai_generated=True)
-                c.updated_at = datetime.now(timezone.utc)
-                db.add(auto); db.flush()
-                db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
-                _q_feature_finish(db, _billing, True)
-                db.commit(); db.refresh(auto)
+                else:
+                    try:
+                        customer_memory_for(db,oid,cid)  # create before reserving Q; helper may commit
+                        reservation = _q_feature_begin(db, oid, 'AUTO_MESSAGE', f'business-auto chat:{cid}')
+                    except HTTPException as exc:
+                        insufficient = exc.status_code == 402 or 'not enough q' in str(exc.detail).lower()
+                        status = 'INSUFFICIENT_Q' if insufficient else 'UNAVAILABLE'
+                        reason = 'Q balance or feature eligibility' if insufficient else 'Automatic reply unavailable; check feature settings'
+                    else:
+                        br = business_reply(db, oid, cid, body.text)
+                        reply = str(br.get('reply') or '').strip()
+                        confidence = int(br.get('confidence', 0) or 0)
+                        if not reply or br.get('provider_unavailable'):
+                            status, reason = 'UNAVAILABLE', 'No usable automatic reply; generate a reviewed reply'
+                        elif br.get('requires_review', True):
+                            status, reason = 'AWAITING_REVIEW', 'Response requires owner review; generate a reviewed reply'
+                        elif confidence < int(bp.auto_threshold or 90):
+                            status, reason = 'LOW_CONFIDENCE', 'Grounding below the configured confidence threshold'
+                        else:
+                            # Recheck after AI generation: no auto send after a mode change or a newer owner reply.
+                            db.refresh(bs); db.refresh(bp)
+                            newer = db.scalar(select(Message.id).where(Message.chat_id==cid,Message.sender_id==oid,Message.id>m.id).limit(1))
+                            if not bs.enabled or bs.mode!='AUTO' or not bp.enabled or confidence < int(bp.auto_threshold or 90) or newer or db.get(AutoReplyReceipt,m.id):
+                                status, reason = 'SKIPPED', 'Settings changed or conversation already answered'
+                            else:
+                                auto = Message(chat_id=cid,sender_id=oid,text=reply,ai_generated=True)
+                                c.updated_at=datetime.now(timezone.utc);db.add(auto);db.flush()
+                                db.add(AutoReplyReceipt(trigger_message_id=m.id,responder_user_id=oid,reply_message_id=auto.id))
+                                status, reason = 'SENT','Automatic reply sent'
+                        _q_feature_finish(db,reservation,status=='SENT');reservation=None
+            decision309(db,m.id,oid,cid,status,reason,confidence)
+            db.commit()
+            if status=='SENT':
+                db.refresh(auto)
                 try:
                     from .v29 import track_shadow_event
-                    track_shadow_event(db, oid, "AUTO_MESSAGE", note=f"business-auto chat:{cid}")
-                    db.commit()
-                except Exception:
-                    db.rollback()
-                ad = msg_json(auto, db)
-                await push(oid, {"type":"message","data":ad}); await push(u.id, {"type":"message","data":ad})
-                background.add_task(push_service.notify, push_tokens(db, u.id), db.get(User, oid).display_name, cid, auto.text, unread_count_for_user(db, u.id))
-                business_handled = True
-            else:
-                _q_feature_finish(db, _billing, False); db.commit()
-        except Exception as e:
-            print("Business AUTO error:", e)
+                    track_shadow_event(db,oid,'AUTO_MESSAGE',note=f'business-auto chat:{cid}');db.commit()
+                except Exception:db.rollback()
+                ad=msg_json(auto,db)
+                await push(oid,{'type':'message','data':ad});await push(u.id,{'type':'message','data':ad})
+                background.add_task(push_service.notify,push_tokens(db,u.id),db.get(User,oid).display_name,cid,auto.text,unread_count_for_user(db,oid))
+        except Exception:
+            logging.getLogger('lemmiq.business309').exception('Business auto request failed')
+            db.rollback()
+            try:
+                # The debit and refund share the rolled-back transaction. Never issue a second refund.
+                if not db.get(AutoReplyReceipt,m.id):decision309(db,m.id,oid,cid,'UNAVAILABLE','Automatic reply could not be completed')
+                db.commit()
+            except Exception:db.rollback()
+        return data
     s = get_settings(db, cid, oid)
-    if not business_handled and not (bs and bp and bp.enabled and bs.enabled) and s.ai_mode == "AUTO" and not sensitive(body.text):
+    if s.ai_mode == "AUTO" and not sensitive(body.text):
         hist = db.scalars(select(Message).where(Message.chat_id == cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
         lines = []
         for x in hist:
@@ -456,6 +489,7 @@ def mark_read(cid: int, u: User = Depends(current_user), db: Session = Depends(g
 @app.put("/chats/{cid}/settings")
 def update_settings(cid: int, body: Settings, u: User = Depends(current_user), db: Session = Depends(get_db)):
     c = ensure_member(db, cid, u.id)
+    if selected309(db,u.id,cid):raise HTTPException(409,"Business Agent controls this chat. Switch to Personal first.")
     cats = {"PARTNER","DATING","BESTIE","FRIEND","FAMILY","WORK","CUSTOMER","SALES","STUDY","CUSTOM"}
     modes = {"OFF","ASSIST","AUTO"}
     if body.category not in cats or body.ai_mode not in modes:
@@ -468,6 +502,7 @@ def update_settings(cid: int, body: Settings, u: User = Depends(current_user), d
 @app.post("/chats/{cid}/suggest")
 def suggest(cid: int, u: User = Depends(current_user), db: Session = Depends(get_db)):
     ensure_member(db, cid, u.id)
+    if selected309(db,u.id,cid):raise HTTPException(409,"Use Business Agent for this conversation.")
     s = get_settings(db, cid, u.id)
     rows = db.scalars(select(Message).where(Message.chat_id == cid).order_by(Message.id.desc()).limit(50)).all()[::-1]
     incoming = next((x.text for x in reversed(rows) if x.sender_id != u.id), None)
@@ -1008,6 +1043,11 @@ def business_chat_status308(cid:int,u:User=Depends(current_user),db:Session=Depe
     b=db.get(BusinessChatSetting,{"user_id":u.id,"chat_id":cid})
     return {"profile_enabled":bool(p and p.enabled and (p.business_name or "").strip()),"enabled":bool(b and b.enabled),"mode":b.mode if b else "OFF"}
 
+@app.get("/business/chats/{cid}/diagnostics")
+def business_diagnostics309(cid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
+    ensure_member(db,cid,u.id)
+    return {"items":history309(db,u.id,cid)}
+
 @app.delete("/business/knowledge/{kid}")
 def delete_business_knowledge(kid:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
     k=db.get(BusinessKnowledge,kid)
@@ -1036,7 +1076,14 @@ def put_business_chat(cid:int,body:BusinessChatIn,u:User=Depends(current_user),d
     ensure_member(db,cid,u.id)
     mode=body.mode.upper()
     if mode not in BUSINESS_MODES: raise HTTPException(422,"Invalid business mode")
-    s=chat_setting_for(db,u.id,cid);s.enabled=body.enabled;s.mode=mode;s.customer_label=body.customer_label.strip();s.updated_at=datetime.now(timezone.utc)
+    if body.enabled and mode!='OFF':
+        p=db.get(BusinessProfile,u.id)
+        if not p or not p.enabled or not (p.business_name or '').strip():raise HTTPException(409,'Enable the main business profile first')
+    s=chat_setting_for(db,u.id,cid)
+    personal=get_settings(db,cid,u.id)
+    # Explicit selection turns personal AI OFF; switching back never restores AUTO silently.
+    if body.enabled or s.enabled:personal.ai_mode='OFF'
+    s.enabled=body.enabled;s.mode=mode if body.enabled else 'OFF';s.customer_label=body.customer_label.strip();s.updated_at=datetime.now(timezone.utc)
     db.commit();db.refresh(s);return chat_setting_json(s)
 
 @app.put("/business/chats/{cid}/memory")
@@ -1116,7 +1163,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "3.0.8",
+        "version": "3.0.9",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
