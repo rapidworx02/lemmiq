@@ -371,11 +371,14 @@ def register_v21310_predict_q(app,current_user,get_db):
         markets=[m for m in markets if (m.close_at.replace(tzinfo=timezone.utc) if not m.close_at.tzinfo else m.close_at)>now()
                  and not str(m.template_code or '').startswith('CRICKET_V21314_')]  # Demo-only cricket-statistics markets
         positions=db.scalars(select(Position).where(Position.user_id==u.id).order_by(Position.id.desc()).limit(100)).all()
-        locked=sum(p.stake_micros for p in positions if p.status=='OPEN')
+        from sqlalchemy import func
+        locked=db.scalar(select(func.coalesce(func.sum(Position.stake_micros),0)).where(Position.user_id==u.id,Position.status=='OPEN')) or 0
         entries=db.scalars(select(Entry).where((Entry.source==f'USER:{u.id}')|(Entry.destination==f'USER:{u.id}')).order_by(Entry.id.desc()).limit(60)).all()
         orders=db.scalars(select(Order).where(Order.user_id==u.id).order_by(Order.id.desc()).limit(40)).all()
+        from .predict311 import enrich
+        cards=enrich(db,[{'id':m.id,'category':m.category,'subcategory':_classification(m),'question':m.question,'status':m.status,'close_at':m.close_at.isoformat(),'rule':m.resolution_rule} for m in markets[:100]],False) if u.id in _team_ids() else []
         db.commit()
-        return {'mode':'PREDICT_Q','available_q':value(w.available),'locked_q':value(locked),'reference_usdt_per_q':value(price),
+        return {'verified_access':u.id in _team_ids(),'mode':'PREDICT_Q','available_q':value(w.available),'locked_q':value(locked),'reference_usdt_per_q':value(price),
             'buy_usdt_per_q':value(price)*1.05,'sell_usdt_per_q':value(price)*0.95,
             'payments_enabled':os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()=='true' and u.id in _team_ids(),
             'wagering_enabled':os.getenv('LEMMIQ_PREDICT_Q_WAGERING_ENABLED','false').lower()=='true' and u.id in _team_ids(),
@@ -383,8 +386,7 @@ def register_v21310_predict_q(app,current_user,get_db):
             'wallet_activity':[{'kind':x.kind,'amount_q':value(x.amount_micros),'direction':'IN' if x.destination==f'USER:{u.id}' else 'OUT','at':x.created_at.isoformat()} for x in entries],
             'orders':[_order_json(o) for o in orders],
             'positions':[{'id':p.id,'market_id':p.market_id,'outcome':p.outcome,'stake_q':value(p.stake_micros),'payout_q':value(p.payout_micros),'status':p.status} for p in positions],
-            'markets':[{'id':m.id,'category':m.category,'subcategory':_classification(m),'question':m.question,
-                         'status':m.status,'close_at':m.close_at.isoformat(),'rule':m.resolution_rule} for m in markets[:100]]}
+            'markets':cards}
 
     @router.get('/treasury')
     def public_treasury(u:User=Depends(current_user),db:Session=Depends(get_db)):

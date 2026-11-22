@@ -135,12 +135,12 @@ def sync_activity(db,uid,include_discovery=True):
     start=local.replace(hour=0,minute=0,second=0,microsecond=0).astimezone(timezone.utc)
     # Participant-only lifecycle alerts, one per market + unit + state; never promotional.
     if p['results']:
-        for pos,pool,unit in ((DemoPosition,DemoPool,'Demo Q'),(Position,Pool,'Q Predict Q')):
+        for pos,pool,unit in ((DemoPosition,DemoPool,'Demo USDT'),(Position,Pool,'Q Predict Q')):
             joined=db.execute(select(pos,PredictMarket,pool).join(PredictMarket,PredictMarket.id==pos.market_id).outerjoin(pool,pool.market_id==pos.market_id).where(pos.user_id==uid,or_(PredictMarket.updated_at>=cut,pool.settled_at>=cut)).order_by(PredictMarket.updated_at.desc()).limit(200)).all()
             grouped={}
             for x,m,pl in joined:grouped.setdefault(m.id,(m,pl,[]))[2].append(x)
             for mid,(m,pl,positions) in grouped.items():
-                key=f'predict:{unit}:{mid}'
+                key=f'predict:{"Demo Q" if unit=="Demo USDT" else unit}:{mid}'
                 if pl and pl.settled_at and all(x.status in ('WON','LOST','VOID') for x in positions):
                     body=m.question+'\n'+'\n'.join(f'{x.outcome}: {x.status} | stake {units(x.stake_micros)} {unit} | payout {units(x.payout_micros)} {unit}' for x in positions)
                     emit(db,uid,key+':settled','PREDICT','Your prediction has settled',body)
@@ -172,7 +172,9 @@ def sync_activity(db,uid,include_discovery=True):
         if rows:emit(db,uid,'markets:'+day,'PREDICT','New demo prediction markets','\n'.join(x.question for x in rows))
 
 def item(r):
-    return dict(id=f'action310-{r.id}',action_id=r.id,kind='ACTION310',category=r.category,title=r.title,body=r.body,status=r.status,created_at=aware(r.created_at).isoformat(),unread=r.read_at is None,chat_id=r.chat_id,draft=r.draft if r.status=='PENDING' else '',reason=r.reason,acknowledged=bool(r.ack_id),mine=False,can_respond=False,can_cancel=False,options=[])
+    parts=r.event_key.split(':')
+    link={"market_id":int(parts[2]),"wallet_mode":"DEMO" if parts[1] in ("Demo Q","Demo USDT") else "REAL_Q"} if len(parts)==4 and parts[0]=="predict" and parts[1] in ("Demo Q","Demo USDT","Q Predict Q") and parts[2].isdigit() else {}
+    return dict(**link,id=f'action310-{r.id}',action_id=r.id,kind='ACTION310',category=r.category,title=r.title,body=r.body,status=r.status,created_at=aware(r.created_at).isoformat(),unread=r.read_at is None,chat_id=r.chat_id,draft=r.draft if r.status=='PENDING' else '',reason=r.reason,acknowledged=bool(r.ack_id),mine=False,can_respond=False,can_cancel=False,options=[])
 def items310(db,uid):
     # Existing Q thread stays usable if an optional module query fails.
     try:

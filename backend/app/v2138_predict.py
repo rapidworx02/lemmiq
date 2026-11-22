@@ -218,6 +218,8 @@ def register_v2138_predict(app,current_user,get_db):
         markets=[{'id':m.id,'question':m.question,'category':m.category,'status':m.status,'close_at':m.close_at.isoformat(),'resolution_rule':m.resolution_rule,
                   'yes_pool':as_units(pools[m.id].yes_micros) if m.id in pools else 0,'no_pool':as_units(pools[m.id].no_micros) if m.id in pools else 0,
                   'my_positions':positions_by.get(m.id,[])} for m in rows]
+        from .predict311 import enrich
+        enrich(db,markets,True)
         pending=db.scalars(select(DemoPosition).where(DemoPosition.user_id==u.id,DemoPosition.status=='OPEN')).all()
         locked=sum(p.stake_micros for p in pending)
         ledger=db.scalars(select(DemoEntry).where((DemoEntry.from_account==f'DEMO_USER:{u.id}')|(DemoEntry.to_account==f'DEMO_USER:{u.id}')).order_by(DemoEntry.id.desc()).limit(25)).all()
