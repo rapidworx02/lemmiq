@@ -299,6 +299,7 @@ async function connectSocket(){
   ws.onmessage=async ev=>{
     try{
       const p=JSON.parse(ev.data);
+      if(p.type==='q_action310'){await loadQThread();if(!$("activeQThread").classList.contains("hidden")&&!$("qThreadList").querySelector("textarea:focus"))renderQThread();renderChats();return;}
       // V2135_PROFILE_UPDATED_HOOK: contact avatar changed
       if(p.type === "profile_updated"){
         await loadChats(true).catch(()=>{});
@@ -415,18 +416,38 @@ async function openQThread(){
   state.qThread.unread_count=0;renderChats();
   if(location.hash!=="#q-thread")history.pushState({view:"chats",qThread:true},"","#q-thread");
 }
+let qFilter310='ALL';
+const labels310={BUSINESS:'Business',CREATORS:'Creators',PREDICT:'Predict',ECONOMY:'Economy'};
+function actionCard310(x){
+ const id=Number(x.action_id),pending=x.status==='PENDING';
+ return `<article class="q-thread-card q310-card ${pending?'needs-response':''}"><div class="q-thread-card-head"><strong>${escapeHtml(labels310[x.category]||'Q Assistant')}</strong><span>${escapeHtml(x.status)}</span></div><h4>${escapeHtml(x.title)}</h4><p>${escapeHtml(x.body)}</p>${x.reason?`<small>${escapeHtml(x.reason)}</small>`:''}${x.acknowledged?'<p class="micro">Customer acknowledgement recorded.</p>':''}${pending?`<label>Reviewed reply<textarea data-q310-draft="${id}" rows="4" maxlength="1800" placeholder="Write or review a reply">${escapeHtml(x.draft||'')}</textarea></label><div class="q310-buttons"><button class="primary" data-q310-action="SEND" data-id="${id}">Approve &amp; send</button><button class="ghost" data-q310-action="DISMISS" data-id="${id}">Dismiss</button></div>`:''}<div class="q310-buttons">${x.chat_id?`<button class="ghost" data-q310-chat="${Number(x.chat_id)}">Open chat</button>`:''}${x.category!=='BUSINESS'?`<button class="ghost" data-q310-view="${x.category==='ECONOMY'?'q-economy':x.category==='CREATORS'?'q-creators':'q-predict'}">Open ${escapeHtml(labels310[x.category])}</button>`:''}</div><small>${escapeHtml(String(x.created_at||'').replace('T',' ').slice(0,19))}</small></article>`;
+}
+function bind310(host){
+ host.querySelectorAll('[data-q310-action]').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.id),action=b.dataset.q310Action,text=host.querySelector(`[data-q310-draft="${id}"]`)?.value.trim()||'';if(action==='SEND'&&!text)return toast('Enter a reviewed reply',true);if(!confirm(action==='SEND'?'Confirm you reviewed this reply and want to send it?':'Dismiss this review?'))return;const token=state.token;b.disabled=true;try{await api(`/v310/q/actions/${id}/decision`,{method:'POST',body:JSON.stringify({action,text})});if(token!==state.token)return;await loadQThread();renderQThread();renderChats();toast('Action recorded')}catch(e){toast(e.message,true)}finally{b.disabled=false}});
+ host.querySelectorAll('[data-q310-chat]').forEach(b=>b.onclick=()=>openChat(Number(b.dataset.q310Chat)));
+ host.querySelectorAll('[data-q310-view]').forEach(b=>b.onclick=()=>setView(b.dataset.q310View));
+ host.querySelectorAll('[data-q310-filter]').forEach(b=>b.onclick=()=>{qFilter310=b.dataset.q310Filter;renderQThread()});
+ host.querySelector('[data-q310-prefs]')?.addEventListener('click',prefs310);
+ host.querySelector('[data-q310-refresh]')?.addEventListener('click',async()=>{await loadQThread();renderQThread();renderChats()});
+}
+async function prefs310(){try{const t=state.token,p=await api('/v310/q/actions/preferences');if(t!==state.token)return;const fields={economy:'Daily Q Economy activity',results:'My prediction results',creators:'New mainstream creators (digest)',markets:'New demo markets (digest)',acknowledgement:'Automatic customer acknowledgement'};openModal(`<h3>Q Assistant preferences</h3>${Object.entries(fields).map(([k,v])=>`<label class="biz-toggle308">${v}<input type="checkbox" data-q310-pref="${k}" ${p[k]?'checked':''}></label>`).join('')}<p class="micro">Business review requests stay private in your Q thread. Discovery is optional. Existing Q quiet hours apply to discovery and economy updates.</p><button id="save310prefs" class="primary">Save preferences</button>`);$('save310prefs').onclick=async()=>{if(t!==state.token)return;const body=Object.fromEntries([...document.querySelectorAll('[data-q310-pref]')].map(x=>[x.dataset.q310Pref,x.checked]));try{await api('/v310/q/actions/preferences',{method:'PUT',body:JSON.stringify(body)});closeModal();await loadQThread();renderQThread()}catch(e){toast(e.message,true)}}}catch(e){toast(e.message,true)}}
+function toolbar310(rows){const pending=rows.filter(x=>x.kind==='ACTION310'&&x.status==='PENDING').length;return `<div class="q310-toolbar"><div class="q310-buttons"><strong>Q Action Centre (${pending} pending)</strong><button class="ghost" data-q310-refresh>Refresh</button><button class="ghost" data-q310-prefs>Preferences</button></div><div class="q310-filters">${['ALL','PENDING','BUSINESS','CREATORS','PREDICT','ECONOMY','LEGACY'].map(k=>`<button class="ghost ${qFilter310===k?'on':''}" data-q310-filter="${k}">${escapeHtml({ALL:'All',PENDING:'Action required',LEGACY:'Q-to-Q / Catch-up'}[k]||labels310[k]||k)}</button>`).join('')}</div></div>`;}
+
 function renderQThread(){
   const host=$("qThreadList");if(!host)return;
-  const rows=state.qThread?.items||[];
-  host.innerHTML=rows.length?rows.map(item=>{
+  const all=state.qThread?.items||[];
+  const rows=all.filter(x=>qFilter310==='ALL'||(qFilter310==='PENDING'?x.status==='PENDING':qFilter310==='LEGACY'?x.kind!=='ACTION310':x.category===qFilter310));
+  host.innerHTML=toolbar310(all)+(rows.length?rows.map(item=>{
+    if(item.kind==='ACTION310')return actionCard310(item);
     const options=(item.options||[]).slice(0,4);
     const status=item.kind==="ASSISTANT"?"Catch-up":item.can_respond?"Needs your response":item.mine&&item.status==="PENDING"?`Waiting for ${escapeHtml(item.other_user?.display_name||"contact")}`:item.status==="RESPONDED"?(item.mine?"Response received":"You responded"):item.status==="CLOSED"?"Closed":item.status;
     return `<div class="q-thread-card ${item.can_respond?"needs-response":""}"><div class="q-thread-card-head"><strong>${item.kind==="ASSISTANT"?"Q · Assistant":"Q ↔ Q"}</strong><span>${escapeHtml(status)}</span></div><h4>${escapeHtml(item.title)}</h4><p>${escapeHtml(item.body)}</p>${item.can_respond?`<div class="q-thread-options">${options.map(o=>`<button class="ghost" data-qthread-choice="${item.request_id}" data-choice="${escapeHtml(o)}">${escapeHtml(o)}</button>`).join("")}</div><div class="q-thread-reply"><input data-qthread-input="${item.request_id}" placeholder="Reply to Q…"><button class="primary" data-qthread-send="${item.request_id}">Send</button></div>`:""}${item.can_cancel?`<button class="mini" data-qthread-cancel="${escapeHtml(item.request_key||"")}">Cancel request</button>`:""}<small>${escapeHtml(String(item.created_at||"").replace("T"," ").slice(0,19))}</small></div>`;
-  }).join(""):`<div class="empty-state"><h3>Q</h3><p>No Q updates yet.</p></div>`;
+  }).join(""):`<div class="empty-state"><h3>Q</h3><p>No Q updates yet.</p></div>`);
+  bind310(host);
   host.querySelectorAll("[data-qthread-choice]").forEach(b=>b.onclick=()=>respondQThread(Number(b.dataset.qthreadChoice),b.dataset.choice||""));
   host.querySelectorAll("[data-qthread-send]").forEach(b=>b.onclick=()=>{const id=Number(b.dataset.qthreadSend),inp=host.querySelector(`[data-qthread-input="${id}"]`);const val=(inp?.value||"").trim();if(val)respondQThread(id,val)});
   host.querySelectorAll("[data-qthread-cancel]").forEach(b=>b.onclick=()=>cancelQThread(b.dataset.qthreadCancel||""));
-  setTimeout(()=>host.scrollTop=host.scrollHeight,20);
+  host.scrollTop=0;
 }
 async function respondQThread(id,choice){
   try{await api(`/v27/q/coordination/${id}/respond`,{method:"POST",body:JSON.stringify({choice,note:""})});await loadQThread();renderQThread();renderChats();toast("Response sent to Q")}
@@ -1298,7 +1319,7 @@ function prepareCallUi(user,stateText="Ringing…"){
   $("callPerson").textContent=user?.display_name||"LEMMIQ user";
   $("callAvatar").innerHTML=user?.avatar_url?`<img src="${escapeHtml(user.avatar_url)}">`:escapeHtml(initials(user?.display_name||"LEMMIQ"));
   $("callEyebrow").textContent=video?"LEMMIQ VIDEO":"LEMMIQ VOICE";
-  $("callFoot").textContent="LEMMIQ V3.0.9";
+  $("callFoot").textContent="LEMMIQ V3.1.0";
   $("callVideoStage").classList.toggle("hidden",!video);
   $("callAvatar").classList.toggle("hidden",video);
   $("cameraCallBtn").classList.toggle("hidden",!video);

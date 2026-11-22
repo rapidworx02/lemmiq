@@ -80,6 +80,8 @@ def register_v2106(app,current_user,get_db):
         # V21317_Q_DIGEST: merge private, low-frequency in-app assistant notes.
         from .v21317_assistant import assistant_items
         out.extend(assistant_items(db,u.id))
+        from .action310 import items310
+        out.extend(items310(db,u.id))
         out.sort(key=lambda x:x.get("created_at", ""), reverse=True)
         return {"unread_count":sum(1 for x in out if x["unread"]),"items":out}
 
@@ -93,6 +95,8 @@ def register_v2106(app,current_user,get_db):
             row.last_seen_at=now;row.updated_at=now
         from .v21317_assistant import mark_assistant_read
         mark_assistant_read(db,u.id)
+        from .action310 import mark310
+        mark310(db,u.id)
         db.commit()
         return {"ok":True,"read_at":now.isoformat()}
 

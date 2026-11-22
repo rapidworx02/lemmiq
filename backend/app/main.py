@@ -15,6 +15,7 @@ from sqlalchemy import or_, select, func
 from sqlalchemy.orm import Session
 from .database import Base, engine, SessionLocal
 from .business309 import selected309, decision309, history309
+from .action310 import queue_review, register_action310
 from .migrations import apply_compat_migrations
 from .models import (User, Chat, ChatSetting, Message, Moment, InsightEvent, MessageAttachment, PushDevice,
     BusinessProfile, BusinessKnowledge, BusinessChatSetting, BusinessCustomerMemory, VoiceNote, TrustHistory,
@@ -28,7 +29,7 @@ from .business_agent import (profile_for, profile_json, knowledge_json, chat_set
 SECRET = os.getenv("LEMMIQ_JWT_SECRET", "")
 if len(SECRET) < 32 or SECRET.startswith("CHANGE_"):
     raise RuntimeError("Set a long random LEMMIQ_JWT_SECRET in backend/.env before starting the server")
-app = FastAPI(title="LEMMIQ Server", version="3.0.9")
+app = FastAPI(title="LEMMIQ Server", version="3.1.0")
 from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 connections: Dict[int, Set[WebSocket]] = {}
@@ -382,6 +383,9 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
         reservation = None
         try:
             status, reason, confidence = 'OFF', 'Business reply mode is OFF', 0
+            review_draft310 = ''
+            ack310 = None
+            review310 = None
             if not bp or not bp.enabled or not (bp.business_name or '').strip():
                 status, reason = 'PROFILE_DISABLED', 'Enable and save the business profile'
             elif bs.mode == 'ASSIST':
@@ -402,6 +406,7 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                     else:
                         br = business_reply(db, oid, cid, body.text)
                         reply = str(br.get('reply') or '').strip()
+                        review_draft310 = reply if not br.get('provider_unavailable') else ''
                         confidence = int(br.get('confidence', 0) or 0)
                         if not reply or br.get('provider_unavailable'):
                             status, reason = 'UNAVAILABLE', 'No usable automatic reply; generate a reviewed reply'
@@ -422,7 +427,15 @@ async def send(cid: int, body: Msg, background: BackgroundTasks, u: User = Depen
                                 status, reason = 'SENT','Automatic reply sent'
                         _q_feature_finish(db,reservation,status=='SENT');reservation=None
             decision309(db,m.id,oid,cid,status,reason,confidence)
+            if bs.mode=='AUTO' and status in ('AWAITING_REVIEW','LOW_CONFIDENCE','UNAVAILABLE','INSUFFICIENT_Q'):
+                review310,ack310=queue_review(db,c,oid,m,status,reason,review_draft310)
             db.commit()
+            if review310:
+                await push(oid,{'type':'q_action310'})
+            if ack310:
+                db.refresh(ack310);ad310=msg_json(ack310,db)
+                await push(oid,{'type':'message','data':ad310});await push(u.id,{'type':'message','data':ad310})
+                background.add_task(push_service.notify,push_tokens(db,u.id),db.get(User,oid).display_name,cid,ack310.text,unread_count_for_user(db,u.id))
             if status=='SENT':
                 db.refresh(auto)
                 try:
@@ -1163,7 +1176,7 @@ def app_config():
         firebase_web_config=None
     vapid=os.getenv("FIREBASE_WEB_VAPID_KEY", "").strip()
     return {
-        "version": "3.0.9",
+        "version": "3.1.0",
         "android_download_url": os.getenv("ANDROID_APK_URL", "").strip(),
         "android_play_url": os.getenv("ANDROID_PLAY_URL", "").strip(),
         "android_install_url": "/download/android",
@@ -1318,3 +1331,5 @@ if WEB_DIR.exists():
 # V303_INSTALLED
 # V304_INSTALLED
 # V305_INSTALLED
+
+register_action310(app,current_user,get_db,push,msg_json)

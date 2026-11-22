@@ -115,6 +115,8 @@ def scheduled_scan() -> int:
         sent = 0
         for uid in ids:
             try:
+                from .action310 import sync_activity, reconcile_reviews
+                sync_activity(db,int(uid));reconcile_reviews(db,int(uid));db.commit()
                 if create_digest_if_due(db, int(uid)):
                     db.commit()
                     sent += 1
