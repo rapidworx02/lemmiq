@@ -1041,12 +1041,14 @@ def register_v29(app, current_user, get_db):
     def admin_resolve_market(market_id:int,body:PredictResolveIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
         _require_admin(db,u,"FULL");m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,"Market not found")
+        if m.template_code=="CRICKET_V312_INTL_WIN":raise HTTPException(409,"Shared cricket markets require coordinated two-wallet settlement")
         _settle_market(db,m,body.outcome,body.source_value,body.note,u.id,{"manual":True});db.commit();return _market_json(db,m,None)
 
     @router.post("/predict/admin/markets/{market_id}/void")
     def admin_void_market(market_id:int,u:User=Depends(current_user),db:Session=Depends(get_db)):
         _require_admin(db,u,"FULL");m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,"Market not found")
+        if m.template_code=="CRICKET_V312_INTL_WIN":raise HTTPException(409,"Shared cricket markets require coordinated two-wallet settlement")
         _settle_market(db,m,"VOID","","Voided by Q Predict Admin",u.id,{"manual":True});db.commit();return _market_json(db,m,None)
 
     @router.post("/predict/admin/agent/run")

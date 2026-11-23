@@ -83,7 +83,7 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("user_id" to uid)).toRequestBody(json)
         return gson.fromJson(req(b("$base/chats/direct").post(rb).build()),ChatDto::class.java)
     }
-    suspend fun messages(cid:Int,limit:Int=60,before:Int?=null):List<MessageDto>{
+    suspend fun messages(cid:Int,limit:Int=30,before:Int?=null):List<MessageDto>{
         val page=limit.coerceIn(1,100)
         val url="$base/v21315/chats/$cid/messages?limit=$page"+(before?.let{"&before=$it"}?:"")
         val t=req(b(url).get().build())
@@ -229,6 +229,10 @@ class Api(private val store:SessionStore){
         req(b("$base/v27/q/coordination/${URLEncoder.encode(requestKey,"UTF-8")}").delete().build())
     }
 
+    suspend fun actionPrefs310():ActionPrefs310 = gson.fromJson(req(b("$base/v310/q/actions/preferences").get().build()),ActionPrefs310::class.java)
+    suspend fun saveActionPrefs310(p:ActionPrefs310):ActionPrefs310 = gson.fromJson(req(b("$base/v310/q/actions/preferences").put(gson.toJson(p).toRequestBody(json)).build()),ActionPrefs310::class.java)
+    suspend fun actionDecision310(id:Int,action:String,text:String){req(b("$base/v310/q/actions/$id/decision").post(gson.toJson(mapOf("action" to action,"text" to text)).toRequestBody(json)).build())}
+    suspend fun actionThread310():ActionFeed310 = gson.fromJson(req(b("$base/v2106/q/thread").get().build()),ActionFeed310::class.java)
     suspend fun qThreadV2106():QThreadDto =
         gson.fromJson(req(b("$base/v2106/q/thread").get().build()),QThreadDto::class.java)
     suspend fun markQThreadReadV2106(){
@@ -332,6 +336,14 @@ class Api(private val store:SessionStore){
         return gson.fromJson(req(b("$base/business/knowledge").post(body).build()),BusinessKnowledgeDto::class.java)
     }
 
+    suspend fun updateBusinessKnowledge308(k:BusinessKnowledgeDto):BusinessKnowledgeDto {
+        val body=gson.toJson(k).toRequestBody(json)
+        return gson.fromJson(req(b("$base/business/knowledge/${k.id}").put(body).build()),BusinessKnowledgeDto::class.java)
+    }
+    suspend fun businessCustomers308():List<BusinessCustomer308>{
+        val t=req(b("$base/business/customers").get().build())
+        return gson.fromJson(t,object:TypeToken<List<BusinessCustomer308>>(){}.type)
+    }
     suspend fun deleteBusinessKnowledge(id:Int){
         req(b("$base/business/knowledge/$id").delete().build())
     }
@@ -349,6 +361,9 @@ class Api(private val store:SessionStore){
         return gson.fromJson(text,BusinessKnowledgeDto::class.java)
     }
 
+    suspend fun businessDiagnostics309(cid:Int):BusinessDiagnostics309 {
+        return gson.fromJson(req(b("$base/business/chats/$cid/diagnostics").get().build()),BusinessDiagnostics309::class.java)
+    }
     suspend fun businessChat(cid:Int):BusinessChatBundle {
         return gson.fromJson(req(b("$base/business/chats/$cid").get().build()),BusinessChatBundle::class.java)
     }
@@ -388,8 +403,9 @@ class Api(private val store:SessionStore){
         val rb=gson.toJson(mapOf("name" to name,"member_ids" to memberIds)).toRequestBody(json)
         return gson.fromJson(req(b("$base/v24/groups").post(rb).build()),GroupDto::class.java)
     }
-    suspend fun groupMessages(gid:Int):List<GroupMessageDto>{
-        val t=req(b("$base/v24/groups/$gid/messages").get().build())
+    suspend fun groupMessages(gid:Int,limit:Int=30,before:Int?=null):List<GroupMessageDto>{
+        val url="$base/v24/groups/$gid/messages?limit=${limit.coerceIn(20,100)}"+(before?.let{"&before=$it"}?:"")
+        val t=req(b(url).get().build())
         return gson.fromJson(t,object:TypeToken<List<GroupMessageDto>>(){}.type)
     }
     suspend fun readGroup(gid:Int){req(b("$base/v24/groups/$gid/read").post("{}".toRequestBody(json)).build())}
@@ -829,3 +845,12 @@ class Api(private val store:SessionStore){
     }
 }
 // V21318_MEDIA_INSTALLED
+
+ data class BusinessCustomer308(val chat_id:Int=0,val display_name:String="",val username:String="",val mode:String="OFF",val enabled:Boolean=false,val customer_label:String="")
+
+data class BusinessDecision309(val message_id:Int=0,val status:String="",val reason:String="",val confidence:Int=0,val updated_at:String="")
+data class BusinessDiagnostics309(val items:List<BusinessDecision309> = emptyList())
+
+data class ActionPrefs310(val economy:Boolean=true,val results:Boolean=true,val creators:Boolean=false,val markets:Boolean=false,val acknowledgement:Boolean=true)
+data class ActionItem310(val id:String="",val kind:String="",val category:String="",val title:String="",val body:String="",val status:String="",val action_id:Int?=null,val chat_id:Int?=null,val draft:String?=null,val reason:String?=null,val acknowledged:Boolean=false,val created_at:String="",val market_id:Int?=null,val wallet_mode:String?=null)
+data class ActionFeed310(val items:List<ActionItem310> = emptyList())

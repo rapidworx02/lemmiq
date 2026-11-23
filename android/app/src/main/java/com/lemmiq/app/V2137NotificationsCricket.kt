@@ -1,7 +1,7 @@
 // V2137_NOTIFICATIONS_CRICKET
 package com.lemmiq.app
 
-import android.Manifest
+
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -26,14 +26,14 @@ import java.time.OffsetDateTime
 
 private val v2137Client = OkHttpClient()
 
-private suspend fun cricketFixturesV2137(ctx:Context):Pair<String,List<JSONObject>>=withContext(Dispatchers.IO){
+private suspend fun cricketFixturesV2137(ctx: Context): Pair<String, List<JSONObject>> = withContext(Dispatchers.IO) {
     val url=BuildConfig.API_BASE_URL.trimEnd('/')+"/v2137/cricket/fixtures"
     val req=Request.Builder().url(url).apply{
         SessionStore(ctx).token?.let{header("Authorization","Bearer $it")}
     }.get().build()
-    v2137Client.newCall(req).execute().use{r->
-        val body=r.body?.string().orEmpty()
-        if(!r.isSuccessful)throw IllegalStateException("Cricket API HTTP ${r.code}")
+    v2137Client.newCall(req).execute().use { r ->
+        val body = r.body.string()
+        if (!r.isSuccessful) throw IllegalStateException("Cricket API HTTP ${r.code}")
         val data=JSONObject(body)
         val json=data.optJSONArray("fixtures")
         val rows=if(json==null)emptyList() else (0 until minOf(35,json.length())).mapNotNull{json.optJSONObject(it)}
@@ -78,26 +78,36 @@ fun V2137NotificationManagement(){
         "call" to "Incoming calls",
         "updates" to "Updates / Status",
         "q" to "Q Economy and predictions",
-        "preview" to "Show message previews"
+        "preview" to "Show message previews",
     )
     Column(Modifier.fillMaxWidth().padding(horizontal=18.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
         Text("Notification management",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
         Text("Push tokens register automatically after notification permission is granted. Configure sounds and pop-ups in Android notification channels.",style=MaterialTheme.typography.bodySmall)
-        items.forEach{(key,label)->
-            val checked=prefs.getBoolean(key,true)
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){
-                Text(label,Modifier.weight(1f),style=MaterialTheme.typography.bodyMedium)
-                Switch(checked=checked,onCheckedChange={prefs.edit().putBoolean(key,it).apply();version++})
+        items.forEach { (key, label) ->
+            val checked = prefs.getBoolean(key, true)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = checked, onCheckedChange = {
+                    prefs.edit().putBoolean(key, it).apply()
+                    version++
+                })
             }
         }
-        OutlinedButton(onClick={
-            val intent=Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply{putExtra(Settings.EXTRA_APP_PACKAGE,ctx.packageName)}
-            runCatching{ctx.startActivity(intent)}
-        },Modifier.fillMaxWidth()){Text("System notification sounds & channels")}
+        OutlinedButton(
+            onClick = {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                }
+                runCatching { ctx.startActivity(intent) }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("System notification sounds & channels")
+        }
         var pushState by remember{mutableStateOf("")}
         OutlinedButton(onClick={
             if(BuildConfig.FCM_CONFIGURED){
-                FirebaseMessaging.getInstance().token.addOnCompleteListener{task->
+                FirebaseMessaging.getInstance().getToken().addOnCompleteListener{task->
                     if(task.isSuccessful){
                         pushState="FCM device token available. Registering…"
                         val store=SessionStore(ctx)

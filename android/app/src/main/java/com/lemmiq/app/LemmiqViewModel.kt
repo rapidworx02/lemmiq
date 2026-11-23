@@ -51,6 +51,8 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var users by mutableStateOf<List<UserDto>>(emptyList())
     var messages by mutableStateOf<List<MessageDto>>(emptyList())
     var canLoadOlderDirectMessages by mutableStateOf(false)
+    var canLoadOlderGroup306 by mutableStateOf(false)
+    var loadingOlderGroup306 by mutableStateOf(false)
     var loadingOlderDirectMessages by mutableStateOf(false)
     var moments by mutableStateOf<List<MomentDto>>(emptyList())
     var active by mutableStateOf<ChatDto?>(null)
@@ -123,8 +125,24 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     var externalDraft by mutableStateOf<String?>(null)
     var attachmentBusy by mutableStateOf(false)
     var businessProfile by mutableStateOf(BusinessProfileDto())
+    var businessLoaded308 by mutableStateOf(false)
+    var businessLoading308 by mutableStateOf(false)
+    var businessStatus308 by mutableStateOf("")
+    var businessCustomers308 by mutableStateOf<List<BusinessCustomer308>>(emptyList())
+    var businessCustomersStatus308 by mutableStateOf("")
     var businessKnowledge by mutableStateOf<List<BusinessKnowledgeDto>>(emptyList())
     var activeBusinessSetting by mutableStateOf(BusinessChatSettingDto())
+    val businessSelected309:Boolean get()=activeBusinessSetting.enabled
+    var businessDiagnostics309 by mutableStateOf<List<BusinessDecision309>>(emptyList())
+    var businessDiagnosticsStatus309 by mutableStateOf("")
+    fun loadBusinessDiagnostics309()=viewModelScope.launch{
+        val cid=active?.id?:return@launch
+        val token=store.token;val gen=conversationGeneration300
+        fun valid()=authenticated&&store.token==token&&active?.id==cid&&gen==conversationGeneration300
+        businessDiagnostics309=emptyList();businessDiagnosticsStatus309="Loading decisions…"
+        try{val result=api.businessDiagnostics309(cid);if(valid()){businessDiagnostics309=result.items;businessDiagnosticsStatus309=if(result.items.isEmpty())"No decisions since the update." else "Private reply decisions"}}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())businessDiagnosticsStatus309=e.message?:"Unable to load diagnostics"}
+    }
     var activeBusinessMemory by mutableStateOf(BusinessMemoryDto())
     var businessSuggestion by mutableStateOf<BusinessSuggestionDto?>(null)
     var businessLearnCandidates by mutableStateOf<List<BusinessLearnCandidate>>(emptyList())
@@ -184,7 +202,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         reloadNotificationSettings()
         PushControl.clearAll(appCtx)
         ws?.close(1000,"logout");store.clear();authenticated=false;active=null;activeGroup=null;chats=emptyList();groups=emptyList();groupMessages=emptyList();statuses=emptyList();trustHistory=emptyList();socialBrief=null;currentUser=null
-        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();qEarningCycles=QEarningCyclesDto();qWeeklyActive=QWeeklyActiveDto();qRebuyOptions=QRebuyOptionsDto();qRebuyOrders=emptyList();qWithdrawalConfig=QWithdrawalConfigDto();qWithdrawals=emptyList();qFeatureCatalog=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
+        localEvents=emptyList();externalMessages=emptyList();agentAnswer=null;qDoAnswer=null;qDailyBrief=null;qCoordination=QCoordinationListDto();qThread=QThreadDto();actionItems310=emptyList();actionPrefs310=null;actionError310="";actionBusy310=false;qHome=null;qWallet=null;qLedger=emptyList();qReferrals=null;qPaymentOrders=emptyList();activeQPaymentOrder=null;qMarketListings=emptyList();qMyListings=emptyList();qMarketOrders=emptyList();qEarningCycles=QEarningCyclesDto();qWeeklyActive=QWeeklyActiveDto();qRebuyOptions=QRebuyOptionsDto();qRebuyOrders=emptyList();qWithdrawalConfig=QWithdrawalConfigDto();qWithdrawals=emptyList();qFeatureCatalog=emptyList();visionHistory=emptyList();activeVision=null;agentBrief=null;remoteInsightBrief=null;businessProfile=BusinessProfileDto();businessDiagnostics309=emptyList();businessDiagnosticsStatus309="";businessLoaded308=false;businessLoading308=false;businessStatus308="";businessCustomers308=emptyList();businessCustomersStatus308="";businessKnowledge=emptyList();businessSuggestion=null;predictHome=null;predictSelected=null;predictCategory="TRENDING";predictBusy=false;predictAnalysis=null;predictAnalysisBusy=false;predictAnalysisMarketId=null;predictLeaderboard=emptyList();predictAnalysisHistory=emptyList()
     }
     fun refreshMe()=viewModelScope.launch{runCatching{api.me()}.onSuccess{currentUser=it}}
     fun openOfficialSupportV2123()=viewModelScope.launch {
@@ -213,11 +231,11 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }}
     fun open(c:ChatDto)=viewModelScope.launch{
         val gen=++conversationGeneration300;val token=store.token
-        activeGroup=null;groupMessages=emptyList();active=c;messages=emptyList();activeCalls=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();activeBusinessSetting=BusinessChatSettingDto();activeBusinessMemory=BusinessMemoryDto();groupBusy=false;canLoadOlderDirectMessages=false
+        activeGroup=null;groupMessages=emptyList();active=c;messages=emptyList();activeCalls=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();activeBusinessSetting=BusinessChatSettingDto();activeBusinessMemory=BusinessMemoryDto();businessDiagnostics309=emptyList();businessDiagnosticsStatus309="";groupBusy=false;canLoadOlderDirectMessages=false;loadingOlderDirectMessages=false
         fun valid()=authenticated&&token==store.token&&gen==conversationGeneration300&&active?.id==c.id
         try{
             val page=api.messages(c.id);if(!valid())return@launch
-            messages=(page+messages.filter{it.chat_id==c.id}).distinctBy{it.id}.sortedBy{it.id};canLoadOlderDirectMessages=page.size>=60
+            messages=(page+messages.filter{it.chat_id==c.id}).distinctBy{it.id}.sortedBy{it.id};canLoadOlderDirectMessages=page.size>=30
             api.read(c.id);if(!valid())return@launch;PushControl.cancelChat(appCtx,c.id)
             val calls=runCatching{api.chatCalls(c.id)}.getOrDefault(emptyList());if(valid())activeCalls=calls
             val bundle=runCatching{api.businessChat(c.id)}.getOrNull();if(valid()&&bundle!=null){activeBusinessSetting=bundle.setting;activeBusinessMemory=bundle.memory}
@@ -227,17 +245,18 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun close(){++conversationGeneration300;active=null;activeGroup=null;canLoadOlderDirectMessages=false;messages=emptyList();groupMessages=emptyList();activeCalls=emptyList();replyTo=null;suggestion=null;businessSuggestion=null;businessLearnCandidates=emptyList();refreshChats();refreshGroups()}
     fun loadOlderDirectMessages()=viewModelScope.launch{
         val chat=active?:return@launch
+        val gen306=conversationGeneration300;val token306=store.token
         val earliest=messages.firstOrNull()?.id?:return@launch
         if(!canLoadOlderDirectMessages||loadingOlderDirectMessages)return@launch
         loadingOlderDirectMessages=true
         try{
-            val older=api.messages(chat.id,60,earliest)
-            if(active?.id!=chat.id)return@launch
+            val older=api.messages(chat.id,30,earliest)
+            if(active?.id!=chat.id||gen306!=conversationGeneration300||token306!=store.token||!authenticated)return@launch
             val known=messages.map{it.id}.toHashSet()
             messages=older.filter{it.id !in known}+messages
-            canLoadOlderDirectMessages=older.size>=60
+            canLoadOlderDirectMessages=older.size>=30
         }catch(e:Exception){error=e.message?:"Could not load older messages"}
-        finally{loadingOlderDirectMessages=false}
+        finally{if(gen306==conversationGeneration300)loadingOlderDirectMessages=false}
     }
     fun send(text:String)=viewModelScope.launch{
         val c=active?:return@launch;if(text.isBlank())return@launch
@@ -271,12 +290,13 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     fun discardSuggestion(){suggestion=null}
     fun suggest()=viewModelScope.launch{
         val c=active?:return@launch
-        if(c.ai_mode!="ASSIST"||busy)return@launch
+        if(c.ai_mode!="ASSIST"||busy||businessSelected309)return@launch
         val token303=store.token;val generation303=conversationGeneration300
-        action{val reply=api.suggest(c.id).reply;if(store.token==token303&&generation303==conversationGeneration300&&active?.id==c.id&&active?.ai_mode=="ASSIST")suggestion=reply}
+        action{val reply=api.suggest(c.id).reply;if(store.token==token303&&generation303==conversationGeneration300&&active?.id==c.id&&active?.ai_mode=="ASSIST"&&!businessSelected309)suggestion=reply}
     }
     fun saveSettings(cat:String,mode:String,tone:String)=viewModelScope.launch{
         val c=active?:return@launch
+        if(businessSelected309){error="Business Agent controls this chat. Disable it before using Personal AI.";return@launch}
         val token303=store.token
         action{val updated=api.settings(c.id,cat,mode,tone);if(store.token==token303&&active?.id==c.id){active=updated;if(updated.ai_mode!="ASSIST")suggestion=null;refreshChats()}}
     }
@@ -988,13 +1008,24 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
     fun openGroup(g:GroupDto)=viewModelScope.launch{
         val gen=++conversationGeneration300; val token=store.token
-        active=null;messages=emptyList();activeGroup=g;groupMessages=emptyList();groupSuggestion=null;groupSummary=null;groupAnswer=null
+        active=null;messages=emptyList();activeGroup=g;groupMessages=emptyList();groupSuggestion=null;groupSummary=null;groupAnswer=null;canLoadOlderGroup306=false;loadingOlderGroup306=false
         fun valid()=authenticated&&token==store.token&&gen==conversationGeneration300&&activeGroup?.id==g.id
         groupBusy=true;error=null
         try{val updated=api.group(g.id);if(!valid())return@launch;activeGroup=updated
-            val page=api.groupMessages(g.id);if(!valid())return@launch;groupMessages=(page+groupMessages).distinctBy{it.id}.sortedBy{it.id};api.readGroup(g.id)
+            val page=api.groupMessages(g.id);if(!valid())return@launch;groupMessages=(page+groupMessages).distinctBy{it.id}.sortedBy{it.id};canLoadOlderGroup306=page.size>=30;api.readGroup(g.id)
         }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}finally{if(valid())groupBusy=false}
         if(valid())refreshGroups()
+    }
+    fun loadOlderGroup306()=viewModelScope.launch{
+        val g=activeGroup?:return@launch
+        val earliest=groupMessages.firstOrNull()?.id?:return@launch
+        val gen=conversationGeneration300;val token=store.token
+        fun valid()=authenticated&&store.token==token&&gen==conversationGeneration300&&activeGroup?.id==g.id
+        if(!canLoadOlderGroup306||loadingOlderGroup306)return@launch
+        loadingOlderGroup306=true
+        try{val page=api.groupMessages(g.id,30,earliest);if(!valid())return@launch
+            groupMessages=(page+groupMessages).distinctBy{it.id}.sortedBy{it.id};canLoadOlderGroup306=page.size>=30
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}finally{if(valid())loadingOlderGroup306=false}
     }
     fun sendGroup(text:String)=viewModelScope.launch{
         val g=activeGroup?:return@launch;if(text.isBlank())return@launch
@@ -1191,6 +1222,33 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
         try{api.endCall(callId);refreshCalls()}catch(e:Exception){error=e.message}finally{busy=false}
     }
 
+    var actionItems310 by mutableStateOf<List<ActionItem310>>(emptyList())
+    var actionPrefs310 by mutableStateOf<ActionPrefs310?>(null)
+    var actionError310 by mutableStateOf("")
+    var actionBusy310 by mutableStateOf(false)
+    fun refreshActions310()=viewModelScope.launch{
+        val token=store.token
+        if(!authenticated||actionBusy310)return@launch
+        actionBusy310=true;actionError310=""
+        try{val f=api.actionThread310();if(authenticated&&store.token==token){actionItems310=f.items.filter{it.kind=="ACTION310"};api.markQThreadReadV2106();refreshQThread()}}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(store.token==token)actionError310=e.message?:"Could not load Q actions"}finally{if(store.token==token)actionBusy310=false}
+    }
+    fun loadActionPrefs310()=viewModelScope.launch{
+        val token=store.token;actionPrefs310=null;actionError310=""
+        try{val p=api.actionPrefs310();if(authenticated&&store.token==token)actionPrefs310=p}catch(e:Exception){if(store.token==token)actionError310=e.message?:"Could not load preferences"}
+    }
+    fun saveActionPrefs310(p:ActionPrefs310)=viewModelScope.launch{
+        val token=store.token
+        try{val result=api.saveActionPrefs310(p);if(authenticated&&store.token==token){actionPrefs310=result;refreshActions310()}}
+        catch(e:Exception){if(store.token==token)actionError310=e.message?:"Could not save preferences"}
+    }
+    fun decideAction310(id:Int,choice:String,text:String)=viewModelScope.launch{
+        if(actionBusy310)return@launch
+        val token=store.token;actionBusy310=true;actionError310=""
+        try{api.actionDecision310(id,choice,text);if(authenticated&&store.token==token){actionItems310=actionItems310.filterNot{it.action_id==id};refreshChats()}}
+        catch(e:Exception){if(store.token==token)actionError310=e.message?:"Could not complete review"}finally{if(store.token==token)actionBusy310=false}
+        if(authenticated&&store.token==token)refreshActions310()
+    }
     fun refreshQThread(markRead:Boolean=false)=viewModelScope.launch{
         runCatching{
             if(markRead)api.markQThreadReadV2106()
@@ -1201,16 +1259,37 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
     }
 
     fun refreshBusiness()=viewModelScope.launch{
-        runCatching{
-            businessProfile=api.businessProfile()
-            businessKnowledge=api.businessKnowledge()
-        }.onFailure{error=it.message}
+        if(businessLoading308||businessBusy)return@launch
+        val token=store.token
+        fun valid()=authenticated&&store.token==token
+        businessLoading308=true;businessLoaded308=false;businessStatus308="Loading saved profile…"
+        try{
+            try{val p=api.businessProfile();if(!valid())return@launch;businessProfile=p;businessLoaded308=true;businessStatus308=if(p.business_name.isBlank())"No business name stored. Existing knowledge is preserved." else "Saved profile loaded."}
+            catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())businessStatus308=e.message?:"Profile load failed. Retry."}
+            try{val rows=api.businessKnowledge();if(valid())businessKnowledge=rows}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}
+        }finally{if(valid())businessLoading308=false}
     }
-
     fun saveBusinessProfile(p:BusinessProfileDto)=viewModelScope.launch{
-        businessBusy=true;error=null
-        try{businessProfile=api.saveBusinessProfile(p);businessKnowledge=api.businessKnowledge()}
-        catch(e:Exception){error=e.message}finally{businessBusy=false}
+        if(!businessLoaded308||businessLoading308||businessBusy)return@launch
+        if(p.business_name.isBlank()){businessStatus308="Enter a business name.";return@launch}
+        val token=store.token
+        fun valid()=authenticated&&store.token==token
+        businessBusy=true;error=null;businessStatus308="Saving…"
+        try{val saved=api.saveBusinessProfile(p);val verified=api.businessProfile();if(!valid())return@launch
+            if(saved!=verified)throw IllegalStateException("Saved profile changed before verification. Reload and review.")
+            businessProfile=verified;businessStatus308="Saved and verified from server."
+        }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())businessStatus308=e.message?:"Save failed"}finally{if(valid())businessBusy=false}
+    }
+    fun loadBusinessCustomers308()=viewModelScope.launch{
+        val t=store.token;businessCustomersStatus308="Loading linked chats…"
+        try{val rows=api.businessCustomers308();if(authenticated&&store.token==t){businessCustomers308=rows;businessCustomersStatus308=if(rows.isEmpty())"No linked chats. Open a chat and enable Business tools." else "${rows.size} linked chats"}}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(authenticated&&store.token==t)businessCustomersStatus308=e.message?:"Unable to load customer chats"}
+    }
+    fun updateBusinessKnowledge308(k:BusinessKnowledgeDto)=viewModelScope.launch{
+        if(businessBusy||k.title.isBlank()||k.content.isBlank())return@launch
+        val t=store.token;businessBusy=true;error=null
+        try{api.updateBusinessKnowledge308(k);val rows=api.businessKnowledge();if(authenticated&&store.token==t)businessKnowledge=rows}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(authenticated&&store.token==t)error=e.message}finally{if(authenticated&&store.token==t)businessBusy=false}
     }
 
     fun addBusinessKnowledge(category:String,title:String,content:String)=viewModelScope.launch{
@@ -1254,10 +1333,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     fun saveBusinessChat(enabled:Boolean,mode:String,label:String)=viewModelScope.launch{
         val cid=active?.id?:return@launch
+        val token=store.token;val gen=conversationGeneration300
+        fun valid()=authenticated&&store.token==token&&active?.id==cid&&gen==conversationGeneration300
         businessBusy=true;error=null
-        try{activeBusinessSetting=api.saveBusinessChat(cid,enabled,mode,label)}catch(e:Exception){error=e.message}finally{businessBusy=false}
+        try{val saved=api.saveBusinessChat(cid,enabled,mode,label);if(valid()){val wasBusiness=activeBusinessSetting.enabled;activeBusinessSetting=saved;suggestion=null;businessSuggestion=null;if(saved.enabled||wasBusiness)active=active?.copy(ai_mode="OFF");refreshChats()}}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}finally{if(authenticated&&store.token==token)businessBusy=false}
     }
-
     fun saveBusinessMemory(notes:String,tags:String)=viewModelScope.launch{
         val cid=active?.id?:return@launch
         businessBusy=true;error=null
@@ -1266,8 +1347,12 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
 
     fun suggestBusiness()=viewModelScope.launch{
         val cid=active?.id?:return@launch
-        businessBusy=true;error=null
-        try{businessSuggestion=api.businessSuggest(cid)}catch(e:Exception){error=e.message}finally{businessBusy=false}
+        val t=store.token;val generation=conversationGeneration300
+        fun valid()=authenticated&&store.token==t&&active?.id==cid&&conversationGeneration300==generation
+        if(businessBusy)return@launch
+        businessBusy=true;error=null;businessSuggestion=null
+        try{val result=api.businessSuggest(cid);if(valid()){if(result.reply.isBlank())error=result.reason.ifBlank{"No business reply generated"} else businessSuggestion=result}}
+        catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){if(valid())error=e.message}finally{if(authenticated&&store.token==t)businessBusy=false}
     }
 
     fun discardBusinessSuggestion(){businessSuggestion=null}
@@ -1343,7 +1428,7 @@ class LemmiqViewModel(app:Application):AndroidViewModel(app){
                         refreshGroups()
                     }
                 }
-                if(map["type"]?.toString() in setOf("q_coordination_request","q_coordination_response","q_coordination_closed")){
+                if(map["type"]?.toString() in setOf("q_coordination_request","q_coordination_response","q_coordination_closed","q_action310")){
                     viewModelScope.launch{
                         qThread=runCatching{api.qThreadV2106()}.getOrDefault(qThread)
                         qCoordination=runCatching{api.qCoordinationV27()}.getOrDefault(qCoordination)

@@ -168,7 +168,7 @@ def sync_activity(db,uid,include_discovery=True):
         if rows:emit(db,uid,'creators:'+day,'CREATORS','New public creators','\n'.join(f'{i.stage_name} (@{i.handle}) | {c.category}' for c,i in rows))
     if p['markets'] and not get_event(db,uid,'markets:'+day):
         # No calls to stake, no prices or odds, no personal targeting; demo cricket discovery only.
-        rows=db.scalars(select(PredictMarket).where(PredictMarket.status=='LIVE',PredictMarket.created_at>=t-timedelta(hours=24),PredictMarket.close_at>t,PredictMarket.template_code.startswith('CRICKET_V21314_')).order_by(PredictMarket.created_at.desc()).limit(5)).all()
+        rows=db.scalars(select(PredictMarket).where(PredictMarket.status=='LIVE',PredictMarket.created_at>=t-timedelta(hours=24),PredictMarket.close_at>t,or_(PredictMarket.template_code.startswith('CRICKET_V21314_'),PredictMarket.template_code=='CRICKET_V312_INTL_WIN')).order_by(PredictMarket.created_at.desc()).limit(5)).all()
         if rows:emit(db,uid,'markets:'+day,'PREDICT','New demo prediction markets','\n'.join(x.question for x in rows))
 
 def item(r):

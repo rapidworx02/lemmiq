@@ -43,7 +43,7 @@ def history(db,uid,demo,status='recent',days=30,offset=0,limit=20,market_id=None
     if not ids:return {'items':[],'has_more':False,'summary':{'markets':0,'stake':0,'returned':0,'net':0}}
     grouped={}
     for p,m,pl,r in db.execute(select(pos,PredictMarket,pool,res).join(PredictMarket,PredictMarket.id==pos.market_id).outerjoin(pool,pool.market_id==pos.market_id).outerjoin(res,res.market_id==pos.market_id).where(pos.user_id==uid,pos.market_id.in_(ids))).all():
-        x=grouped.setdefault(m.id,{'market_id':m.id,'question':m.question,'category':m.category,'market_status':m.status,'close_at':iso(m.close_at),'settled_at':iso(pl.settled_at) if pl else None,'result':r.outcome if r and pl and pl.settled_at else None,'evidence':r.evidence if r and pl and pl.settled_at else None,'positions':[]})
+        x=grouped.setdefault(m.id,{'market_id':m.id,'question':m.question,'category':m.category,'template_code':m.template_code,'market_status':m.status,'close_at':iso(m.close_at),'settled_at':iso(pl.settled_at) if pl else None,'result':r.outcome if r and pl and pl.settled_at else None,'evidence':r.evidence if r and pl and pl.settled_at else None,'positions':[]})
         x['positions'].append({'side':p.outcome,'stake':units(p.stake_micros),'returned':units(p.payout_micros),'fee':units(p.fee_micros),'status':p.status})
     for x in grouped.values():
         if x['settled_at'] and all(p['status']=='VOID' for p in x['positions']):x['settlement_status']='REFUNDED'
@@ -69,6 +69,9 @@ def register_predict311(app,current_user,get_db):
         if not wanted:return {}
         q=select(PredictMarket.id).where(PredictMarket.id.in_(wanted),PredictMarket.status.in_(['LIVE','CLOSED','SUSPENDED','RESOLVING','RESOLVED','VOID']))
         if wallet=='REAL_Q':q=q.where(~PredictMarket.template_code.startswith('CRICKET_V21314_'))
+        if wallet=='REAL_Q':
+            from .cricket312 import real_cricket_allowed
+            if not real_cricket_allowed():q=q.where(PredictMarket.template_code!='CRICKET_V312_INTL_WIN')
         valid=db.scalars(q).all()
         return aggregate(db,valid,wallet=='DEMO')
     app.include_router(router)

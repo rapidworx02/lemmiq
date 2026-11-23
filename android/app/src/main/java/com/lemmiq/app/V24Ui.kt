@@ -263,6 +263,12 @@ fun V24NewGroupDialog(vm:LemmiqViewModel,dismiss:()->Unit){
 @Composable
 fun V24GroupChat(vm:LemmiqViewModel){
     val g=vm.activeGroup?:return
+    val list306=remember(g.id){LazyListState()}
+    val scope306=rememberCoroutineScope()
+    val newest306=vm.groupMessages.lastOrNull()?.id
+    LaunchedEffect(g.id,newest306){if(newest306!=null&&list306.firstVisibleItemIndex<=1)list306.scrollToItem(0)}
+    val oldest306=list306.layoutInfo.visibleItemsInfo.maxOfOrNull{it.index}?:-1
+    LaunchedEffect(g.id,oldest306,vm.groupMessages.size){if(vm.groupMessages.isNotEmpty()&&oldest306>=vm.groupMessages.size-3&&vm.canLoadOlderGroup306)vm.loadOlderGroup306()}
     val ctx=LocalContext.current
     var draft by remember{mutableStateOf("")}
     var settings by remember{mutableStateOf(false)}
@@ -312,13 +318,15 @@ fun V24GroupChat(vm:LemmiqViewModel){
                 FilledTonalButton({vm.summarizeGroup()}){Text("🧠 Catch me up")}
             }
             if(vm.groupBusy)LinearProgressIndicator(Modifier.fillMaxWidth())
-            LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
-                var previousDay:String?=null
-                vm.groupMessages.forEach{m->
+            if(list306.firstVisibleItemIndex>2)TextButton({scope306.launch{list306.scrollToItem(0)}}){Text("↓ Latest messages")}
+            LazyColumn(Modifier.fillMaxSize(),state=list306,reverseLayout=true,contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                itemsIndexed(vm.groupMessages.asReversed(),key={_,m->m.id}){reverseIndex,m->
+                    val index=vm.groupMessages.lastIndex-reverseIndex
                     val day=v24FriendlyDay(m.created_at)
-                    if(day!=previousDay){item(key="d_${m.id}"){V24DateSeparator(day)};previousDay=day}
-                    item(key=m.id){V24GroupBubble(m,vm)}
+                    val prev=vm.groupMessages.getOrNull(index-1)?.let{v24FriendlyDay(it.created_at)}
+                    Column{if(day!=prev)V24DateSeparator(day);V24GroupBubble(m,vm)}
                 }
+                if(vm.canLoadOlderGroup306)item(key="group306_history"){TextButton({vm.loadOlderGroup306()},enabled=!vm.loadingOlderGroup306){Text(if(vm.loadingOlderGroup306)"Loading…" else "Load earlier messages")}}
             }
         }
     }

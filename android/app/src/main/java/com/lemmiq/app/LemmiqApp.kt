@@ -321,7 +321,7 @@ private fun Home(vm:LemmiqViewModel){
     ){pad->
         Box(Modifier.padding(pad)){
             when{
-                qThreadOpen->V2106QThread(vm,onBack={qThreadOpen=false;vm.refreshQThread(markRead=true)},onAsk={prompt->qThreadOpen=false;qFullScreen=true;vm.qMode="ASK";vm.askAgent(prompt)})
+                qThreadOpen->ActionCentre310(vm,onBack={qThreadOpen=false;vm.refreshQThread(markRead=true)},onAsk={prompt->qThreadOpen=false;qFullScreen=true;vm.qMode="ASK";vm.askAgent(prompt)},onChat={id->val ch=vm.chats.firstOrNull{it.id==id};if(ch!=null){qThreadOpen=false;tab=0;showMore=false;vm.open(ch)}else vm.refreshChats()},onSection={target->qThreadOpen=false;showMore=false;tab=target})
                 qFullScreen->Column(Modifier.fillMaxSize()){
                     Surface(shadowElevation=1.dp){Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){TextButton({qFullScreen=false}){Text("‹ Back")};Text("Q · Personal Assistant",fontWeight=FontWeight.Bold)}}
                     Box(Modifier.weight(1f)){ChatAgent(vm)}
@@ -524,6 +524,7 @@ private fun Chat(vm:LemmiqViewModel){
     var showCreatorPpvV2131 by remember(c.id){mutableStateOf(false)}
     var settings by remember{mutableStateOf(false)}
     var businessSettings by remember{mutableStateOf(false)}
+    var showBusinessDiagnostics309 by remember(c.id){mutableStateOf(false)}
     var showAttach by remember{mutableStateOf(false)}
     var showSearch by remember{mutableStateOf(false)}
     var showMore by remember{mutableStateOf(false)}
@@ -560,7 +561,8 @@ private fun Chat(vm:LemmiqViewModel){
             }
         }
     }
-    val messageListState=rememberLazyListState()
+    val messageListState=remember(c.id){LazyListState()}
+    val scope306=rememberCoroutineScope()
     val timeline=remember(vm.messages,vm.activeCalls){
         buildList{
             vm.messages.forEach{add("message" to it)}
@@ -571,7 +573,11 @@ private fun Chat(vm:LemmiqViewModel){
         when(x){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->""}
     }?:""
     LaunchedEffect(c.id,newestTimelineId){
-        if(timeline.isNotEmpty()&&(messageListState.layoutInfo.totalItemsCount<=1||messageListState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?.let{it>=messageListState.layoutInfo.totalItemsCount-3}==true))runCatching{messageListState.scrollToItem(timeline.size)}
+        if(timeline.isNotEmpty()&&messageListState.firstVisibleItemIndex<=1)messageListState.scrollToItem(0)
+    }
+    val oldestVisible306=messageListState.layoutInfo.visibleItemsInfo.maxOfOrNull{it.index}?:-1
+    LaunchedEffect(c.id,oldestVisible306,timeline.size){
+        if(timeline.isNotEmpty()&&oldestVisible306>=timeline.size-3&&vm.canLoadOlderDirectMessages)vm.loadOlderDirectMessages()
     }
     Scaffold(
         containerColor=Bg,
@@ -585,7 +591,7 @@ private fun Chat(vm:LemmiqViewModel){
                     V24Avatar(c.other_user);Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)){
                         Text(c.other_user.display_name,fontWeight=FontWeight.Bold)
-                        Text("@${c.other_user.username} · ${catEmoji(c.category)} ${pretty(c.category)} · ${pretty(c.ai_mode)}",color=Muted,fontSize=10.sp)
+                        Text(if(vm.businessSelected309)"@${c.other_user.username} | Business ${if(vm.businessProfile.enabled)vm.activeBusinessSetting.mode else "PAUSED"}" else "@${c.other_user.username} | ${pretty(c.category)} | ${pretty(c.ai_mode)}",color=Muted,fontSize=10.sp)
                     }
                     Text("📞",fontSize=18.sp,modifier=Modifier.clickable{
                         vm.startVoiceCall(c.id){join->
@@ -620,7 +626,7 @@ private fun Chat(vm:LemmiqViewModel){
                         }
                     }
                 }
-                vm.businessSuggestion?.let{bs->
+                vm.businessSuggestion?.takeIf{it.reply.isNotBlank()}?.let{bs->
                     Surface(color=Color(0xFFEAF8F2),shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
                             Row(verticalAlignment=Alignment.CenterVertically){
@@ -640,14 +646,14 @@ private fun Chat(vm:LemmiqViewModel){
                         }
                     }
                 }
-                if(c.ai_mode=="ASSIST"){
+                if(!vm.businessSelected309&&c.ai_mode=="ASSIST"){
                     Row(Modifier.fillMaxWidth().padding(horizontal=10.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically){
                         FilledTonalButton({vm.suggest()},enabled=!vm.busy){Text(if(vm.busy)"Please wait…" else "✨ Suggest reply",fontSize=12.sp)}
                     }
-                }else if(c.ai_mode=="AUTO"){
+                }else if(!vm.businessSelected309&&c.ai_mode=="AUTO"){
                     Text("⚡ Auto enabled",color=MaterialTheme.colorScheme.primary,fontSize=11.sp,modifier=Modifier.padding(horizontal=12.dp,vertical=4.dp))
                 }
-                vm.suggestion?.let{s->
+                vm.suggestion?.takeUnless{vm.businessSelected309}?.let{s->
                     Surface(color=Soft,shape=RoundedCornerShape(18.dp),modifier=Modifier.padding(10.dp,5.dp)){
                         Column(Modifier.padding(12.dp)){
                             Text("Q  Suggested reply",color=Purple,fontWeight=FontWeight.Bold,fontSize=11.sp)
@@ -718,27 +724,30 @@ private fun Chat(vm:LemmiqViewModel){
         }
     ){p->
         Column(Modifier.fillMaxSize().padding(p)){
-            if(vm.businessProfile.enabled && vm.activeBusinessSetting.enabled){
+            if(vm.businessSelected309){
                 Row(Modifier.fillMaxWidth().padding(12.dp,5.dp),verticalAlignment=Alignment.CenterVertically){
-                    FilledTonalButton({vm.suggestBusiness()},enabled=!vm.businessBusy && vm.activeBusinessSetting.mode!="OFF"){Text("💼 Business reply")}
+                    FilledTonalButton({vm.suggestBusiness()},enabled=!vm.businessBusy && vm.businessProfile.enabled && vm.activeBusinessSetting.mode!="OFF"){Text("💼 Business reply")}
                     Spacer(Modifier.width(6.dp))
-                    TextButton({businessSettings=true}){Text("Customer memory")}
+                    TextButton({businessSettings=true}){Text("Settings")}
+                    TextButton({showBusinessDiagnostics309=true;vm.loadBusinessDiagnostics309()}){Text("Diagnostics")}
                     Spacer(Modifier.weight(1f))
                     Text(vm.activeBusinessSetting.mode,fontSize=10.sp,color=Color(0xFF08775D),fontWeight=FontWeight.Bold)
                 }
             }
 
+            if(messageListState.firstVisibleItemIndex>2)TextButton({scope306.launch{messageListState.scrollToItem(0)}}){Text("↓ Latest messages")}
             if(timeline.isEmpty())Empty("👋","Start the conversation","Messages appear here in real time.")
             else LazyColumn(
                 modifier=Modifier.fillMaxSize(),
                 state=messageListState,
+                reverseLayout=true,
                 contentPadding=PaddingValues(14.dp),
                 verticalArrangement=Arrangement.spacedBy(7.dp)
             ){
-                item(key="v21315_history_loader"){V21315LoadOlderMessages(vm)}
-                itemsIndexed(timeline,key={_,item->
+                itemsIndexed(timeline.asReversed(),key={_,item->
                     when(val x=item.second){is MessageDto->"m_${x.id}";is CallDto->"c_${x.id}";else->item.hashCode().toString()}
-                }){index,item->
+                }){reverseIndex,item->
+                    val index=timeline.lastIndex-reverseIndex
                     val at=when(val x=item.second){is MessageDto->x.created_at;is CallDto->x.started_at;else->""}
                     val day=v24FriendlyDay(at)
                     val prev=if(index>0)when(val x=timeline[index-1].second){is MessageDto->v24FriendlyDay(x.created_at);is CallDto->v24FriendlyDay(x.started_at);else->""} else null
@@ -755,6 +764,7 @@ private fun Chat(vm:LemmiqViewModel){
                         }
                     }
                 }
+                item(key="v21315_history_loader"){V21315LoadOlderMessages(vm)}
             }
         }
     }
@@ -768,10 +778,10 @@ private fun Chat(vm:LemmiqViewModel){
         AlertDialog(onDismissRequest={showMore=false},title={Text(c.other_user.display_name)},
             text={Column{
                 TextButton({showMore=false;showSearch=true}){Text("Search messages")}
-                TextButton({showMore=false;settings=true}){Text("Chat AI settings")}
-                if(c.ai_mode=="ASSIST")TextButton({showMore=false;vm.suggest()},enabled=!vm.busy){Text("Suggest reply")}
+                TextButton({showMore=false;if(vm.businessSelected309)businessSettings=true else settings=true}){Text("Chat Intelligence")}
+                if(!vm.businessSelected309&&c.ai_mode=="ASSIST")TextButton({showMore=false;vm.suggest()},enabled=!vm.busy){Text("Suggest reply")}
                 if(c.ai_mode!="OFF")TextButton({showMore=false;vm.summarizeActiveChat()}){Text("Summarise conversation")}
-                if(vm.businessProfile.enabled)TextButton({showMore=false;businessSettings=true}){Text("Business tools")}
+                TextButton({showMore=false;businessSettings=true}){Text("Business tools")}
                 TextButton({vm.togglePin();showMore=false}){Text(if(c.pinned)"Unpin chat" else "📌 Pin chat")}
                 TextButton({vm.toggleFavourite();showMore=false}){Text(if(c.favourite)"Remove favourite" else "⭐ Favourite")}
                 TextButton({vm.toggleArchive();showMore=false}){Text(if(c.archived)"Unarchive" else "Archive")}
@@ -806,8 +816,12 @@ private fun Chat(vm:LemmiqViewModel){
         V21318ForwardDialog(vm,m.id,"direct",m.text.ifBlank{m.attachment?.name?:"Attachment"}){forwardMessage=null}
     }
 
-    if(settings)Settings(c,vm){settings=false}
+    if(settings&&!vm.businessSelected309)Settings(c,vm){settings=false}
     if(businessSettings)BusinessChatDialog(c,vm){businessSettings=false}
+    if(showBusinessDiagnostics309)AlertDialog(onDismissRequest={showBusinessDiagnostics309=false},title={Text("Business AUTO diagnostics")},text={LazyColumn(Modifier.heightIn(max=400.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+        item{Text(vm.businessDiagnosticsStatus309,fontWeight=FontWeight.Bold);Text("Only visible to you. Review flagged enquiries manually.",fontSize=12.sp)}
+        items(vm.businessDiagnostics309,key={it.message_id}){d->Column{Text(d.status.replace('_',' '),fontWeight=FontWeight.Bold);Text(d.reason,fontSize=12.sp);Text("Message #${d.message_id} | ${d.confidence}%",fontSize=11.sp,color=Muted)}}
+    }},confirmButton={TextButton({vm.loadBusinessDiagnostics309()}){Text("Refresh")}},dismissButton={TextButton({showBusinessDiagnostics309=false}){Text("Close")}})
     if(vm.businessLearnCandidates.isNotEmpty())BusinessLearnDialog(vm)
     pendingContact?.let{(name,phone)->
         AlertDialog(onDismissRequest={pendingContact=null},title={Text("Share this contact?")},
@@ -1022,7 +1036,7 @@ private fun Bubble(m:MessageDto,me:Int,vm:LemmiqViewModel,onTrust:()->Unit,onAct
                             }}){Text("Open / share",color=if(mine)Color.White else Purple)}
                         }
                     }
-                }else V2138LinkedText(m.text,if(mine)Color.White else Ink)
+                }else if(m.ai_generated)Text(bold309(m.text),color=if(mine)Color.White else Ink) else V2138LinkedText(m.text,if(mine)Color.White else Ink)
 
                 if(m.reactions.isNotEmpty())Row(horizontalArrangement=Arrangement.spacedBy(4.dp),modifier=Modifier.padding(horizontal=if(isPhoto)7.dp else 0.dp)){
                     m.reactions.forEach{r->Surface(color=if(mine)Color.White.copy(alpha=.12f) else Soft,shape=RoundedCornerShape(99.dp)){Text("${r.emoji} ${r.count}",Modifier.padding(horizontal=6.dp,vertical=2.dp),fontSize=10.sp)}}
@@ -1654,20 +1668,30 @@ private fun BusinessScreen(vm:LemmiqViewModel){
     var kbTitle by remember{mutableStateOf("")}
     var kbContent by remember{mutableStateOf("")}
     var showKnowledge by remember{mutableStateOf(true)}
+    var tab308 by remember{mutableStateOf("Profile")}
+    var search308 by remember{mutableStateOf("")}
+    var edit308 by remember{mutableStateOf<BusinessKnowledgeDto?>(null)}
+    var delete308 by remember{mutableStateOf<BusinessKnowledgeDto?>(null)}
     val docPicker=rememberLauncherForActivityResult(ActivityResultContracts.GetContent()){uri->if(uri!=null)vm.uploadBusinessKnowledge(uri)}
-    LaunchedEffect(Unit){vm.refreshBusiness()}
+    LaunchedEffect(Unit){if(!vm.businessLoaded308)vm.refreshBusiness()}
+    LaunchedEffect(tab308){if(tab308=="Customer chats")vm.loadBusinessCustomers308()}
     LazyColumn(Modifier.fillMaxSize().background(Bg),contentPadding=PaddingValues(bottom=30.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        item{Header("LEMMIQ Business Beta","Teach Q your business, then use grounded customer replies")}
-        item{GradientPanel("💼 Business Agent","Optional beta inside your personal LEMMIQ"){
+        item{Header("LEMMIQ Business Agent","Profile, knowledge and customer replies")}
+        item{Column(Modifier.padding(horizontal=18.dp)){
+            LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("Profile","Knowledge","Customer chats","AI settings")){x->FilterChip(tab308==x,{tab308=x},{Text(x)})}}
+            Text(vm.businessStatus308,fontSize=12.sp,color=Muted)
+            TextButton({vm.refreshBusiness()},enabled=!vm.businessBusy&&!vm.businessLoading308){Text("Reload saved profile")}
+        }}
+        if(tab308=="Profile")item{GradientPanel("💼 Business Agent","Optional beta inside your personal LEMMIQ"){
             Text(if(enabled)"Business intelligence enabled" else "Business intelligence is off",color=Color.White,fontSize=20.sp,fontWeight=FontWeight.Black)
             Text("Approved knowledge + customer context + recent chat → grounded reply",color=Color.White.copy(alpha=.85f),fontSize=11.sp)
         }}
-        item{
+        if(tab308=="Profile")item{
             Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){
                     Row(verticalAlignment=Alignment.CenterVertically){
                         Column(Modifier.weight(1f)){Text("Enable Business Beta",fontWeight=FontWeight.Bold);Text("You choose which customer chats use it.",fontSize=10.sp,color=Muted)}
-                        Switch(enabled,{enabled=it})
+                        Switch(enabled,{enabled=it},enabled=vm.businessLoaded308&&!vm.businessBusy&&!vm.businessLoading308)
                     }
                     OutlinedTextField(name,{name=it},Modifier.fillMaxWidth(),label={Text("Business name")},singleLine=true)
                     OutlinedTextField(type,{type=it},Modifier.fillMaxWidth(),label={Text("Business type")},singleLine=true)
@@ -1679,17 +1703,27 @@ private fun BusinessScreen(vm:LemmiqViewModel){
                         OutlinedTextField(email,{email=it},Modifier.weight(1f),label={Text("Email")},singleLine=true)
                     }
                     OutlinedTextField(website,{website=it},Modifier.fillMaxWidth(),label={Text("Website")},singleLine=true)
+                    Button({vm.saveBusinessProfile(BusinessProfileDto(enabled,name,type,description,website,phone,email,hours,area,tone,vm.businessProfile.currency,threshold,vm.businessProfile.updated_at))},
+                        enabled=vm.businessLoaded308&&!vm.businessLoading308&&!vm.businessBusy && name.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text(if(vm.businessBusy)"Saving…" else "Save Business Profile")}
+                }
+            }
+        }
+        if(tab308=="AI settings")item{Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){Column(Modifier.padding(16.dp)){
                     Text("Reply tone",fontWeight=FontWeight.Bold,fontSize=12.sp)
                     LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("Professional","Friendly","Warm","Direct","Premium","Casual")){x->FilterChip(tone==x,{tone=x},{Text(x)})}}
                     Text("AUTO grounding threshold: $threshold%",fontWeight=FontWeight.Bold,fontSize=12.sp)
                     Slider(value=threshold.toFloat(),onValueChange={threshold=it.toInt()},valueRange=70f..100f,steps=5)
                     Text("AUTO only sends when the Business Agent returns a high-confidence reply that does not require review. Otherwise it waits for you.",fontSize=10.sp,color=Muted)
-                    Button({vm.saveBusinessProfile(BusinessProfileDto(enabled,name,type,description,website,phone,email,hours,area,tone,"AUD",threshold))},
-                        enabled=!vm.businessBusy && name.isNotBlank(),modifier=Modifier.fillMaxWidth()){Text(if(vm.businessBusy)"Saving…" else "Save Business Profile")}
-                }
-            }
+            Button({vm.saveBusinessProfile(BusinessProfileDto(enabled,name,type,description,website,phone,email,hours,area,tone,vm.businessProfile.currency,threshold,vm.businessProfile.updated_at))},enabled=vm.businessLoaded308&&!vm.businessLoading308&&!vm.businessBusy&&name.isNotBlank()){Text("Save AI settings")}
+        }}}
+        if(tab308=="Customer chats"){
+            item{Text(vm.businessCustomersStatus308,Modifier.padding(horizontal=18.dp),color=Muted);TextButton({vm.loadBusinessCustomers308()}){Text("Refresh customer chats")}}
+            items(vm.businessCustomers308,key={it.chat_id}){customer->Card(Modifier.fillMaxWidth().padding(horizontal=18.dp)){Column(Modifier.padding(14.dp)){
+                Text(customer.display_name,fontWeight=FontWeight.Bold);Text("@${customer.username} · ${customer.mode}",color=Muted)
+                TextButton({val c=vm.chats.firstOrNull{it.id==customer.chat_id};if(c!=null)vm.open(c) else vm.error="Open this conversation from Chats."}){Text("Open chat")}
+            }}}
         }
-        item{
+        if(tab308=="Knowledge")item{
             Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(22.dp)){
                 Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     Text("Knowledge Base",fontSize=19.sp,fontWeight=FontWeight.Black)
@@ -1698,6 +1732,7 @@ private fun BusinessScreen(vm:LemmiqViewModel){
                         OutlinedButton({docPicker.launch("*/*")},enabled=!vm.businessBusy){Text("📄 Upload PDF / DOCX / TXT")}
                         TextButton({showKnowledge=!showKnowledge}){Text(if(showKnowledge)"Hide knowledge" else "Show knowledge (${vm.businessKnowledge.size})")}
                     }
+                    OutlinedTextField(search308,{search308=it},Modifier.fillMaxWidth(),label={Text("Search knowledge")},singleLine=true)
                     Text("Add knowledge manually",fontWeight=FontWeight.Bold,fontSize=13.sp)
                     LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("FAQ","SERVICE","PRICING","POLICY","HOURS","AREA","OTHER")){x->FilterChip(category==x,{category=x},{Text(x)})}}
                     OutlinedTextField(kbTitle,{kbTitle=it},Modifier.fillMaxWidth(),label={Text("Title")},singleLine=true)
@@ -1706,20 +1741,20 @@ private fun BusinessScreen(vm:LemmiqViewModel){
                 }
             }
         }
-        if(showKnowledge){
+        if(tab308=="Knowledge"&&showKnowledge){
             if(vm.businessKnowledge.isEmpty())item{Text("No business knowledge yet.",Modifier.padding(horizontal=20.dp),color=Muted)}
-            items(vm.businessKnowledge,key={it.id}){k->
+            items(vm.businessKnowledge.filter{search308.isBlank()||it.title.contains(search308,true)||it.category.contains(search308,true)||it.content.contains(search308,true)},key={it.id}){k->
                 Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),shape=RoundedCornerShape(18.dp)){
                     Column(Modifier.padding(14.dp)){
                         Row{Text(k.category,color=Purple,fontSize=10.sp,fontWeight=FontWeight.Black);Spacer(Modifier.weight(1f));Text(k.source,color=Muted,fontSize=9.sp)}
                         Text(k.title,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=3.dp))
-                        Text(k.content,maxLines=5,overflow=TextOverflow.Ellipsis,fontSize=12.sp,color=Muted,modifier=Modifier.padding(top=4.dp))
-                        TextButton({vm.deleteBusinessKnowledge(k.id)},enabled=!vm.businessBusy){Text("Delete",color=MaterialTheme.colorScheme.error)}
+                        Text(if(k.approved&&k.active)"Approved · Active" else "Not used for replies",fontSize=11.sp,color=Muted)
+                        Row{TextButton({edit308=k},enabled=!vm.businessBusy){Text("View / Edit")};TextButton({delete308=k},enabled=!vm.businessBusy){Text("Delete",color=MaterialTheme.colorScheme.error)}}
                     }
                 }
             }
         }
-        item{
+        if(tab308=="Profile")item{
             Card(Modifier.fillMaxWidth().padding(horizontal=18.dp),colors=CardDefaults.cardColors(containerColor=Soft),shape=RoundedCornerShape(20.dp)){
                 Column(Modifier.padding(16.dp)){
                     Text("How to use it",fontWeight=FontWeight.Black,color=Purple)
@@ -1729,6 +1764,13 @@ private fun BusinessScreen(vm:LemmiqViewModel){
         }
         vm.error?.let{item{Text(it,color=MaterialTheme.colorScheme.error,fontSize=11.sp,modifier=Modifier.padding(horizontal=20.dp))}}
     }
+    edit308?.let{k->
+        var title by remember(k.id){mutableStateOf(k.title)};var text by remember(k.id){mutableStateOf(k.content)};var categoryEdit by remember(k.id){mutableStateOf(k.category)};var approved by remember(k.id){mutableStateOf(k.approved)};var active by remember(k.id){mutableStateOf(k.active)}
+        AlertDialog(onDismissRequest={edit308=null},title={Text("Knowledge details")},text={LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)){
+            item{OutlinedTextField(title,{title=it},label={Text("Title")})};item{LazyRow{items(listOf("FAQ","SERVICE","PRICING","POLICY","HOURS","AREA","OTHER")){v->FilterChip(v==categoryEdit,{categoryEdit=v},{Text(v)})}}};item{OutlinedTextField(text,{text=it},label={Text("Content")},minLines=4,maxLines=9)};item{Row{Text("Approved",Modifier.weight(1f));Switch(approved,{approved=it})}};item{Row{Text("Active",Modifier.weight(1f));Switch(active,{active=it})}}
+        }},confirmButton={Button({vm.updateBusinessKnowledge308(k.copy(title=title,content=text,category=categoryEdit,approved=approved,active=active));edit308=null},enabled=title.isNotBlank()&&text.isNotBlank()&&!vm.businessBusy){Text("Save")}},dismissButton={TextButton({edit308=null}){Text("Cancel")}})
+    }
+    delete308?.let{k->AlertDialog(onDismissRequest={delete308=null},title={Text("Delete knowledge?")},text={Text(k.title)},confirmButton={TextButton({vm.deleteBusinessKnowledge(k.id);delete308=null}){Text("Delete")}},dismissButton={TextButton({delete308=null}){Text("Cancel")}})}
 }
 
 @Composable
@@ -1738,9 +1780,11 @@ private fun BusinessChatDialog(c:ChatDto,vm:LemmiqViewModel,dismiss:()->Unit){
     var label by remember(vm.activeBusinessSetting){mutableStateOf(vm.activeBusinessSetting.customer_label)}
     var notes by remember(vm.activeBusinessMemory){mutableStateOf(vm.activeBusinessMemory.notes)}
     var tags by remember(vm.activeBusinessMemory){mutableStateOf(vm.activeBusinessMemory.tags)}
-    AlertDialog(onDismissRequest=dismiss,title={Text("💼 Business Agent · ${c.other_user.display_name}")},text={
+    AlertDialog(onDismissRequest=dismiss,title={Text("Chat Intelligence | ${c.other_user.display_name}")},text={
         LazyColumn(verticalArrangement=Arrangement.spacedBy(10.dp)){
+            item{Text(if(vm.businessProfile.enabled&&vm.businessLoaded308)"Business profile enabled" else "Setup required: More → Business Agent. Save and enable your profile first.",color=Muted,fontSize=12.sp)}
             item{Row(verticalAlignment=Alignment.CenterVertically){Text("Use Business Agent",Modifier.weight(1f),fontWeight=FontWeight.Bold);Switch(enabled,{enabled=it})}}
+            item{Text("Personal AI is disabled while Business Agent is selected. Turn Business off and save to switch back; Personal AI stays OFF until selected again.",fontSize=12.sp,color=Muted)}
             item{Text("Mode",fontWeight=FontWeight.Bold);LazyRow(horizontalArrangement=Arrangement.spacedBy(6.dp)){items(listOf("OFF","ASSIST","AUTO")){x->FilterChip(mode==x,{mode=x},{Text(x)})}}}
             item{OutlinedTextField(label,{label=it},Modifier.fillMaxWidth(),label={Text("Customer label (optional)")},singleLine=true)}
             item{OutlinedTextField(notes,{notes=it},Modifier.fillMaxWidth(),label={Text("Customer memory / confirmed notes")},minLines=3,maxLines=6)}
@@ -1749,7 +1793,7 @@ private fun BusinessChatDialog(c:ChatDto,vm:LemmiqViewModel,dismiss:()->Unit){
             item{OutlinedButton({vm.learnBusinessFromActiveChat();dismiss()}){Text("🧠 Learn from chat (review first)")}}
             if(mode=="AUTO")item{Text("AUTO will only send when approved business knowledge strongly supports the reply and the confidence threshold is met.",fontSize=10.sp,color=Color(0xFF795A16))}
         }
-    },confirmButton={Button({vm.saveBusinessChat(enabled,mode,label);vm.saveBusinessMemory(notes,tags);dismiss()}){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
+    },confirmButton={Button({vm.saveBusinessChat(enabled,mode,label);vm.saveBusinessMemory(notes,tags);dismiss()},enabled=!enabled||mode=="OFF"||(vm.businessLoaded308&&vm.businessProfile.enabled&&vm.businessProfile.business_name.isNotBlank())){Text("Save")}},dismissButton={TextButton(dismiss){Text("Cancel")}})
 }
 
 @Composable
@@ -2167,3 +2211,50 @@ private fun moneyString(cents:Long):String = String.format(Locale.US,"$%,.2f",ce
 // V302_INSTALLED
 // V303_INSTALLED
 // V304_INSTALLED
+
+private fun bold309(value:String):androidx.compose.ui.text.AnnotatedString {
+    val b=androidx.compose.ui.text.AnnotatedString.Builder();val pattern=Regex("\\*\\*([^*\\n]+)\\*\\*");var start=0
+    for(m in pattern.findAll(value)){b.append(value.substring(start,m.range.first));val from=b.length;b.append(m.groupValues[1]);b.addStyle(androidx.compose.ui.text.SpanStyle(fontWeight=FontWeight.Bold),from,b.length);start=m.range.last+1}
+    b.append(value.substring(start));return b.toAnnotatedString()
+}
+
+@Composable
+private fun ActionCentre310(vm:LemmiqViewModel,onBack:()->Unit,onAsk:(String)->Unit,onChat:(Int)->Unit,onSection:(Int)->Unit){
+    var legacy by remember{mutableStateOf(false)}
+    var filter by remember{mutableStateOf("ALL")}
+    var prefsOpen by remember{mutableStateOf(false)}
+    var selected by remember{mutableStateOf<ActionItem310?>(null)}
+    var edit by remember{mutableStateOf("")}
+    LaunchedEffect(Unit){vm.refreshActions310()}
+    if(legacy){V2106QThread(vm,onBack={legacy=false},onAsk=onAsk);return}
+    Column(Modifier.fillMaxSize().background(Bg)){
+        Row(Modifier.fillMaxWidth().padding(8.dp),verticalAlignment=Alignment.CenterVertically){
+            TextButton(onBack){Text("‹ Back")};Column(Modifier.weight(1f)){Text("Q Action Centre",fontWeight=FontWeight.Bold);Text("${vm.actionItems310.count{it.status=="PENDING"}} pending",fontSize=11.sp,color=Muted)}
+            TextButton({vm.refreshActions310()},enabled=!vm.actionBusy310){Text("Refresh")}
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal=8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            OutlinedButton({prefsOpen=true;vm.loadActionPrefs310()}){Text("Preferences")};OutlinedButton({legacy=true}){Text("Q-to-Q / Ask Q")}
+        }
+        LazyRow(Modifier.fillMaxWidth().padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)){
+            items(listOf("ALL","PENDING","BUSINESS","CREATORS","PREDICT","ECONOMY")){f->FilterChip(filter==f,{filter=f},{Text(if(f=="PENDING")"Action required" else f.lowercase().replaceFirstChar{it.uppercase()})})}
+        }
+        if(vm.actionError310.isNotBlank())Text(vm.actionError310,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(10.dp))
+        val rows=vm.actionItems310.filter{filter=="ALL"||(filter=="PENDING"&&it.status=="PENDING")||it.category==filter}
+        LazyColumn(Modifier.weight(1f).fillMaxWidth(),contentPadding=PaddingValues(10.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+            if(rows.isEmpty())item{Text(if(vm.actionBusy310)"Loading Q activity…" else "No activity in this section",color=Muted)}
+            items(rows,key={it.id}){x->Card(Modifier.fillMaxWidth()){
+                Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                    Text(x.category+" | "+x.status,fontSize=11.sp,color=Purple,fontWeight=FontWeight.Bold);Text(x.title,fontWeight=FontWeight.Bold);Text(x.body,fontSize=13.sp)
+                    if(!x.reason.isNullOrBlank())Text(x.reason,fontSize=11.sp,color=Muted)
+                    if(x.acknowledged)Text("Customer acknowledgement recorded",fontSize=11.sp,color=Muted)
+                    if(x.status=="PENDING"&&x.action_id!=null)Button({selected=x;edit=x.draft.orEmpty()},enabled=!vm.actionBusy310){Text("Review reply")}
+                    if(x.chat_id!=null)TextButton({onChat(x.chat_id)}){Text("Open customer chat")}
+                    if(x.category in listOf("CREATORS","ECONOMY","PREDICT"))TextButton({if(x.category=="PREDICT"&&x.market_id!=null&&x.wallet_mode!=null)PredictRoute311.pending=x.wallet_mode to x.market_id;onSection(when(x.category){"CREATORS"->1;"ECONOMY"->2;else->3})}){Text(if(x.market_id!=null)"View my prediction" else "Open "+x.category.lowercase())}
+                    Text(x.created_at.take(19).replace('T',' '),fontSize=10.sp,color=Muted)
+                }
+            }}
+        }
+    }
+    selected?.let{x->AlertDialog(onDismissRequest={selected=null},title={Text("Review customer reply")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Text("Confirm accuracy and compliance before sending. Open the customer chat to see the original message.",fontSize=12.sp);OutlinedTextField(edit,{edit=it},Modifier.fillMaxWidth(),label={Text("Reviewed reply")},minLines=3,maxLines=7);TextButton({x.chat_id?.let(onChat);selected=null}){Text("Open chat")};TextButton({x.action_id?.let{vm.decideAction310(it,"DISMISS","")};selected=null}){Text("Dismiss request")}}},confirmButton={Button({x.action_id?.let{vm.decideAction310(it,"SEND",edit)};selected=null},enabled=edit.isNotBlank()&&edit.length<=1800&&!vm.actionBusy310){Text("Approve & Send")}},dismissButton={TextButton({selected=null}){Text("Cancel")}})}
+    if(prefsOpen){val p=vm.actionPrefs310;AlertDialog(onDismissRequest={prefsOpen=false},title={Text("Q Assistant preferences")},text={if(p==null)Text("Loading preferences…") else {var draft by remember(p){mutableStateOf(p)};Column{listOf("Daily economy activity" to draft.economy,"My prediction results" to draft.results,"New mainstream creators" to draft.creators,"New demo markets" to draft.markets,"Customer acknowledgement" to draft.acknowledgement).forEachIndexed{i,(label,value)->Row(verticalAlignment=Alignment.CenterVertically){Text(label,Modifier.weight(1f));Switch(value,{v->draft=when(i){0->draft.copy(economy=v);1->draft.copy(results=v);2->draft.copy(creators=v);3->draft.copy(markets=v);else->draft.copy(acknowledgement=v)}})}};Button({vm.saveActionPrefs310(draft);prefsOpen=false}){Text("Save preferences")}}}},confirmButton={TextButton({prefsOpen=false}){Text("Close")}})}
+}

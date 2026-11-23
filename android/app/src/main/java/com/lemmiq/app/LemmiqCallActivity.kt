@@ -44,6 +44,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class LemmiqCallActivity:ComponentActivity(){
+    private var pip306 by mutableStateOf(false)
+    private fun supportsPip306()=Build.VERSION.SDK_INT>=26 && packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
+    private fun minimise306(){
+        if(Build.VERSION.SDK_INT>=26 && supportsPip306())runCatching{enterPictureInPictureMode(android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(16,9)).build())}
+    }
+    override fun onPictureInPictureModeChanged(inPictureInPictureMode:Boolean,newConfig:android.content.res.Configuration){
+        super.onPictureInPictureModeChanged(inPictureInPictureMode,newConfig);pip306=inPictureInPictureMode
+    }
+    @Composable private fun Minimise306(){if(supportsPip306()&&status.value=="Connected"&&!pip306)TextButton({minimise306()}){Text("Minimise call",color=Color.White)}}
     private var room:Room?=null
     private var callId=""
     private var wsUrl=""
@@ -78,6 +87,7 @@ class LemmiqCallActivity:ComponentActivity(){
 
     override fun onCreate(savedInstanceState:Bundle?){
         super.onCreate(savedInstanceState)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         callId=intent.getStringExtra("call_id").orEmpty()
         wsUrl=intent.getStringExtra("ws_url").orEmpty()
         token=intent.getStringExtra("token").orEmpty()
@@ -94,7 +104,8 @@ class LemmiqCallActivity:ComponentActivity(){
 
         setContent{
             MaterialTheme{
-                if(isVideoCall()) VideoCallUi() else VoiceCallUi()
+                if(pip306&&!isVideoCall())Box(Modifier.fillMaxSize().background(Color(0xFF17102D)),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text(person,color=Color.White,fontSize=18.sp);Text(formatSeconds(seconds.intValue),color=Color.White)}}
+                else if(isVideoCall()) VideoCallUi() else VoiceCallUi()
             }
         }
 
@@ -115,8 +126,9 @@ class LemmiqCallActivity:ComponentActivity(){
                 if(status.value=="Connected")Text(formatSeconds(seconds.intValue),color=Color.White,fontSize=18.sp,modifier=Modifier.padding(top=6.dp))
                 Spacer(Modifier.height(34.dp))
                 CallControls(video=false)
+                Minimise306()
                 Spacer(Modifier.height(22.dp))
-                Text("LEMMIQ V${BuildConfig.VERSION_NAME} · LiveKit/WebRTC",color=Color(0xFF8E89A5),fontSize=11.sp)
+                Text("LEMMIQ V${BuildConfig.VERSION_NAME}",color=Color(0xFF8E89A5),fontSize=11.sp)
             }
         }
     }
@@ -137,7 +149,7 @@ class LemmiqCallActivity:ComponentActivity(){
                     }
                 }
             }
-            if(r!=null && localVideo.value!=null && cameraEnabled.value){
+            if(!pip306 && r!=null && localVideo.value!=null && cameraEnabled.value){
                 Surface(
                     modifier=Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(14.dp).size(width=116.dp,height=164.dp),
                     shape=RoundedCornerShape(18.dp),shadowElevation=8.dp,color=Color.Black
@@ -145,7 +157,7 @@ class LemmiqCallActivity:ComponentActivity(){
                     VideoTrackView(passedRoom=r,videoTrack=localVideo.value,modifier=Modifier.fillMaxSize(),mirror=frontCamera.value)
                 }
             }
-            Column(
+            if(!pip306)Column(
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color.Black.copy(alpha=.44f)).navigationBarsPadding().padding(16.dp),
                 horizontalAlignment=Alignment.CenterHorizontally
             ){
@@ -153,6 +165,8 @@ class LemmiqCallActivity:ComponentActivity(){
                 else Text(formatSeconds(seconds.intValue),color=Color.White.copy(alpha=.88f),fontSize=13.sp)
                 Spacer(Modifier.height(6.dp))
                 CallControls(video=true)
+                Minimise306()
+                Text("LEMMIQ V${BuildConfig.VERSION_NAME}",color=Color.White.copy(alpha=.7f),fontSize=10.sp)
             }
         }
     }

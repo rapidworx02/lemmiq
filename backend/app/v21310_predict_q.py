@@ -50,6 +50,9 @@ def _num(v, max_value=100000):
     except (InvalidOperation,TypeError,ValueError):raise HTTPException(422,'Enter a positive amount with at most six decimal places')
 
 def _team_ids():return {int(x) for x in os.getenv('LEMMIQ_PREDICT_Q_TEAM_IDS','').split(',') if x.strip().isdigit()}
+def _real_cricket312():
+    from .cricket312 import real_cricket_allowed
+    return real_cricket_allowed()
 def _team_gate(u,feature):
     if u.id not in _team_ids():raise HTTPException(403,'Q Predict real-value functions are restricted to approved, verified users')
     if os.getenv('LEMMIQ_PREDICT_Q_'+feature+'_ENABLED','false').lower()!='true':
@@ -312,6 +315,7 @@ def _classification(m):
     if m.category!='SPORTS':return ''
     try:cfg=json.loads(m.source_config_json or '{}')
     except Exception:cfg={}
+    if str(m.template_code or '')=='CRICKET_V312_INTL_WIN':return 'INTERNATIONAL'
     if str(m.template_code or '').startswith('CRICKET_V21314_') and cfg.get('format')=='TEST':return 'INTERNATIONAL'
     series=str(cfg.get('series') or '').lower()
     leagues=('premier league','ipl','big bash','bbl','psl','hundred','cpl','sa20','t20 blast','major league','global t20')
@@ -369,7 +373,7 @@ def register_v21310_predict_q(app,current_user,get_db):
         price=_reference(db)
         markets=db.scalars(select(PredictMarket).where(PredictMarket.status=='LIVE').order_by(PredictMarket.close_at).limit(150)).all()
         markets=[m for m in markets if (m.close_at.replace(tzinfo=timezone.utc) if not m.close_at.tzinfo else m.close_at)>now()
-                 and not str(m.template_code or '').startswith('CRICKET_V21314_')]  # Demo-only cricket-statistics markets
+                 and not str(m.template_code or '').startswith('CRICKET_V21314_') and (not str(m.template_code or '').startswith('CRICKET_V312_INTL_WIN') or _real_cricket312())]  # Demo-only cricket-statistics markets
         positions=db.scalars(select(Position).where(Position.user_id==u.id).order_by(Position.id.desc()).limit(100)).all()
         from sqlalchemy import func
         locked=db.scalar(select(func.coalesce(func.sum(Position.stake_micros),0)).where(Position.user_id==u.id,Position.status=='OPEN')) or 0
@@ -457,6 +461,10 @@ def register_v21310_predict_q(app,current_user,get_db):
             raise HTTPException(409,'Market closed')
         if str(m.template_code or '').startswith('CRICKET_V21314_'):
             raise HTTPException(423,'Cricket performance markets are Demo-only until authorised and independently verified')
+        if str(m.template_code or '').startswith('CRICKET_V21314_'):
+            raise HTTPException(423,'Legacy cricket statistics remain Demo-only')
+        if str(m.template_code or '')=='CRICKET_V312_INTL_WIN' and not _real_cricket312():
+            raise HTTPException(423,'Real Q cricket staking requires verified account, authorised operator and an enabled cricket licence gate')
         if db.get(Resolution,m.id):raise HTTPException(409,'Result already recorded')
         w=_wallet(db,u.id)
         if amount>w.available:raise HTTPException(409,'Insufficient Q Predict Q')
@@ -532,6 +540,7 @@ def register_v21310_predict_q(app,current_user,get_db):
         _admin(db,u)
         market=db.scalar(select(PredictMarket).where(PredictMarket.id==market_id).with_for_update())
         if not market:raise HTTPException(404,'Market not found')
+        if market.template_code=='CRICKET_V312_INTL_WIN':raise HTTPException(409,'Shared cricket markets must settle via the coordinated two-wallet result engine')
         close=market.close_at.replace(tzinfo=timezone.utc) if market.close_at.tzinfo is None else market.close_at
         if now()<close:raise HTTPException(409,'Cannot settle before market close')
         if db.get(Resolution,market_id):raise HTTPException(409,'Market already settled')

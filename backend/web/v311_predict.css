@@ -2,3 +2,6 @@
 @supports (-webkit-touch-callout: none){@media(max-width:820px){
 html{overflow-x:clip;-webkit-text-size-adjust:100%}body{margin:0;min-height:100dvh;overflow-x:clip}#appView:not(.hidden){max-width:100%;box-sizing:border-box;min-height:100dvh}#appView .workspace,#appView .view,#appView .chat-layout,#appView .conversation-list{min-width:0;max-width:100%;box-sizing:border-box}body.v305-chat-list:not(.v300-conversation) #appView:not(.hidden){height:100dvh!important;max-height:100dvh!important;min-height:0!important;padding-bottom:max(8px,env(safe-area-inset-bottom))!important}body.v305-chat-list:not(.v300-conversation) #appView .sidebar{margin-bottom:0!important}body.v300-conversation #appView:not(.hidden){min-height:0!important}#conversationList{overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}#appView input,#appView textarea,#appView select{font-size:16px}#view-chats button{min-width:0}#view-chats .chat-layout{max-width:100%}#globalQOrb{max-width:54px;max-height:54px}#view-chats .conversation-list{overflow-x:clip}
 }}
+
+.pq312-timer{display:inline-flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:#6953be;background:rgba(121,85,239,.09);padding:5px 9px;border-radius:8px;font-variant-numeric:tabular-nums}
+.pq312-timer.is-closed{color:#9b6060;background:rgba(190,65,70,.08)}

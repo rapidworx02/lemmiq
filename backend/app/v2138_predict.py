@@ -295,6 +295,7 @@ def register_v2138_predict(app,current_user,get_db):
         _require_admin(db,u,'FULL')
         m=db.get(PredictMarket,market_id)
         if not m:raise HTTPException(404,'Market not found')
+        if m.template_code=='CRICKET_V312_INTL_WIN':raise HTTPException(409,'Shared cricket markets require coordinated two-wallet settlement')
         if aware(m.close_at)>now():raise HTTPException(409,'Cannot resolve a demo market before its scheduled close')
         if db.get(DemoResolution,market_id):raise HTTPException(409,'Demo result already recorded; resolution is immutable')
         # External evidence must be reviewed by the admin; this is NOT automatic settlement.
