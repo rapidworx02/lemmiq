@@ -182,7 +182,8 @@ class QuoteIn(BaseModel):
     q_amount:Decimal=Field(gt=0,le=100000)
     network:Literal['TRC20','BEP20']
 class BuySubmit(BaseModel):
-    tx_hash:str=Field(min_length=64,max_length=66)
+    tx_hash:str=Field(default='',max_length=66)
+    sender_address:str=Field(default='',max_length=80)
 class TreasuryIn(BaseModel):
     address:str=Field(min_length=34,max_length=80)
     active:bool=True
@@ -196,6 +197,24 @@ class SettleIn(BaseModel):
     evidence:str=Field(min_length=10,max_length=500)
 class RejectIn(BaseModel):
     reason:str=Field(min_length=8,max_length=240)
+
+class ManualApproveIn(BaseModel):
+    # This is an explicit accounting override, not proof of a blockchain payment.
+    reason:str=Field(min_length=20,max_length=220)
+    confirmation:Literal['MANUAL_APPROVE_UNVERIFIED']
+
+def manual_approval_enabled():
+    return os.getenv('LEMMIQ_PREDICT_Q_MANUAL_APPROVAL_ENABLED','false').strip().lower()=='true'
+
+def manual_approval_limit_micros():
+    raw=os.getenv('LEMMIQ_PREDICT_Q_MANUAL_APPROVAL_MAX_USDT','250').strip()
+    try:
+        cap=Decimal(raw)
+        if not cap.is_finite() or cap<=0 or cap>2500:raise ValueError()
+        return int(cap*MICRO)
+    except (ValueError,InvalidOperation):
+        raise HTTPException(503,'Invalid manual approval cap; configure 0-2500 USDT')
+
 
 def _wallet(db,uid):
     from sqlalchemy import text
@@ -413,6 +432,8 @@ def register_v21310_predict_q(app,current_user,get_db):
         price=_reference(db);q_units=_num(body.q_amount)
         fee=_quote(price,q_units)
         if fee<1_000_000:raise HTTPException(422,'Minimum purchase: 1 USDT')
+        from .predict_q_reconcile313 import checkout_amount
+        fee=checkout_amount(db,body.network,vault.address,fee)
         order=Order(code='PQ-'+secrets.token_hex(10).upper(),user_id=u.id,network=body.network,
             q_micros=q_units,reference_price_microusd=price,buy_bps=Q_BUY_BPS,
             expected_usdt_micros=fee,receiving_address=vault.address,sender_address='',
@@ -422,21 +443,31 @@ def register_v21310_predict_q(app,current_user,get_db):
 
     @router.post('/buy/orders/{order_id}/submit')
     def submit(order_id:int,body:BuySubmit,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        # Users normally submit no proof fields. Payment settlement still requires
+        # a confirmed, uniquely attributed, on-chain USDT receipt.
         _team_gate(u,'PAYMENTS')
         order=db.scalar(select(Order).where(Order.id==order_id).with_for_update())
         if not order or order.user_id!=u.id:raise HTTPException(404,'Purchase order not found')
-        if order.status!='CREATED':raise HTTPException(409,'Order already submitted or processed')
+        if order.status not in ('CREATED','PENDING'):raise HTTPException(409,'Order already processed')
         expiry=order.expires_at.replace(tzinfo=timezone.utc) if order.expires_at.tzinfo is None else order.expires_at
-        if now()>expiry:
+        if order.status=='CREATED' and now()>expiry:
             raise HTTPException(409,'Quote expired. Contact support before making a payment.')
-        if not order.sender_address:
-            raise HTTPException(409,'Save the sending wallet address before submitting your transfer')
-        h=_hash(order.network,body.tx_hash)
-        if db.scalar(select(Order.id).where(Order.tx_hash==h)):raise HTTPException(409,'Transaction already claimed')
-        if db.scalar(select(QPaymentOrder.id).where(func.lower(QPaymentOrder.submitted_tx_hash)==h)):
-            raise HTTPException(409,'Transaction already used for a Q Economy payment')
-        order.tx_hash=h;order.status='PENDING';order.updated_at=now()
-        db.commit();return _order_json(order)
+        # Optional information is validated when supplied, without requiring it.
+        sender=body.sender_address.strip()
+        if sender:order.sender_address=_address(order.network,sender)
+        raw=body.tx_hash.strip()
+        if raw:
+            h=_hash(order.network,raw)
+            if db.scalar(select(Order.id).where(Order.tx_hash==h,Order.id!=order.id)):
+                raise HTTPException(409,'Transaction already claimed in Q Predict')
+            if db.scalar(select(QPaymentOrder.id).where(func.lower(QPaymentOrder.submitted_tx_hash)==h)):
+                raise HTTPException(409,'Transaction already claimed in Q Economy')
+            if order.tx_hash and order.tx_hash!=h:
+                raise HTTPException(409,'Payment TXID already submitted; ask support to review')
+            order.tx_hash=h
+        order.status='PENDING';order.updated_at=now()
+        db.commit()
+        return _order_json(order)
 
     @router.post('/buy/orders/{order_id}/sender')
     def sender_address(order_id:int,body:TreasuryIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
@@ -492,6 +523,8 @@ def register_v21310_predict_q(app,current_user,get_db):
         candidates=db.scalars(select(Pool).where(Pool.settled_at.is_(None)).order_by(Pool.market_id.desc()).limit(100)).all()
         return {'mode':'AUTHORIZED_USERS_ONLY','payments_enabled':os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()=='true',
             'wagering_enabled':os.getenv('LEMMIQ_PREDICT_Q_WAGERING_ENABLED','false').lower()=='true',
+            'manual_approval_enabled':manual_approval_enabled(),
+            'manual_approval_max_usdt':value(manual_approval_limit_micros()),
             'team_ids':sorted(_team_ids()),'treasury':[{'network':t.network,'address':t.address,'active':t.active} for t in treasuries],
             'orders':[_order_json(x) for x in orders],
             'open_pools':[{'market_id':x.market_id,'pool_q':value(x.yes_micros+x.no_micros)} for x in candidates]}
@@ -516,7 +549,14 @@ def register_v21310_predict_q(app,current_user,get_db):
         _admin(db,u)
         order=db.scalar(select(Order).where(Order.id==order_id).with_for_update())
         if not order:raise HTTPException(404,'Order not found')
-        if order.status!='PENDING' or not order.tx_hash or not order.sender_address:raise HTTPException(409,'Order must have a verified sender and submitted transaction')
+        if order.status!='PENDING':raise HTTPException(409,'Order must be awaiting payment verification')
+        if not order.tx_hash:
+            from .predict_q_reconcile313 import discover_payment
+            proof_match=discover_payment(db,order)
+            order.tx_hash=proof_match['tx_hash'];order.sender_address=proof_match['sender_address']
+        elif not order.sender_address:
+            from .predict_q_reconcile313 import sender_from_known_hash
+            order.sender_address=sender_from_known_hash(order)
         proof=_verify_transfer(order) # fail closed if RPC is down
         if db.scalar(select(QPaymentOrder.id).where(func.lower(QPaymentOrder.submitted_tx_hash)==order.tx_hash)):
             raise HTTPException(409,'Transaction already claimed in Q Economy')
@@ -525,6 +565,44 @@ def register_v21310_predict_q(app,current_user,get_db):
         order.status='APPROVED';order.reviewer_id=u.id;order.updated_at=now()
         _audit(db,u.id,'APPROVE_BUY',{'order_id':order.id,'tx_hash':order.tx_hash,**proof})
         db.commit();return _order_json(order)
+
+    @router.post('/admin/buy/{order_id}/manual-approve')
+    def manual_approve_buy(order_id:int,body:ManualApproveIn,u:User=Depends(current_user),db:Session=Depends(get_db)):
+        # Distinct from automatic verified approval; never mislabel as chain-verified.
+        # Only MASTER_ADMIN can exercise the accounting override. Disabled by default.
+        _admin(db,u)
+        if not manual_approval_enabled():
+            raise HTTPException(423,'Manual unverified credits are disabled by operator policy')
+        row=db.scalar(select(Order).where(Order.id==order_id).with_for_update())
+        if not row:raise HTTPException(404,'Purchase order not found')
+        if row.status!='PENDING':raise HTTPException(409,'Only pending orders may receive manual credit')
+        if row.user_id not in _team_ids():raise HTTPException(403,'User is not on the approved verified access list')
+        if os.getenv('LEMMIQ_PREDICT_Q_PAYMENTS_ENABLED','false').lower()!='true':
+            raise HTTPException(423,'Q Predict USDT deposits are disabled')
+        if row.expected_usdt_micros>manual_approval_limit_micros():
+            raise HTTPException(409,'Order exceeds manual credit limit; use independently verified payment approval')
+        # An order is immutable once approved and BUY_Q is a single issuance.
+        issued=db.scalar(select(Entry.id).where(Entry.reference==row.code,
+                          Entry.kind.in_(['BUY_Q','BUY_Q_MANUAL'])).limit(1))
+        if issued:raise HTTPException(409,'Q already issued for this order')
+        if row.tx_hash and db.scalar(select(QPaymentOrder.id).where(
+                func.lower(QPaymentOrder.submitted_tx_hash)==row.tx_hash)):
+            raise HTTPException(409,'Submitted TXID is already claimed in Q Economy')
+        wallet=_wallet(db,row.user_id)
+        wallet.available+=row.q_micros;wallet.updated_at=now()
+        _entry(db,'PREDICT_Q_MANUAL_ISSUANCE',f'USER:{row.user_id}',
+               row.q_micros,'BUY_Q_MANUAL',row.code)
+        row.status='APPROVED';row.reviewer_id=u.id;row.updated_at=now()
+        row.notes=('MANUAL UNVERIFIED CREDIT - '+body.reason.strip())[:260]
+        _audit(db,u.id,'MANUAL_APPROVE_BUY',{
+            'order_id':row.id,'order_code':row.code,'user_id':row.user_id,
+            'network':row.network,'expected_usdt_micros':row.expected_usdt_micros,
+            'q_credited_micros':row.q_micros,'chain_verified':False,
+            'unverified_override':True,'reason':body.reason.strip(),
+        })
+        db.commit()
+        return {**_order_json(row),'approval_type':'MANUAL_UNVERIFIED',
+                'chain_verified':False}
 
     @router.post('/admin/buy/{order_id}/reject')
     def reject(order_id:int,body:RejectIn,u:User=Depends(current_user),db:Session=Depends(get_db)):

@@ -7,7 +7,7 @@
 /* V21360_CREATOR_UX */
 /* V21356_STUDIO_DELETE */
 /* V21354_CREATOR_AUTOPUBLISH */
-const CACHE = "lemmiq-v312-dual-r2";
+const CACHE = "lemmiq-v312-manual-r4";
 const SHELL = [
   "/web/v2136_creator_ux.js?v=3.0.4",
   "/web/v2134_professional.js?v=3.0.4",
@@ -23,7 +23,7 @@ const SHELL = [
   "/web/v306.css?v=3.0.6",
   "/web/v306.js?v=3.0.7",
   "/web/v21310_predict_q.css?v=3.0.4",
-  "/web/v21310_predict_q.js?v=3.1.2-r2",
+  "/web/v21310_predict_q.js?v=3.1.2-manual-r4",
   "/web/v301.css?v=3.0.1",
   "/web/v301_admin.js?v=3.0.1",
   "/web/v21311_upgrade.js?v=3.0.7",
