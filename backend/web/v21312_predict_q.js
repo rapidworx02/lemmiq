@@ -75,14 +75,20 @@
     try {
       const data = await api(`/v21312/predict/qr/order/${id}`);
       if (!panel.isConnected || panel.querySelector('.pq12-qr-panel')) return;
-      const rawAddress = panel.querySelector('.pq-data code')?.textContent?.trim();
+      const rawAddress = panel.querySelector('[data-pq-receiving-address]')?.textContent?.trim()
+        || panel.querySelector('.pq-data code')?.textContent?.trim()
+        || [...panel.querySelectorAll('p code')].map(el=>el.textContent.trim()).find(addr=>addr===data.receiving_address);
+      const orderNetwork = panel.dataset.pqOrderNetwork || data.network;
+      if (String(orderNetwork).toUpperCase() !== String(data.network).toUpperCase()) throw new Error('Payment network mismatch — do not send funds');
       if (!data.qr_png_b64 || !data.receiving_address || rawAddress !== data.receiving_address) {
         throw new Error('Receiving address mismatch — use Copy Address and contact support');
       }
       const box = document.createElement('div');
       box.className = 'pq12-qr-panel';
       box.innerHTML = `<strong>Scan to pay with ${safe(data.network)} USDT</strong><img class="pq12-qr-image" alt="QR encoding receiving address" role="button" tabindex="0" src="data:image/png;base64,${data.qr_png_b64}"><button class="ghost" type="button">Enlarge QR code</button><small>QR is generated from this exact order receiving address. Check the network and destination in your wallet before transferring.</small>`;
-      panel.querySelector('#pqCopyAddress').before(box);
+      const slot = panel.querySelector('#pq12QrSlot');
+      if (slot) slot.replaceWith(box);
+      else panel.querySelector('#pqCopyAddress').before(box);
       box.querySelector('button').onclick = () => showZoom(data);
       const pic = box.querySelector('img');
       pic.onclick = () => showZoom(data);
@@ -93,7 +99,9 @@
         const n = document.createElement('p');
         n.className = 'pq-note';
         n.textContent = 'QR unavailable: ' + e.message + '. Copy the receiving address instead.';
-        panel.querySelector('#pqCopyAddress')?.before(n);
+        const slot = panel.querySelector('#pq12QrSlot');
+        if (slot) slot.replaceWith(n);
+        else panel.querySelector('#pqCopyAddress')?.before(n);
       }
     } finally {
       delete panel.dataset.pq12Loading;

@@ -13,3 +13,25 @@
 .pq12-admin-qr img{max-width:130px;background:#fff;padding:5px;border-radius:8px}
 .pq12-admin-qr button{margin-right:7px;margin-top:6px}
 @media(max-width:650px){.pq12-qr-image{height:175px;width:175px}.pq12-modal-inner{padding:15px}}
+/* V312 QR checkout fix: centred, prominently scannable checkout like Q Economy. */
+.pq12-qr-slot{border:1px dashed var(--line);padding:16px;text-align:center;border-radius:14px;margin:12px 0;font-size:13px;opacity:.9}
+.pq12-qr-panel{align-items:center;text-align:center;width:100%;box-sizing:border-box;gap:10px}
+.pq12-qr-panel .pq12-qr-image{width:min(72vw,245px);height:auto;aspect-ratio:1/1;box-sizing:border-box}
+.pq12-qr-panel button{min-height:40px}
+/* V312 prediction confirmation and locked states — both Demo USDT and real Q. */
+.pq312-final-notice{border:1px solid rgba(183,163,255,.45);border-radius:12px;background:rgba(117,83,204,.15);padding:12px;color:var(--text);font-size:13px;line-height:1.55;margin:10px 0}
+.pq312-position-lock{border-left:3px solid #aa96ff;padding:8px 10px;background:rgba(117,83,204,.10);border-radius:8px;font-size:13px;line-height:1.45;margin:12px 0;color:var(--text)}
+.pq312-confirm-dialog{border:1px solid var(--line);border-radius:19px;background:var(--surface,#19172e);color:var(--text);box-shadow:0 14px 60px rgba(0,0,0,.48);width:min(94vw,490px);max-height:90vh;overflow:auto;padding:0}
+.pq312-confirm-dialog::backdrop{background:rgba(7,5,23,.75)}
+.pq312-confirm-content{padding:22px;display:flex;flex-direction:column;gap:12px}
+.pq312-confirm-content h3{margin:0;font-size:21px}
+.pq312-confirm-content small{font-weight:700;letter-spacing:.07em;color:#b7a6ff}
+.pq312-confirm-question{font-weight:600;line-height:1.45;margin:0}
+.pq312-confirm-detail{display:grid;grid-template-columns:1fr auto;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.pq312-confirm-detail span{opacity:.85}
+.pq312-confirm-help{font-size:12px;opacity:.85;margin:0}
+.pq312-confirm-actions{display:flex;gap:10px}
+.pq312-confirm-actions button{flex:1;min-height:44px}
+@media(max-width:480px){.pq312-confirm-content{padding:16px}.pq312-confirm-actions{flex-direction:column}}
+
+
